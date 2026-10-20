@@ -1,0 +1,50 @@
+import * as THREE from 'three';
+import { GRADE, SKY } from '../core/palette.ts';
+
+export function createRenderer(container: any) {
+  const captureMode = new URLSearchParams(location.search).get('capture') === '1';
+
+  // Full-quality rendering is the only gameplay path. The cap prevents a 3x
+  // or 4x browser zoom/device scale from creating pathological render targets,
+  // but normal 1x/2x displays always render at their native pixel ratio.
+  const choosePixelRatio = (_w?: any, _h?: any) => Math.min(window.devicePixelRatio || 1, 2);
+
+  const renderer = new THREE.WebGLRenderer({
+    // The scene is rendered through EffectComposer and receives post-process AA at the
+    // end of that chain. Asking the browser for another multisampled default
+    // framebuffer only duplicates work without touching the composed image.
+    antialias: false,
+    powerPreference: 'high-performance',
+    stencil: false,
+    alpha: false,
+    // Retaining every presented frame costs bandwidth on some drivers and is
+    // unnecessary in gameplay. The deterministic capture tool opts in via
+    // `?capture=1` when it needs canvas.toDataURL().
+    preserveDrawingBuffer: captureMode,
+  });
+  renderer.setPixelRatio(choosePixelRatio(container.clientWidth, container.clientHeight));
+  renderer.setSize(container.clientWidth, container.clientHeight);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = GRADE.exposure;
+
+  renderer.shadowMap.enabled = true;
+  // VSM gives the large pastel cast shadows a stable, separably-filtered
+  // penumbra. The former five-sample rotated PCF kernel was responsible for
+  // the visible grain/crawling in broad tree shadows.
+  renderer.shadowMap.type = THREE.VSMShadowMap;
+  renderer.shadowMap.autoUpdate = true;
+
+  // Palette colours are stored linear. getHex() encodes back to sRGB, which is
+  // what setClearColor expects; the previous convertLinearToSRGB() *before*
+  // getHex() applied the transfer twice and cleared to a near-white.
+  renderer.setClearColor(SKY.haze.getHex(THREE.SRGBColorSpace), 1);
+  container.appendChild(renderer.domElement);
+
+  (renderer as any).renderProfile = 'high';
+  (renderer as any).resizeTo = (width: any, height: any) => {
+    renderer.setPixelRatio(choosePixelRatio(width, height));
+    renderer.setSize(width, height);
+  };
+  return renderer;
+}

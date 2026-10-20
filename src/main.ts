@@ -1,0 +1,252 @@
+import * as THREE from 'three';
+import { createRenderer } from './render/renderer.ts';
+import { Atmosphere } from './render/lighting.ts';
+import { FPCamera } from './render/fp-camera.ts';
+import { createPostFX } from './render/postfx.ts';
+import { buildWorld } from './world/world.ts';
+import { createWater, makeDepthMap, DEPTH_RANGE } from './world/water.ts';
+import { createParticles } from './fx/particles.ts';
+import { createCharacter } from './player/character.ts';
+import { setVoxelWaterline } from './core/voxel.ts';
+import { updatePlanetUniforms } from './render/planet.glsl.ts';
+import { DayNight } from './render/day-night.ts';
+import { Controller, Input } from './player/controller.ts';
+import { createPathNavigator } from './player/pathfinding.ts';
+import { createDog } from './player/dog.ts';
+import { createBubbles } from './ui/bubbles.ts';
+import { createMap } from './ui/map.ts';
+import { createPause } from './ui/pause.ts';
+import { createSettings } from './ui/settings.ts';
+import { createHud } from './ui/hud.ts';
+import { makeRng } from './core/rng.ts';
+import { createDroneMode } from './player/drone.ts';
+
+const SEED = 20260820;
+
+// Scratch vectors — reused every frame to avoid GC pressure.
+const _sunWorld = new THREE.Vector3();
+const _sunNDC   = new THREE.Vector3();
+let _lastPlanetX = Infinity, _lastPlanetZ = Infinity;
+
+const container = document.getElementById('app')!;
+const bootEl = document.getElementById('boot')!;
+const barEl = bootEl.querySelector('#bar i')!;
+const subEl = bootEl.querySelector('.sub')!;
+
+const setProgress = (p: number): void => {
+  (barEl as HTMLElement).style.width = `${Math.round(p * 100)}%`;
+};
+
+async function start(): Promise<void> {
+  const renderer = createRenderer(container);
+  const scene = new THREE.Scene();
+
+  const world = await buildWorld(SEED, setProgress);
+  scene.add(world.group);
+
+  const fpCam = new FPCamera(
+    container.clientWidth / container.clientHeight,
+    renderer.domElement,
+  );
+  const atmo = new Atmosphere(scene, world.size);
+  const dayNight = new DayNight(atmo, renderer);
+
+  const waterDepth = makeDepthMap(world);
+  const water = createWater(world.size, waterDepth);
+  scene.add(water.mesh);
+  setVoxelWaterline(world.meshes.material, waterDepth, world.size, DEPTH_RANGE);
+
+  const particles = createParticles(world.size, makeRng(SEED ^ 0x1234));
+  scene.add(particles.group);
+
+  // Register water + particle planet uniforms so they all bend together.
+  world.allPlanetUnis.push(water.planetUnis);
+  for (const pUnis of particles.planetUnisList) world.allPlanetUnis.push(pUnis);
+
+  const character = createCharacter(world.meshes.edgeMaterial);
+  scene.add(character.root);
+
+  // Hide character from first-person view
+  character.root.traverse((o: THREE.Object3D) => {
+    if ((o as THREE.Mesh).isMesh) o.layers.set(1);
+  });
+  fpCam.camera.layers.disable(1);
+
+  const controller = new Controller(world.grid, world.spawn);
+  const drone = createDroneMode(world.grid);
+  const input = new Input(renderer.domElement);
+  document.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.code === 'KeyG' && fpCam.isLocked) {
+      if (drone.active) {
+        drone.beginLanding();
+      } else {
+        drone.enter(fpCam.camera);
+        fpCam.droneActive = true;
+      }
+    }
+  });
+
+  const navigator = createPathNavigator({
+    world, controller, camera: fpCam.camera, dom: renderer.domElement, input,
+  });
+  const map = createMap({ world, controller, input });
+  const bubbles = createBubbles({
+    camera: fpCam.camera, container, viewport: renderer.domElement as any,
+  });
+
+  const dog = createDog({
+    world, surface: navigator.surface, player: controller, input: input as any,
+    edgeMaterial: world.meshes.edgeMaterial, rng: makeRng(SEED ^ 0xd06),
+    onCommand: ((name: string) => bubbles.say(character.root, name, { height: 3.35 })) as any,
+  });
+  scene.add(dog.root);
+
+  const post = createPostFX(renderer, scene, fpCam.camera, world.meshes.edgeMaterial);
+  // FPCamera has no zoom range; pass a stub so settings.js compiles cleanly
+  const settings = createSettings({ rig: { setZoomRange: () => {} }, atmo, input, world, dayNight });
+  const hud = createHud({ dayNight, drone, camera: fpCam.camera });
+  const pause = createPause({ input, map });
+
+  // frame the spawn before the veil lifts
+  fpCam.update(1 / 60, controller.pos, 0, true);
+  world.streaming.update(controller.pos, fpCam.camera.position);
+  atmo.followTarget(controller.pos.x, controller.pos.z);
+
+  scene.updateMatrixWorld(true);
+  scene.matrixWorldAutoUpdate = false;
+
+  addEventListener('resize', () => {
+    const w = container.clientWidth, h = container.clientHeight;
+    (renderer as any).resizeTo(w, h);
+    fpCam.resize(w / h);
+    post.setSize(w, h);
+    bubbles.resize();
+  });
+
+  const clock = new THREE.Clock();
+  let started = false;
+  let perfTime = 0;
+  let perfFrames = 0;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (window as any).__fps = 0;
+
+  function frame(): void {
+    requestAnimationFrame(frame);
+    const rawDt = clock.getDelta();
+    const dt = Math.min(rawDt, 1 / 20);
+
+    if (rawDt < 0.5) {
+      perfTime += rawDt;
+      perfFrames++;
+      if (perfTime >= 0.75) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (window as any).__fps = Math.round(perfFrames / perfTime);
+        perfTime = 0;
+        perfFrames = 0;
+      }
+    }
+
+    const wish = fpCam.getWish();
+    const jumpEdge = fpCam.getJumpEdge();
+    const jumpHeld = fpCam.getJumpHeld();
+
+    const manualMovement = wish.lengthSq() > 1e-4 || jumpEdge;
+    navigator.update(dt, wish, manualMovement, input.paused);
+
+    const STEP = 1 / 60;
+    let remaining = dt;
+    let jumped = false, landed = 0, stepped = 0;
+    while (remaining > 1e-5) {
+      const h = Math.min(remaining, STEP);
+      const e = controller.update(h, wish, jumpEdge && remaining === dt, jumpHeld);
+      if (e.jumped) jumped = true;
+      if (e.landed > landed) landed = e.landed;
+      if (e.stepped && e.stepRise > stepped) stepped = e.stepRise;
+      remaining -= h;
+    }
+    if (jumped) character.jump();
+    if (stepped > 0) character.step(stepped);
+    if (landed > 0) character.land(landed);
+
+    character.root.position.set(controller.pos.x, controller.visualY, controller.pos.z);
+    character.update(dt, {
+      speed01: controller.speed01,
+      grounded: controller.grounded,
+      vy: controller.vel.y,
+      heading: controller.heading,
+      groundY: controller.groundY,
+      swimming: controller.swimming,
+    });
+    character.root.updateMatrixWorld(true);
+    dog.update(dt);
+
+    if (drone.active) {
+      const done = drone.update(
+        dt,
+        fpCam.camera,
+        fpCam._keys,
+        fpCam.drainDroneMX(),
+        fpCam.drainDroneAltDelta(),
+      );
+      if (done) {
+        fpCam.droneActive = false;
+        fpCam.yaw   = fpCam.camera.rotation.y;
+        fpCam.pitch = 0;
+      }
+    } else {
+      fpCam.update(dt, controller.pos, controller.speed01, controller.grounded);
+    }
+    world.streaming.update(controller.pos, fpCam.camera.position, false, dt);
+    atmo.followTarget(controller.pos.x, controller.pos.z);
+    dayNight.update(dt);
+    // Project sun to screen for crepuscular rays — active only near horizon.
+    {
+      const sunDir = dayNight.sunDir; // read-only reference, no allocation
+      _sunWorld.copy(sunDir).multiplyScalar(500).add(fpCam.camera.position);
+      _sunNDC.copy(_sunWorld).project(fpCam.camera);
+      const sunVisible = sunDir.y > -0.1 && Math.abs(_sunNDC.x) < 1.2 && Math.abs(_sunNDC.y) < 1.2
+        ? Math.pow(Math.max(0, 0.25 - sunDir.y) / 0.35, 1.5)
+        : 0;
+      post.setSunScreenPos(_sunNDC.x * 0.5 + 0.5, -_sunNDC.y * 0.5 + 0.5, sunVisible);
+    }
+    atmo.update(dt, fpCam.camera);
+    water.update(dt);
+    particles.update(dt, fpCam.camera);
+    for (const d of world.animated) d.update(dt, fpCam.camera);
+    bubbles.update(dt);
+    map.update();
+    hud.update();
+    settings.update();
+
+    // Update planet-bend uniforms only when the player has moved (saves an
+    // iteration over all materials every frame while standing still or hovering).
+    const bendOrigin = fpCam.droneActive ? fpCam.camera.position : controller.pos;
+    if (Math.abs(bendOrigin.x - _lastPlanetX) + Math.abs(bendOrigin.z - _lastPlanetZ) > 0.001) {
+      _lastPlanetX = bendOrigin.x;
+      _lastPlanetZ = bendOrigin.z;
+      for (const unis of world.allPlanetUnis) updatePlanetUniforms(unis, bendOrigin);
+    }
+
+    post.render(dt);
+
+    if (!started) {
+      started = true;
+      requestAnimationFrame(() => bootEl.classList.add('gone'));
+    }
+  }
+
+  frame();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (window as any).__game = {
+    scene, renderer, fpCam, world, controller, character, post, atmo, water,
+    particles, navigator, map, pause, settings, hud, input, dog, bubbles,
+  };
+}
+
+start().catch((err: unknown) => {
+  console.error(err);
+  (subEl as HTMLElement).textContent = 'Unable to start';
+  (subEl as HTMLElement).classList.add('error');
+});
