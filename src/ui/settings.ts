@@ -5,10 +5,10 @@
  * streaming. Values persist in localStorage and apply immediately.
  */
 
-import { DEFAULT_STREAM_RADIUS } from '../core/voxel.ts';
-import { DEFAULT_SHADOW_RESOLUTION } from '../render/lighting.ts';
-import { PLANET_RADIUS_DEFAULT } from '../render/planet.glsl.ts';
-import type { DayNight } from '../render/day-night.ts';
+import { DEFAULT_STREAM_RADIUS } from '../core/voxel';
+import { DEFAULT_SHADOW_RESOLUTION } from '../render/lighting';
+import { PLANET_RADIUS_DEFAULT } from '../render/planet.glsl';
+import type { DayNight } from '../render/day-night';
 
 const STORE_KEY = 'VoxelWorld.settings';
 const SETTINGS_VERSION = 2;

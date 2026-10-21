@@ -20,7 +20,7 @@
  */
 
 import * as THREE from 'three';
-import { PLANET_UNIFORMS_GLSL, PLANET_BEND_GLSL, planetUniformValues } from '../render/planet.glsl.ts';
+import { PLANET_UNIFORMS_GLSL, PLANET_BEND_GLSL, planetUniformValues } from '../render/planet.glsl';
 
 const UP = [0, 1, 0];
 const DETAIL_CHUNK = 48;

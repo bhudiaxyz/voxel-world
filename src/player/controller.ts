@@ -9,7 +9,7 @@
  */
 
 import * as THREE from 'three';
-import { WATER } from '../core/palette.ts';
+import { WATER } from '../core/palette';
 
 const GRAVITY      = 58;
 const MAX_SPEED    = 13.5;

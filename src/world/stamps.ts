@@ -27,10 +27,10 @@
  * running a cascade down flat ground.
  */
 
-import { BLOCKS, WATER } from '../core/palette.ts';
-import { makeRng } from '../core/rng.ts';
-import { plantTree } from './vegetation.ts';
-import { CASCADE } from './terrain.ts';
+import { BLOCKS, WATER } from '../core/palette';
+import { makeRng } from '../core/rng';
+import { plantTree } from './vegetation';
+import { CASCADE } from './terrain';
 
 /**
  * How many scenes the map gets, per 256x256 blocks of it.

@@ -6,8 +6,8 @@
  */
 
 import type * as THREE from 'three';
-import type { DayNight } from '../render/day-night.ts';
-import type { DroneMode } from '../player/drone.ts';
+import type { DayNight } from '../render/day-night';
+import type { DroneMode } from '../player/drone';
 
 const CSS = `
 #hud {

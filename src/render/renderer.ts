@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { GRADE, SKY } from '../core/palette.ts';
+import { GRADE, SKY } from '../core/palette';
 
 export function createRenderer(container: any) {
   const captureMode = new URLSearchParams(location.search).get('capture') === '1';

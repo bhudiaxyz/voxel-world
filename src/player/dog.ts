@@ -22,8 +22,8 @@
  */
 
 import * as THREE from 'three';
-import { createBoxEdges } from '../core/voxel.ts';
-import { IncrementalAStar, routePoints } from './pathfinding.ts';
+import { createBoxEdges } from '../core/voxel';
+import { IncrementalAStar, routePoints } from './pathfinding';
 
 /**
  * World units per dog voxel.

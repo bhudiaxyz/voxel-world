@@ -14,7 +14,7 @@
  * the river and the beaches can sit off-lattice while the land stays on it.
  */
 
-import { clamp } from '../core/rng.ts';
+import { clamp } from '../core/rng';
 
 /**
  * Majority (mode) filter — the workhorse.

@@ -27,8 +27,8 @@
  */
 
 import * as THREE from 'three';
-import { LIGHT, SKY, FOG } from '../core/palette.ts';
-import { SKY_UNIFORMS_GLSL, SKY_FN_GLSL, skyUniformValues } from './sky.ts';
+import { LIGHT, SKY, FOG } from '../core/palette';
+import { SKY_UNIFORMS_GLSL, SKY_FN_GLSL, skyUniformValues } from './sky';
 
 /**
  * Full-resolution dynamic shadowing. `?shadow=` remains only as a diagnostic

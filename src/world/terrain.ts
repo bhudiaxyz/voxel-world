@@ -27,11 +27,11 @@
  */
 
 import * as THREE from 'three';
-import { BLOCKS, BLOCK_BY_ID, WATER, PATTERN, registerBlock } from '../core/palette.ts';
-import { LICHEN_PALE } from './vegetation.ts';
-import { VoxelGrid } from '../core/voxel.ts';
-import { makeNoise2D, fbm2, clamp, smoothstep, makeRng } from '../core/rng.ts';
-import { modeFilter, despeckle, carveStairs, riseAbove, dropBelow } from './terrain-shape.ts';
+import { BLOCKS, BLOCK_BY_ID, WATER, PATTERN, registerBlock } from '../core/palette';
+import { LICHEN_PALE } from './vegetation';
+import { VoxelGrid } from '../core/voxel';
+import { makeNoise2D, fbm2, clamp, smoothstep, makeRng } from '../core/rng';
+import { modeFilter, despeckle, carveStairs, riseAbove, dropBelow } from './terrain-shape';
 
 export const WORLD = {
   /**

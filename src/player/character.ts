@@ -9,7 +9,7 @@
  */
 
 import * as THREE from 'three';
-import { createBoxEdges } from '../core/voxel.ts';
+import { createBoxEdges } from '../core/voxel';
 
 const S = 0.30;   // world units per character voxel
 

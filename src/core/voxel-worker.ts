@@ -1,4 +1,4 @@
-import { buildChunkTransferPayload, installBlockRegistry } from './voxel.ts';
+import { buildChunkTransferPayload, installBlockRegistry } from './voxel';
 
 function collectTransfers(payload: any) {
   const transfers: any[] = [];

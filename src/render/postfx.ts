@@ -40,10 +40,10 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
 import { Pass } from 'three/examples/jsm/postprocessing/Pass.js';
-import { GRADE, SKY, LIGHT } from '../core/palette.ts';
-import { FOG_NEAR } from './lighting.ts';
-import { EDGE_LAYER } from '../core/voxel.ts';
-import { SKY_UNIFORMS_GLSL, SKY_FN_GLSL, skyUniformValues } from './sky.ts';
+import { GRADE, SKY, LIGHT } from '../core/palette';
+import { FOG_NEAR } from './lighting';
+import { EDGE_LAYER } from '../core/voxel';
+import { SKY_UNIFORMS_GLSL, SKY_FN_GLSL, skyUniformValues } from './sky';
 
 /* ------------------------------------------------------------------ *
  * Grade — display space. Taste only.

@@ -20,7 +20,7 @@
  */
 
 import * as THREE from 'three';
-import { BLOCK_BY_ID, WATER } from '../core/palette.ts';
+import { BLOCK_BY_ID, WATER } from '../core/palette';
 
 /** Scene-kind marker colours. Warm for built things, cool for water ones. */
 const KIND = {

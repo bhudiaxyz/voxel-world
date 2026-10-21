@@ -5,14 +5,14 @@
  */
 
 import * as THREE from 'three';
-import { generateTerrain, WORLD } from './terrain.ts';
-import { planWorld } from './planner.ts';
-import { scatterVegetation } from './vegetation.ts';
-import { buildStructures } from './props.ts';
-import { buildStamps } from './stamps.ts';
-import { createWorldChunkStreamer } from '../core/voxel.ts';
-import { makeRng } from '../core/rng.ts';
-import { BLOCKS, BLOCK_BY_ID } from '../core/palette.ts';
+import { generateTerrain, WORLD } from './terrain';
+import { planWorld } from './planner';
+import { scatterVegetation } from './vegetation';
+import { buildStructures } from './props';
+import { buildStamps } from './stamps';
+import { createWorldChunkStreamer } from '../core/voxel';
+import { makeRng } from '../core/rng';
+import { BLOCKS, BLOCK_BY_ID } from '../core/palette';
 
 export async function buildWorld(seed: number, onProgress: (p: number, s?: string) => void = () => {}) {
   const yieldFrame = () => new Promise((r) => setTimeout(r, 0));

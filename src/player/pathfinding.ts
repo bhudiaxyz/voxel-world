@@ -7,7 +7,7 @@
  */
 
 import * as THREE from 'three';
-import { WATER } from '../core/palette.ts';
+import { WATER } from '../core/palette';
 
 const PLAYER_HEIGHT = 1.75;
 const MAX_STEP = 3.30;

@@ -12,8 +12,8 @@
  */
 
 import * as THREE from 'three';
-import { PETAL_COLORS, MOTE_COLORS } from '../core/palette.ts';
-import { PLANET_UNIFORMS_GLSL, PLANET_BEND_GLSL, planetUniformValues } from '../render/planet.glsl.ts';
+import { PETAL_COLORS, MOTE_COLORS } from '../core/palette';
+import { PLANET_UNIFORMS_GLSL, PLANET_BEND_GLSL, planetUniformValues } from '../render/planet.glsl';
 
 const PETAL_VERT = /* glsl */`
   #include <common>

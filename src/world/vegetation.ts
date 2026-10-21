@@ -19,10 +19,10 @@
  */
 
 import * as THREE from 'three';
-import { WATER, BLOCKS, BLOCK_BY_ID, PATTERN, registerBlock } from '../core/palette.ts';
-import { clamp, smoothstep, makeNoise2D, fbm2 } from '../core/rng.ts';
-import { DetailField } from './veg-detail.ts';
-import { BIOME } from './planner.ts';
+import { WATER, BLOCKS, BLOCK_BY_ID, PATTERN, registerBlock } from '../core/palette';
+import { clamp, smoothstep, makeNoise2D, fbm2 } from '../core/rng';
+import { DetailField } from './veg-detail';
+import { BIOME } from './planner';
 
 const c = (hex: number) => new THREE.Color(hex);
 

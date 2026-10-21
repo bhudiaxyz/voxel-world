@@ -6,8 +6,8 @@
  * heightfield so it sits on the ground properly.
  */
 
-import { BLOCKS, WATER } from '../core/palette.ts';
-import { clamp } from '../core/rng.ts';
+import { BLOCKS, WATER } from '../core/palette';
+import { clamp } from '../core/rng';
 
 /**
  * A plank bridge across the channel at a river node.

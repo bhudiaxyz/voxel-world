@@ -15,7 +15,7 @@
  * coordinate 28372" into "the sakura shore west of the highland".
  */
 
-import { makeRng, makeNoise2D, fbm2, clamp } from '../core/rng.ts';
+import { makeRng, makeNoise2D, fbm2, clamp } from '../core/rng';
 
 export const BIOME = {
   MEADOW:   0,

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { VoxelGrid } from '../core/voxel.ts';
+import type { VoxelGrid } from '../core/voxel';
 
 const DRONE = {
   cruiseSpeed:           18,
