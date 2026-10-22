@@ -13,14 +13,15 @@ const CSS = `
 #hud {
   position:fixed; inset:0; z-index:20; pointer-events:none;
   font-family:Inter, ui-sans-serif, system-ui, sans-serif;
-  color:#5d536d;
-  --hud-shadow:0 8px 24px rgba(69,58,88,.14);
+  color:var(--ink);
+  --hud-shadow:0 8px 24px rgba(0,0,0,.42);
 }
 #hud .place {
   position:absolute; left:50%; top:max(24px, env(safe-area-inset-top));
   transform:translate(-50%, -6px); opacity:0;
-  font-size:12px; font-weight:650; letter-spacing:.22em;
-  text-transform:uppercase; text-shadow:0 1px 8px rgba(255,255,255,.85);
+  font-size:12px; font-weight:700; letter-spacing:.22em;
+  text-transform:uppercase; color:var(--gold);
+  text-shadow:0 0 14px rgba(201,173,115,.4);
   transition:opacity .55s ease, transform .55s ease;
 }
 #hud .place.show { opacity:.9; transform:translate(-50%, 0); }
@@ -33,16 +34,16 @@ const CSS = `
 #hud .shortcuts.show { opacity:.82; transform:none; }
 #hud .shortcut {
   display:flex; align-items:center; gap:7px; height:30px; padding:0 10px 0 7px;
-  border:1px solid rgba(255,255,255,.72); border-radius:8px;
-  background:rgba(255,255,255,.52); backdrop-filter:blur(14px) saturate(1.12);
-  box-shadow:var(--hud-shadow); font-size:10px; font-weight:650;
-  letter-spacing:.11em; text-transform:uppercase;
+  border:1px solid var(--line); border-radius:8px;
+  background:rgba(20,19,24,.72); backdrop-filter:blur(14px) saturate(1.08);
+  box-shadow:var(--hud-shadow); font-size:10px; font-weight:700;
+  letter-spacing:.11em; text-transform:uppercase; color:var(--ink-soft);
 }
 #hud kbd {
   min-width:18px; height:18px; padding:0 4px; display:grid; place-items:center;
-  border-radius:4px; background:rgba(91,78,111,.74); color:#fff;
+  border-radius:4px; background:rgba(201,173,115,.18); color:var(--gold);
   font:700 10px/1 Inter, ui-sans-serif, system-ui, sans-serif;
-  box-shadow:0 1px 0 rgba(0,0,0,.12);
+  box-shadow:0 1px 0 rgba(0,0,0,.3);
 }
 #hud .status-bar {
   position:absolute; left:max(18px, env(safe-area-inset-left));
@@ -51,10 +52,11 @@ const CSS = `
 }
 #hud .status-chip {
   display:flex; align-items:center; gap:6px; height:28px; padding:0 10px 0 8px;
-  border:1px solid rgba(255,255,255,.72); border-radius:8px;
-  background:rgba(255,255,255,.52); backdrop-filter:blur(14px) saturate(1.12);
-  box-shadow:var(--hud-shadow); font-size:10px; font-weight:650;
+  border:1px solid var(--line); border-radius:8px;
+  background:rgba(20,19,24,.72); backdrop-filter:blur(14px) saturate(1.08);
+  box-shadow:var(--hud-shadow); font-size:10px; font-weight:700;
   letter-spacing:.09em; font-variant-numeric:tabular-nums; opacity:.82;
+  color:var(--ink-soft);
 }
 @media (max-width:640px), (pointer:coarse) {
   #hud .shortcuts { display:none; }

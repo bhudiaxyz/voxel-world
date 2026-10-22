@@ -47,18 +47,15 @@ const CSS = `
   transform-origin:50% 100%;
   font-family:Inter, ui-rounded, system-ui, sans-serif;
   font-weight:650; font-size:15px; letter-spacing:.015em;
-  white-space:nowrap; color:#fff;
-  /* A thin four-way rim rather than a heavy stroke: the world is pastel and a
-   * black outline would be the darkest thing on screen. The rim is the same
-   * violet the terrain is inked with, so the label belongs to the picture. */
+  white-space:nowrap; color:var(--ink);
   text-shadow:
-     0  1px 0 rgba(58,48,78,.62),  0 -1px 0 rgba(58,48,78,.62),
-     1px 0   0 rgba(58,48,78,.62), -1px 0  0 rgba(58,48,78,.62),
-     0  2px 8px rgba(46,38,64,.38);
+     0  1px 0 rgba(0,0,0,.72),  0 -1px 0 rgba(0,0,0,.72),
+     1px 0   0 rgba(0,0,0,.72), -1px 0  0 rgba(0,0,0,.72),
+     0  2px 8px rgba(0,0,0,.5);
 }
-#bubbles .bubble.soft  { font-size:13px; font-weight:600; color:#f4effb; }
-#bubbles .bubble.alert { color:#ffdfb4; }
-#bubbles .bubble.hush  { font-size:12.5px; font-weight:550; color:#e9e2f4;
+#bubbles .bubble.soft  { font-size:13px; font-weight:600; color:var(--ink-soft); }
+#bubbles .bubble.alert { color:var(--gold-bright); }
+#bubbles .bubble.hush  { font-size:12.5px; font-weight:550; color:var(--ink-faint);
                          font-style:italic; }
 `;
 

@@ -4,41 +4,40 @@ const CSS = `
 #pause {
   position:fixed; inset:0; z-index:45; display:none;
   align-items:center; justify-content:center;
-  background:rgba(207,207,224,.28); backdrop-filter:blur(10px) saturate(1.04);
-  font-family:Inter, ui-sans-serif, system-ui, sans-serif; color:#50475f;
+  background:rgba(7,7,10,.55); backdrop-filter:blur(10px) saturate(1.04);
+  font-family:Inter, ui-sans-serif, system-ui, sans-serif; color:var(--ink);
 }
 #pause.open { display:flex; }
 #pause .panel {
   width:min(300px, calc(100vw - 32px)); padding:18px;
-  border-radius:14px; background:rgba(255,255,255,.68);
-  border:1px solid rgba(255,255,255,.84);
+  border-radius:14px; background:rgba(20,19,24,.88);
+  border:1px solid var(--line);
   backdrop-filter:blur(18px) saturate(1.12);
-  box-shadow:0 24px 64px rgba(69,56,88,.20);
+  box-shadow:0 24px 64px rgba(0,0,0,.55);
 }
-#pause h2 { margin:0 0 20px; font-size:15px; font-weight:650; letter-spacing:.02em; }
+#pause h2 { margin:0 0 20px; font-size:15px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--gold); }
 #pause nav { display:grid; gap:8px; }
 #pause button {
   width:100%; height:42px; padding:0 14px; display:flex; align-items:center;
-  justify-content:space-between; border:1px solid rgba(255,255,255,.78);
-  border-radius:8px; background:rgba(255,255,255,.42); color:#574d66;
+  justify-content:space-between; border:1px solid rgba(201,173,115,.18);
+  border-radius:8px; background:rgba(30,28,35,.72); color:var(--ink-soft);
   font:600 12px/1 Inter, ui-sans-serif, system-ui, sans-serif;
-  letter-spacing:.02em; cursor:pointer;
+  letter-spacing:.08em; text-transform:uppercase; cursor:pointer;
   transition:background .14s ease, border-color .14s ease;
 }
 #pause button:hover, #pause button:focus-visible {
-  outline:none; background:rgba(255,255,255,.78); border-color:#fff;
+  outline:none; background:rgba(42,39,48,.88); border-color:var(--gold);
 }
-#pause #pause-resume { background:rgba(255,255,255,.88); border-color:#fff; color:#453c55; }
+#pause #pause-resume { background:rgba(201,173,115,.12); border-color:var(--line); color:var(--gold); }
 #pause #pause-resume:hover, #pause #pause-resume:focus-visible {
-  background:#fff; border-color:#fff;
+  background:rgba(201,173,115,.22); border-color:var(--gold);
 }
 #pause kbd {
   min-width:22px; height:20px; padding:0 5px; display:grid; place-items:center;
-  border-radius:5px; background:rgba(78,66,96,.10); color:rgba(66,55,82,.58);
-  font:650 9px/1 Inter, ui-sans-serif, system-ui, sans-serif;
+  border-radius:5px; background:rgba(201,173,115,.12); color:var(--gold);
+  font:700 9px/1 Inter, ui-sans-serif, system-ui, sans-serif;
   text-transform:uppercase;
 }
-#pause #pause-resume kbd { background:rgba(69,60,85,.10); color:rgba(69,60,85,.55); }
 `;
 
 export function createPause({ input, map }: any) {

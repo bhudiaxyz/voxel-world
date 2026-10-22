@@ -34,32 +34,32 @@ const KIND = {
 const CSS = `
 #map { position:fixed; inset:0; z-index:44; display:none;
        align-items:center; justify-content:center;
-       background:rgba(207,207,224,.30); backdrop-filter:blur(10px) saturate(1.04);
+       background:rgba(7,7,10,.60); backdrop-filter:blur(10px) saturate(1.04);
        font-family:Inter, ui-sans-serif, system-ui, sans-serif;
-       color:#fff; opacity:0; transition:opacity .18s ease; }
+       color:var(--ink); opacity:0; transition:opacity .18s ease; }
 #map.on { display:flex; }
 #map.vis { opacity:1; }
 #map .frame { position:relative; padding:8px; border-radius:14px;
-  background:rgba(255,255,255,.58); border:1px solid rgba(255,255,255,.82);
+  background:rgba(20,19,24,.90); border:1px solid var(--line);
   backdrop-filter:blur(18px) saturate(1.12);
-  box-shadow:0 24px 72px rgba(69,56,88,.22); }
-#map canvas { display:block; border-radius:9px; background:#cfc6de;
-  box-shadow:inset 0 0 0 1px rgba(24,18,36,.18); }
+  box-shadow:0 24px 72px rgba(0,0,0,.55); }
+#map canvas { display:block; border-radius:9px; background:#0d0c0f;
+  box-shadow:inset 0 0 0 1px rgba(201,173,115,.12); }
 #map .north { position:absolute; left:18px; top:17px; z-index:2;
   width:25px; height:25px; display:grid; place-items:center; border-radius:6px;
-  background:rgba(255,255,255,.66); border:1px solid rgba(255,255,255,.82);
-  color:#584e68; backdrop-filter:blur(9px); font-size:10px; font-weight:750;
-  letter-spacing:.06em; box-shadow:0 4px 14px rgba(64,52,82,.12); }
+  background:rgba(20,19,24,.88); border:1px solid var(--line);
+  color:var(--gold); backdrop-filter:blur(9px); font-size:10px; font-weight:700;
+  letter-spacing:.06em; box-shadow:0 4px 14px rgba(0,0,0,.35); }
 #map .close { position:absolute; right:17px; top:16px; z-index:2;
   width:28px; height:28px; display:grid; place-items:center; padding:0;
-  border:1px solid rgba(255,255,255,.15); border-radius:7px;
-  background:rgba(255,255,255,.66); color:rgba(73,61,89,.72);
+  border:1px solid rgba(201,173,115,.18); border-radius:7px;
+  background:rgba(30,28,35,.80); color:var(--ink-soft);
   backdrop-filter:blur(7px); font:400 18px/1 Inter, sans-serif; cursor:pointer; }
-#map .close:hover { color:#4f455d; background:rgba(255,255,255,.92); }
+#map .close:hover { color:var(--gold); background:rgba(42,39,48,.88); border-color:var(--gold); }
 #map .busy { position:absolute; inset:0; display:flex; align-items:center;
   justify-content:center; }
 #map .busy::after { content:""; width:22px; height:22px; border-radius:50%;
-  border:2px solid rgba(255,255,255,.24); border-top-color:#fff;
+  border:2px solid rgba(201,173,115,.18); border-top-color:var(--gold);
   animation:map-spin .75s linear infinite; }
 @keyframes map-spin { to { transform:rotate(360deg); } }
 `;
