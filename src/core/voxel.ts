@@ -1309,7 +1309,7 @@ function makeEdgeMaterial() {
         // edgeDepth² to compensate for the depth buffer's non-linear precision
         // loss at large view distances (near=0.1, far=6000 compresses most
         // precision into the first few units).
-        float depthBias = 2e-5 + alongDepthSlope + edgeDepth * edgeDepth * 2e-3;
+        float depthBias = 2e-5 + alongDepthSlope + edgeDepth * edgeDepth * 1e-5;
         if (edgeDepth > sceneDepth + depthBias) discard;
 
         float halfWidth = uCoreWidth * 0.5;

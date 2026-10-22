@@ -2,7 +2,7 @@
  * Post-processing — where the diorama gets its air.
  *
  * Chain:
- *   RenderPass -> Atmosphere -> Bloom -> Grade/Output -> AA
+ *   SceneDepthPass -> EdgeMaskPass -> Atmosphere -> Bloom -> Crepuscular -> Grade/Output -> AA
  *
  * Everything before Grade is linear HDR. Grade begins with the same ACES and
  * sRGB conversion that used to occupy a separate OutputPass, then performs its

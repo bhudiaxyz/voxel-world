@@ -9,6 +9,7 @@ A first-person procedural voxel planet wilderness explorer written in Three.js. 
 - **Night sky** — procedural stars, a Milky Way with dust lane, emission nebulae, and a moon disc. Fades out near sunrise.
 - **Volumetric-style atmosphere** — sunrise/sunset limb glow, crepuscular rays (eight-tap radial blur), and animated cloud cover.
 - **Drone mode** — float above the terrain and cruise hands-free. The drone follows the ground height at a smooth altitude.
+- **Ink edge rendering** — a custom analytic line pass draws toon-style dark and light strokes at block boundaries, composited in display space after tone mapping so outlines never bloom or saturate.
 - **LOD fade** — distant chunks dissolve in with a Bayer 4×4 ordered dither rather than popping.
 - **Rich vegetation** — ferns, red ferns, thick moss, pale lichen on cliff faces, tall shrubs, grass tufts, willow trees, and spire trees join the existing oaks and blossoms.
 - **TypeScript** — the entire codebase is strict-mode TypeScript.
