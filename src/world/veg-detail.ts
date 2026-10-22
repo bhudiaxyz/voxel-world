@@ -277,15 +277,8 @@ export class DetailField {
       // Depth write is off (see material above), so the blades draw after the
       // terrain or its chunks would paint over them.
       mesh.renderOrder = 2;
-      // LOD fade-in: start fully dithered out, advance in update().
-      mesh.userData.lodAlpha = 0;
-      mesh.userData.lodFading = true;
-      mesh.onBeforeRender = () => {
-        (mesh.material as unknown as THREE.ShaderMaterial).uniforms.uLodAlpha.value = mesh.userData.lodAlpha;
-      };
-      mesh.onAfterRender = () => {
-        (mesh.material as unknown as THREE.ShaderMaterial).uniforms.uLodAlpha.value = 1.0;
-      };
+      mesh.userData.lodAlpha = 1.0;
+      mesh.userData.lodFading = false;
       group.add(mesh);
     }
 

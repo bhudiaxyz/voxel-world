@@ -593,6 +593,17 @@ export function createWorldChunkStreamer(grid: any, {
         uniforms.uLodAlpha.value = 1.0;
       };
     }
+    if (record.edges) {
+      const edgeUniforms = (meshes.edgeMaterial as any).uniforms;
+      record.edges.userData.lodAlpha = 0.0;
+      record.edges.userData.lodFading = true;
+      record.edges.onBeforeRender = () => {
+        edgeUniforms.uLodAlpha.value = record.edges.userData.lodAlpha;
+      };
+      record.edges.onAfterRender = () => {
+        edgeUniforms.uLodAlpha.value = 1.0;
+      };
+    }
   };
 
   const loadChunk = (ci: any, ck: any) => {
@@ -722,7 +733,7 @@ export function createWorldChunkStreamer(grid: any, {
     // Advance LOD fade-in for newly loaded chunks.
     if (dt > 0) {
       for (const record of loaded.values()) {
-        for (const mesh of [record.solid, record.glow]) {
+        for (const mesh of [record.solid, record.glow, record.edges]) {
           if (!mesh || !mesh.userData.lodFading) continue;
           mesh.userData.lodAlpha = Math.min(1.0, mesh.userData.lodAlpha + dt * 1.5);
           if (mesh.userData.lodAlpha >= 1.0) {
@@ -804,7 +815,7 @@ export function createWorldChunkStreamer(grid: any, {
       // Preloaded spawn chunks appear fully opaque immediately — no screen-door on start.
       const record = loaded.get(keyOf(initial[i].ci, initial[i].ck));
       if (record) {
-        for (const mesh of [record.solid, record.glow]) {
+        for (const mesh of [record.solid, record.glow, record.edges]) {
           if (!mesh) continue;
           mesh.userData.lodAlpha = 1.0;
           mesh.userData.lodFading = false;
@@ -1140,6 +1151,7 @@ function makeEdgeMaterial() {
       uMistDens: { value: 0.022 },
       uMistMax: { value: 0.55 },
       tSceneDepth: { value: null },
+      uLodAlpha: { value: 1.0 },
     },
     vertexShader: /* glsl */`
       uniform vec2 resolution;
@@ -1249,6 +1261,7 @@ function makeEdgeMaterial() {
       uniform sampler2D tSceneDepth;
       uniform vec2 resolution;
       uniform float uCoreWidth;
+      uniform float uLodAlpha;
 
       varying vec2 vScreenStart;
       varying vec2 vScreenEnd;
@@ -1315,6 +1328,7 @@ function makeEdgeMaterial() {
         float aa = max(fwidth(signedDistance) * 0.65, 0.50);
         float coverage = 1.0 - smoothstep(-aa, aa, signedDistance);
         coverage *= clamp(vFogVisibility, 0.0, 1.0);
+        coverage *= uLodAlpha;
         /* A hard stop at the surface, not a ramp.
          *
          * Fading over a depth left every vertical edge trailing off into the

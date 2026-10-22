@@ -35,11 +35,10 @@
 
 import * as THREE from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
-import { Pass } from 'three/examples/jsm/postprocessing/Pass.js';
+import { Pass, FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
 import { GRADE, SKY, LIGHT } from '../core/palette';
 import { FOG_NEAR } from './lighting';
 import { EDGE_LAYER } from '../core/voxel';
@@ -251,6 +250,59 @@ class EdgeMaskPass extends Pass {
     renderer.setRenderTarget(previousTarget);
     renderer.setClearColor(this.clearColor, previousAlpha);
     renderer.autoClear = previousAutoClear;
+  }
+}
+
+/**
+ * Renders the scene into a dedicated FBO that owns the depth texture, then
+ * blits the colour to the readBuffer so the rest of the composer chain picks
+ * it up exactly as if a plain RenderPass had run.
+ *
+ * The depth texture must never be simultaneously an FBO depth attachment and
+ * a sampler in the same draw call (WebGL feedback loop). Keeping it on a
+ * separate FBO that is never the composer's writeBuffer makes that impossible:
+ * the composer ping-pongs between renderTarget1/2, neither of which has the
+ * depth texture attached, so every pass that samples it is writing elsewhere.
+ */
+class SceneDepthPass extends Pass {
+  private _scene: THREE.Scene;
+  private _camera: THREE.Camera;
+  private _fbo: THREE.WebGLRenderTarget;
+  private _quad: FullScreenQuad;
+
+  constructor(scene: THREE.Scene, camera: THREE.Camera, fbo: THREE.WebGLRenderTarget) {
+    super();
+    this.needsSwap = false;
+    this._scene  = scene;
+    this._camera = camera;
+    this._fbo    = fbo;
+    this._quad   = new FullScreenQuad(new THREE.ShaderMaterial({
+      uniforms: { tDiffuse: { value: fbo.texture } },
+      vertexShader:   `varying vec2 vUv;
+                       void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
+      fragmentShader: `uniform sampler2D tDiffuse; varying vec2 vUv;
+                       void main(){ gl_FragColor=texture2D(tDiffuse,vUv); }`,
+      depthTest: false,
+      depthWrite: false,
+      toneMapped: false,
+    }));
+  }
+
+  render(renderer: THREE.WebGLRenderer, _write: THREE.WebGLRenderTarget, read: THREE.WebGLRenderTarget) {
+    renderer.setRenderTarget(this._fbo);
+    renderer.clear();
+    renderer.render(this._scene, this._camera);
+
+    renderer.setRenderTarget(read);
+    renderer.clear();
+    this._quad.render(renderer);
+  }
+
+  setSize(w: number, h: number) { this._fbo.setSize(w, h); }
+
+  dispose() {
+    (this._quad.material as THREE.Material).dispose();
+    this._quad.dispose();
   }
 }
 
@@ -472,16 +524,15 @@ export function createPostFX(
   composer.setPixelRatio(dpr);
   composer.setSize(size.x, size.y);
 
-  // EffectComposer clones the base target for its second buffer, and
-  // RenderPass draws the scene into the *read* buffer (renderTarget2), not
-  // the one we constructed. The depth texture must be attached there or the
-  // atmosphere and edge-visibility passes read an empty buffer. Later quad
-  // passes do write into renderTarget2 after a
-  // swap, but only after this pass has already consumed the depth, and
-  // RenderPass re-clears and re-renders it at the top of every frame.
-  composer.renderTarget2.depthTexture = depthTexture;
+  // sceneFBO owns the depthTexture and is never part of the composer's
+  // ping-pong chain, so no pass ever writes to it while sampling depthTexture.
+  const sceneFBO = new THREE.WebGLRenderTarget(size.x * dpr, size.y * dpr, {
+    type: THREE.HalfFloatType,
+    samples: 0,
+    depthTexture,
+  });
 
-  composer.addPass(new RenderPass(scene, camera));
+  composer.addPass(new SceneDepthPass(scene, camera, sceneFBO));
   edgeMaterial.uniforms.tSceneDepth.value = depthTexture;
   const edgePass = new EdgeMaskPass(edgeMaterial, camera, edgeMask, scene);
   composer.addPass(edgePass);
@@ -602,12 +653,11 @@ export function createPostFX(
       composer.render(dt);
     },
     setSize(w: number, h: number) {
-      // Keep the composer in lockstep with the renderer's budgeted DPR.
-      // composer.setSize resizes both internal targets, and renderTarget2
-      // resizes the attached depth texture with it.
-      composer.setPixelRatio(renderer.getPixelRatio());
+      const dpr = renderer.getPixelRatio();
+      composer.setPixelRatio(dpr);
       composer.setSize(w, h);
-      edgeMask.setSize(w * renderer.getPixelRatio(), h * renderer.getPixelRatio());
+      sceneFBO.setSize(w * dpr, h * dpr);
+      edgeMask.setSize(w * dpr, h * dpr);
       setRes(w, h);
     },
     depthTexture,

@@ -123,7 +123,7 @@ async function start(): Promise<void> {
     bubbles.resize();
   });
 
-  const clock = new THREE.Clock();
+  const clock = new THREE.Timer();
   let started = false;
   let perfTime = 0;
   let perfFrames = 0;
@@ -133,6 +133,7 @@ async function start(): Promise<void> {
 
   function frame(): void {
     requestAnimationFrame(frame);
+    clock.update();
     const rawDt = clock.getDelta();
     const dt = Math.min(rawDt, 1 / 20);
 
