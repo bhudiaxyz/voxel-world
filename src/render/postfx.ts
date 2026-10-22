@@ -64,8 +64,8 @@ const GradeShader = {
     // mapping, so the pale stroke cannot become an emitter.
     uEdgeDark:  { value: new THREE.Vector3(0.39, 0.32, 0.43) },
     uEdgeLight: { value: new THREE.Vector3(0.94, 0.91, 0.93) },
-    uEdgeDarkOpacity:  { value: 0.64 },
-    uEdgeLightOpacity: { value: 0.30 },
+    uEdgeDarkOpacity:  { value: 0.0 },
+    uEdgeLightOpacity: { value: 0.0 },
     // "Milk": a flat mix toward a bright lilac across the whole frame. The
     // reference frames are clean and confidently coloured, so this stays low
     // — just enough to keep the darkest values from going heavy.

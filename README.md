@@ -37,6 +37,7 @@ npm run preview   # serve that bundle locally
 | WASD | Move |
 | Mouse | Look |
 | Space | Jump (hold in water to swim up) |
+| E | Toggle edge outlines |
 | G | Toggle drone mode |
 | Y | Tell the dog to sit or stand |
 | M | Toggle map |

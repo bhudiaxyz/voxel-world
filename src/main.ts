@@ -84,6 +84,12 @@ async function start(): Promise<void> {
         fpCam.droneActive = true;
       }
     }
+    if (e.code === 'KeyE' && fpCam.isLocked) {
+      const g = post.grade.uniforms;
+      const on = g['uEdgeDarkOpacity'].value === 0;
+      g['uEdgeDarkOpacity'].value  = on ? 0.64 : 0;
+      g['uEdgeLightOpacity'].value = on ? 0.30 : 0;
+    }
   });
 
   const navigator = createPathNavigator({
