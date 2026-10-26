@@ -10,6 +10,7 @@
 
 import * as THREE from 'three';
 import { WATER } from '../core/palette';
+import { isTouchDevice } from '../ui/touch-controls';
 
 const GRAVITY = 58;
 const MAX_SPEED = 13.5;
@@ -528,26 +529,28 @@ export class Input {
       { passive: false },
     );
 
-    // touch: left half is a virtual stick, right half jumps
-    dom.addEventListener('pointerdown', (e: any) => {
-      if (e.pointerType !== 'touch') return;
-      if (e.clientX < innerWidth * 0.5) this._touch = { id: e.pointerId, x: e.clientX, y: e.clientY };
-      else this.jumpPressed = true;
-    });
-    dom.addEventListener('pointermove', (e: any) => {
-      if (!this._touch || e.pointerId !== this._touch.id) return;
-      const dx = (e.clientX - this._touch.x) / 58;
-      const dy = (e.clientY - this._touch.y) / 58;
-      this.axis.set(THREE.MathUtils.clamp(dx, -1, 1), THREE.MathUtils.clamp(dy, -1, 1));
-    });
-    const end = (e: any) => {
-      if (this._touch && e.pointerId === this._touch.id) {
-        this._touch = null;
-        this.axis.set(0, 0);
-      }
-    };
-    dom.addEventListener('pointerup', end);
-    dom.addEventListener('pointercancel', end);
+    // Legacy touch stick — only active on non-touch devices (nipplejs handles touch).
+    if (!isTouchDevice) {
+      dom.addEventListener('pointerdown', (e: any) => {
+        if (e.pointerType !== 'touch') return;
+        if (e.clientX < innerWidth * 0.5) this._touch = { id: e.pointerId, x: e.clientX, y: e.clientY };
+        else this.jumpPressed = true;
+      });
+      dom.addEventListener('pointermove', (e: any) => {
+        if (!this._touch || e.pointerId !== this._touch.id) return;
+        const dx = (e.clientX - this._touch.x) / 58;
+        const dy = (e.clientY - this._touch.y) / 58;
+        this.axis.set(THREE.MathUtils.clamp(dx, -1, 1), THREE.MathUtils.clamp(dy, -1, 1));
+      });
+      const end = (e: any) => {
+        if (this._touch && e.pointerId === this._touch.id) {
+          this._touch = null;
+          this.axis.set(0, 0);
+        }
+      };
+      dom.addEventListener('pointerup', end);
+      dom.addEventListener('pointercancel', end);
+    }
   }
 
   /** Read and clear the per-frame edge flags. */

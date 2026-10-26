@@ -1,12 +1,12 @@
 # Voxel World
 
-A first-person explorer for a procedurally generated spherical voxel world (Three.js + TypeScript + Vite). Walk, drone, or fly across the planet, exploring terraced terrain, rivers, blossom trees, bridges, a companion dog, and a real-time day/night cycle with animated aurora. Walk the curved surface of a tiny planet — the world bends away from you at the horizon.
+A first-person explorer for a procedurally generated spherical voxel world (Three.js + TypeScript + Vite). Walk, drone, or fly across the planet, exploring terraced terrain, rivers, blossom trees, bridges, a companion dog, and a real-time day/night cycle with animated aurora. Walk the curved surface of the island on a tiny planet — the world bends away from you at the horizon.
 
 Inspired by **Verdant** [https://github.com/xikhar/verdant] and **Petalfell** [https://github.com/xikhar/voxel-game-original], along with aspects of **Beyond Fable** [https://github.com/xikhar/beyond-fable].
 
 ## Highlights
 
-- **Curved planet** — GPU vertex bending gives the planet a Mario-Galaxy-style curvature. Physics stay flat; only the visuals curve.
+- **Curved planet** — GPU vertex bending gives the island a Mario-Galaxy-style curvature. Physics stay flat; only the visuals curve.
 - **Day/night cycle** — a 20-minute day with seven keyframed sky palettes. Watch the sun rise through orange haze, reach a pale noon, and set again.
 - **Night sky** — procedural stars, a Milky Way with Great Rift dust lane, emission nebulae, and a moon disc. Fades out near sunrise.
 - **Aurora** — animated curtain aurora appears at deep night: flickering vertical rays, sweeping pulse waves, slow breathing intensity, and colour that shifts from green through cyan to magenta and ghostly white at peaks.
