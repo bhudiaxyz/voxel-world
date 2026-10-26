@@ -419,6 +419,108 @@ export const PETAL_COLORS = [c(0xe8a040), c(0xd4882a), c(0xc87030), c(0xd49840),
 export const MOTE_COLORS = [c(0xfff0c0), c(0xffd880), c(0xf0c840), c(0xffffff)];
 
 /* ------------------------------------------------------------------ *
+ * Swappable colour palettes
+ * ------------------------------------------------------------------ */
+
+/**
+ * A VoxelPalette defines the key semantic colours for the world. Derived
+ * block colours (side, bottom, tint, fringeColor) are darkened automatically
+ * from the top face colour.
+ */
+export interface VoxelPalette {
+  label: string;
+  /** Grass block faces */
+  grass: number; grassLight: number; grassDeep: number;
+  soil: number; sand: number;
+  stone: number; stonePale: number; stoneWarm: number;
+  /** Foliage blocks (maps to LEAF_PINK..LEAF_ROSE in order) */
+  foliage: [number, number, number, number, number, number];
+  water: { shoal: number; shallow: number; deep: number };
+}
+
+/** The active palette name — read by map.ts and any future palette-aware systems. */
+export let activePaletteName = 'Autumn';
+
+export const VOXEL_PALETTES: Record<string, VoxelPalette> = {
+  Autumn: {
+    label: 'Autumn Woodland',
+    grass: 0x8a9e4a, grassLight: 0x9aae5e, grassDeep: 0x7a8e3e,
+    soil: 0xa07848, sand: 0xc4a882,
+    stone: 0x9a9088, stonePale: 0xaaa098, stoneWarm: 0xa89890,
+    foliage: [0xe8973a, 0xf0b840, 0xd06040, 0xeacc78, 0x7a9848, 0xe07040],
+    water: { shoal: 0x6a8888, shallow: 0x3a5a5a, deep: 0x2a4040 },
+  },
+  Alpine: {
+    label: 'Alpine Snow',
+    grass: 0x8ab0c8, grassLight: 0xa0c0d8, grassDeep: 0x7098b0,
+    soil: 0x8090a8, sand: 0xe8e8f0,
+    stone: 0xb0b8c4, stonePale: 0xc8d0d8, stoneWarm: 0xa0a8b4,
+    foliage: [0x587898, 0x8090a8, 0x486878, 0xd8e8f0, 0x405870, 0x506880],
+    water: { shoal: 0x8ab0cc, shallow: 0x4878a0, deep: 0x305878 },
+  },
+  Desert: {
+    label: 'Desert Dunes',
+    grass: 0xa09058, grassLight: 0xb0a870, grassDeep: 0x887848,
+    soil: 0xc07840, sand: 0xe0c080,
+    stone: 0xb08870, stonePale: 0xc8a888, stoneWarm: 0xa87858,
+    foliage: [0x907040, 0xb09858, 0xc86030, 0xd8c070, 0x789040, 0xa07840],
+    water: { shoal: 0x5888a0, shallow: 0x306880, deep: 0x205060 },
+  },
+  Alien: {
+    label: 'Alien Biome',
+    grass: 0x40a878, grassLight: 0x58c890, grassDeep: 0x309060,
+    soil: 0x8040a8, sand: 0xc0e8c0,
+    stone: 0x506870, stonePale: 0x7090a0, stoneWarm: 0x407068,
+    foliage: [0xa028d8, 0xd040e8, 0x4080c0, 0xe060a0, 0x30b870, 0x8030c0],
+    water: { shoal: 0x30c0a8, shallow: 0x18908c, deep: 0x106060 },
+  },
+};
+
+/** Darken a Three.js Color by a factor (0..1 = darker) in linear space. */
+function darken(src: THREE.Color, factor: number): THREE.Color {
+  return new THREE.Color(src.r * factor, src.g * factor, src.b * factor);
+}
+
+/** Apply a VoxelPalette by mutating BLOCK_BY_ID colors in place. */
+export function setVoxelPalette(name: string): void {
+  const p = VOXEL_PALETTES[name];
+  if (!p) return;
+  activePaletteName = name;
+
+  // Helper: set a block's face colours from a single top hex, with derived darkenings.
+  const applyBlock = (id: number, topHex: number, sideFactor = 0.88, bottomFactor = 0.78) => {
+    const blk = BLOCK_BY_ID[id];
+    if (!blk) return;
+    blk.top.set(topHex);
+    blk.side.copy(darken(blk.top, sideFactor));
+    blk.bottom.copy(darken(blk.top, bottomFactor));
+    if (blk.tint) blk.tint.copy(darken(blk.top, sideFactor));
+    if (blk.topTint) blk.topTint.copy(darken(blk.top, sideFactor));
+    if (blk.fringeColor) blk.fringeColor.copy(darken(blk.top, sideFactor));
+  };
+
+  applyBlock(BLOCKS.GRASS.id, p.grass);
+  applyBlock(BLOCKS.GRASS_LIGHT.id, p.grassLight);
+  applyBlock(BLOCKS.GRASS_DEEP.id, p.grassDeep);
+  applyBlock(BLOCKS.GRASS_STONE.id, p.grass);
+  applyBlock(BLOCKS.GRASS_LIGHT_STONE.id, p.grassLight);
+  applyBlock(BLOCKS.GRASS_DEEP_STONE.id, p.grassDeep);
+  applyBlock(BLOCKS.SOIL.id, p.soil, 0.9, 0.8);
+  applyBlock(BLOCKS.SAND.id, p.sand, 0.9, 0.8);
+  applyBlock(BLOCKS.STONE.id, p.stone, 0.9, 0.8);
+  applyBlock(BLOCKS.STONE_PALE.id, p.stonePale, 0.9, 0.8);
+  applyBlock(BLOCKS.STONE_WARM.id, p.stoneWarm, 0.9, 0.8);
+  const leaves = [BLOCKS.LEAF_PINK, BLOCKS.LEAF_BLUSH, BLOCKS.LEAF_LILAC,
+                  BLOCKS.LEAF_CREAM, BLOCKS.LEAF_MINT, BLOCKS.LEAF_ROSE];
+  for (let i = 0; i < leaves.length; i++) applyBlock(leaves[i].id, p.foliage[i], 0.88, 0.78);
+
+  // Water
+  WATER.shoal.set(p.water.shoal);
+  WATER.shallow.set(p.water.shallow);
+  WATER.deep.set(p.water.deep);
+}
+
+/* ------------------------------------------------------------------ *
  * Grading — applied in postfx
  * ------------------------------------------------------------------ */
 export const GRADE = {

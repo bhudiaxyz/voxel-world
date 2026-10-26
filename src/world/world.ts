@@ -9,11 +9,41 @@ import { planWorld } from './planner';
 import { scatterVegetation } from './vegetation';
 import { buildStructures } from './props';
 import { buildStamps } from './stamps';
-import { createWorldChunkStreamer } from '../core/voxel';
+import { VoxelGrid, createWorldChunkStreamer } from '../core/voxel';
 import { makeRng } from '../core/rng';
 import { BLOCKS, BLOCK_BY_ID } from '../core/palette';
 
-export async function buildWorld(seed: number, onProgress: (p: number, s?: string) => void = () => {}) {
+/** The assembled world returned by buildWorld. */
+export interface World {
+  grid: VoxelGrid;
+  size: number;
+  heights: Int16Array;
+  spawn: THREE.Vector3;
+  group: THREE.Group;
+  meshes: {
+    solid: THREE.Object3D;
+    glow: THREE.Object3D;
+    edges: THREE.Object3D;
+    material: THREE.Material;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    glowMaterial: any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    edgeMaterial: any;
+  };
+  streaming: ReturnType<typeof createWorldChunkStreamer>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  allPlanetUnis: any[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  animated: any[];
+  props: { bridges: Array<{ x: number; z: number; deckY: number }> } | undefined;
+  stamps: Array<{ kind: string; at: [number, number] }> | undefined;
+  plan: ReturnType<typeof planWorld>;
+  rng: ReturnType<typeof makeRng>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  decorations: any[];
+}
+
+export async function buildWorld(seed: number, onProgress: (p: number, s?: string) => void = () => {}): Promise<World> {
   const yieldFrame = () => new Promise((r) => setTimeout(r, 0));
 
   /* The plan comes before the voxels.
@@ -26,6 +56,7 @@ export async function buildWorld(seed: number, onProgress: (p: number, s?: strin
   const plan = planWorld(seed, WORLD.size);
 
   onProgress(0.05, 'raising the land');
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const world: any = generateTerrain(seed, plan);
   world.plan = plan;
   world.rng = makeRng(seed ^ 0x5f3a);
@@ -97,11 +128,11 @@ export async function buildWorld(seed: number, onProgress: (p: number, s?: strin
   }
 
   onProgress(1.0, 'ready');
-  return world;
+  return world as World;
 }
 
 /** Pick a pleasant, walkable, well-framed spawn point near the river. */
-function findSpawn(world: any) {
+function findSpawn(world: World) {
   const { grid, heights, size: S } = world;
   const b = world.props?.bridges?.[0];
   if (b) {

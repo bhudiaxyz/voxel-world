@@ -1,6 +1,7 @@
 /** Player pause menu — Escape. Shows adaptive key/touch bindings. */
 
 import { isTouchDevice } from './touch-controls';
+import { VOXEL_PALETTES, activePaletteName } from '../core/palette';
 
 const CSS = `
 #pause {
@@ -57,6 +58,24 @@ const CSS = `
   letter-spacing:.04em;
 }
 #pause .binding kbd { flex-shrink:0; }
+#pause .palette-row {
+  margin-top:14px; padding-top:14px;
+  border-top:1px solid rgba(201,173,115,.12);
+  display:flex; align-items:center; justify-content:space-between;
+  gap:10px;
+}
+#pause .palette-row label {
+  font-size:10px; font-weight:700; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--ink-faint,rgba(232,220,193,.4)); white-space:nowrap;
+}
+#pause .palette-row select {
+  flex:1; height:34px; padding:0 10px;
+  border:1px solid rgba(201,173,115,.18); border-radius:8px;
+  background:rgba(30,28,35,.72); color:var(--ink-soft,rgba(232,220,193,.62));
+  font:600 11px/1 var(--font-body,Inter,ui-sans-serif,system-ui,sans-serif);
+  letter-spacing:.06em; cursor:pointer; appearance:none;
+}
+#pause .palette-row select:focus { outline:none; border-color:var(--gold); }
 `;
 
 const KEYBOARD_BINDINGS = [
@@ -96,6 +115,9 @@ export function createPause({ input, map }: any) {
   document.head.appendChild(style);
 
   const bindings = isTouchDevice ? TOUCH_BINDINGS : KEYBOARD_BINDINGS;
+  const paletteOptions = Object.entries(VOXEL_PALETTES)
+    .map(([k, p]) => `<option value="${k}"${k === activePaletteName ? ' selected' : ''}>${p.label}</option>`)
+    .join('');
 
   const root = document.createElement('div');
   root.id = 'pause';
@@ -109,14 +131,20 @@ export function createPause({ input, map }: any) {
       <div class="controls">
         <h3>Controls</h3>
         <div class="bindings">${buildBindings(bindings)}</div>
+        <div class="palette-row">
+          <label for="pause-palette">Palette</label>
+          <select id="pause-palette">${paletteOptions}</select>
+        </div>
       </div>
     </div>
   `;
   document.body.appendChild(root);
 
   const resume = root.querySelector('#pause-resume');
+  const paletteSelect = root.querySelector('#pause-palette') as HTMLSelectElement;
   let open = false;
   let wasPaused = false;
+  let _onPaletteChange: ((name: string) => void) | null = null;
 
   const setOpen = (next: any) => {
     if (next === open) return;
@@ -131,6 +159,10 @@ export function createPause({ input, map }: any) {
       input.paused = wasPaused;
     }
   };
+
+  paletteSelect.addEventListener('change', () => {
+    _onPaletteChange?.(paletteSelect.value);
+  });
 
   resume!.addEventListener('click', () => setOpen(false));
   root.querySelector('#pause-map')!.addEventListener('click', () => {
@@ -153,5 +185,8 @@ export function createPause({ input, map }: any) {
       return open;
     },
     toggle: () => setOpen(!open),
+    onPaletteChange(cb: (name: string) => void) {
+      _onPaletteChange = cb;
+    },
   };
 }

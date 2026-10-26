@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { createRenderer } from './render/renderer';
+import { setVoxelPalette, WATER } from './core/palette';
 import { Atmosphere } from './render/lighting';
 import { FPCamera } from './render/fp-camera';
 import { createPostFX } from './render/postfx';
@@ -148,6 +149,16 @@ async function start(): Promise<void> {
   });
   const hud = createHud({ dayNight, drone, camera: fpCam.camera });
   const pause = createPause({ input, map });
+  pause.onPaletteChange((name) => {
+    setVoxelPalette(name);
+    // Water uniforms were cloned at material creation — push updated palette colours.
+    const wu = water.planetUnis;
+    wu.uShoal.value.copy(WATER.shoal);
+    wu.uShallow.value.copy(WATER.shallow);
+    wu.uDeep.value.copy(WATER.deep);
+    world.streaming.invalidateAll();
+    map.invalidateTerrain();
+  });
 
   touch.onFly(() => {
     if (fly.active) {
@@ -255,8 +266,7 @@ async function start(): Promise<void> {
     dog.update(dt);
 
     if (fly.active) {
-      fpCam.camera.rotation.set(fpCam.pitch, fpCam.yaw, 0); // apply mouse/touch look
-      fly.update(dt, fpCam.camera, fpCam._keys, fpCam.drainDroneAltDelta(dt), fpCam._joyX, fpCam._joyY);
+      fly.update(dt, fpCam.camera, fpCam._keys, fpCam.yaw, fpCam.pitch, fpCam.drainDroneAltDelta(dt), fpCam._joyX, fpCam._joyY);
     } else if (drone.active) {
       const done = drone.update(
         dt,

@@ -22,20 +22,20 @@
 import * as THREE from 'three';
 import { BLOCK_BY_ID, WATER } from '../core/palette';
 
-/** Scene-kind marker colours. Warm for built things, cool for water ones. */
+/** Scene-kind marker colours — drawn from the world palette. */
 const KIND = {
-  waterfall: { fill: '#eaf3ff', ring: '#7f8fc6', label: 'waterfall' },
-  pond: { fill: '#cdbde8', ring: '#6f5fa6', label: 'pond' },
-  crossing: { fill: '#f0dcc4', ring: '#a87f5c', label: 'crossing' },
-  grove: { fill: '#f6cfd9', ring: '#b3738b', label: 'grove' },
-  overlook: { fill: '#e2e0d2', ring: '#8d8a70', label: 'overlook' },
+  waterfall: { fill: 'rgba(106,160,154,0.82)', ring: 'rgba(40,58,58,0.90)', label: 'waterfall' },
+  pond:      { fill: 'rgba(80,130,130,0.75)',  ring: 'rgba(42,64,64,0.90)',  label: 'pond' },
+  crossing:  { fill: 'rgba(192,144,82,0.82)',  ring: 'rgba(100,72,40,0.90)', label: 'crossing' },
+  grove:     { fill: 'rgba(130,168,82,0.82)',  ring: 'rgba(74,108,44,0.90)', label: 'grove' },
+  overlook:  { fill: 'rgba(170,162,150,0.75)', ring: 'rgba(96,90,82,0.90)',  label: 'overlook' },
 };
 
 const CSS = `
 #map { position:fixed; inset:0; z-index:44; display:none;
        align-items:center; justify-content:center;
        background:rgba(7,7,10,.60); backdrop-filter:blur(10px) saturate(1.04);
-       font-family:Inter, ui-sans-serif, system-ui, sans-serif;
+       font-family:var(--font-body, 'Outfit', system-ui, sans-serif);
        color:var(--ink); opacity:0; transition:opacity .18s ease; }
 #map.on { display:flex; }
 #map.vis { opacity:1; }
@@ -205,8 +205,8 @@ export function createMap({ world, controller, input }: any) {
     // ---- bridges: small timber ticks -------------------------------
     ctx.lineWidth = 1.4 * unit;
     for (const b of world.props?.bridges || []) {
-      ctx.fillStyle = '#f0dcc4';
-      ctx.strokeStyle = 'rgba(90,72,58,.8)';
+      ctx.fillStyle = 'rgba(184,130,74,0.88)'; // plank amber
+      ctx.strokeStyle = 'rgba(90,58,28,0.85)';
       const r = 3.2 * unit;
       ctx.beginPath();
       ctx.rect(b.x - r, b.z - r, r * 2, r * 2);
@@ -247,16 +247,17 @@ export function createMap({ world, controller, input }: any) {
      * high-contrast dots, and finding it took longer than reading the rest of
      * the map. A pale disc under it and a dark ring around it separate it from
      * the terrain at any zoom. */
+    // Warm amber halo — echoes the palette's gold/terracotta accent
     const halo = ctx.createRadialGradient(px, pz, 0, px, pz, a * 3.2);
-    halo.addColorStop(0, 'rgba(255,255,255,.85)');
-    halo.addColorStop(0.55, 'rgba(255,255,255,.35)');
-    halo.addColorStop(1, 'rgba(255,255,255,0)');
+    halo.addColorStop(0, 'rgba(192,88,40,0.55)');
+    halo.addColorStop(0.55, 'rgba(192,88,40,0.18)');
+    halo.addColorStop(1, 'rgba(192,88,40,0)');
     ctx.fillStyle = halo;
     ctx.beginPath();
     ctx.arc(px, pz, a * 3.2, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.strokeStyle = 'rgba(58,50,78,.55)';
+    ctx.strokeStyle = 'rgba(20,12,6,0.55)';
     ctx.lineWidth = 1.6 * unit;
     ctx.beginPath();
     ctx.arc(px, pz, a * 1.5, 0, Math.PI * 2);
@@ -270,8 +271,8 @@ export function createMap({ world, controller, input }: any) {
     ctx.lineTo(dx * a * -0.16, dz * a * -0.16); // notched tail
     ctx.lineTo(dz * a * 0.62 - dx * a * 0.5, -dx * a * 0.62 - dz * a * 0.5);
     ctx.closePath();
-    ctx.fillStyle = '#5aa9c9';
-    ctx.strokeStyle = '#fdfdff';
+    ctx.fillStyle = '#c05828'; // palette --gold
+    ctx.strokeStyle = 'rgba(232,220,193,0.92)'; // palette --ink
     ctx.lineWidth = 2.0 * unit;
     ctx.fill();
     ctx.stroke();
@@ -333,6 +334,10 @@ export function createMap({ world, controller, input }: any) {
       return open;
     },
     toggle: () => setOpen(!open),
+    /** Force terrain re-bake on next open (e.g. after a palette change). */
+    invalidateTerrain() {
+      terrain = null;
+    },
     /** Cheap no-op while closed; the terrain layer is never re-baked. */
     update() {
       if (open && terrain) draw();

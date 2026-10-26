@@ -4,7 +4,6 @@ import type { VoxelGrid } from '../core/voxel';
 const FLY = {
   speed: 20,
   sprintSpeed: 60,
-  vertSpeed: 10,
   floorClearance: 1.75, // eye height above terrain floor
 };
 
@@ -12,11 +11,17 @@ export interface FlyMode {
   readonly active: boolean;
   enter(camera: THREE.PerspectiveCamera): void;
   exit(): void;
-  /** altDelta is already scaled (m) — from drainDroneAltDelta(dt). */
+  /**
+   * @param yaw      current camera yaw from FPCamera (radians)
+   * @param pitch    current camera pitch from FPCamera (radians)
+   * @param altDelta already-scaled altitude delta (m) from drainDroneAltDelta(dt)
+   */
   update(
     dt: number,
     camera: THREE.PerspectiveCamera,
     keys: Set<string>,
+    yaw: number,
+    pitch: number,
     altDelta: number,
     joyX?: number,
     joyY?: number,
@@ -25,11 +30,6 @@ export interface FlyMode {
 
 export function createFlyMode(grid: VoxelGrid): FlyMode {
   let active = false;
-
-  const groundY = (x: number, z: number): number => {
-    const t = grid.columnTop(Math.round(x), Math.round(z));
-    return t < 0 ? 0 : t + 1;
-  };
 
   return {
     get active() {
@@ -46,10 +46,12 @@ export function createFlyMode(grid: VoxelGrid): FlyMode {
       active = false;
     },
 
-    update(dt, camera, keys, altDelta, joyX = 0, joyY = 0) {
+    update(dt, camera, keys, yaw, pitch, altDelta, joyX = 0, joyY = 0) {
       if (!active) return;
 
-      const yaw = camera.rotation.y;
+      // Apply mouse/touch look — caller owns yaw/pitch, we own the camera rotation.
+      camera.rotation.set(pitch, yaw, 0);
+
       const fwd = -Math.sin(yaw);
       const rgt = Math.cos(yaw);
       const sprinting = keys.has('ShiftLeft') || keys.has('ShiftRight');
@@ -82,7 +84,7 @@ export function createFlyMode(grid: VoxelGrid): FlyMode {
       camera.position.y += altDelta;
 
       // Terrain floor constraint — cannot fly below ground
-      const floor = groundY(camera.position.x, camera.position.z) + FLY.floorClearance;
+      const floor = grid.surfaceY(camera.position.x, camera.position.z) + FLY.floorClearance;
       if (camera.position.y < floor) camera.position.y = floor;
     },
   };

@@ -82,6 +82,7 @@ export class FPCamera {
         this._droneAltDelta += e.movementY;
         return;
       }
+      // fly mode shares direct yaw/pitch update (falls through here intentionally)
       this.yaw -= e.movementX * SENSITIVITY;
       this.pitch -= e.movementY * SENSITIVITY;
       this.pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, this.pitch));

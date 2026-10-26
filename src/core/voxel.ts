@@ -78,6 +78,12 @@ export class VoxelGrid {
     return this.height[z * this.sx + x];
   }
 
+  /** World-space Y of the surface (top + 1), or 0 if the column is empty. */
+  surfaceY(x: number, z: number): number {
+    const t = this.columnTop(Math.round(x), Math.round(z));
+    return t < 0 ? 0 : t + 1;
+  }
+
   isSolid(x: number, y: number, z: number) {
     return this.get(x, y, z) !== 0;
   }
@@ -988,12 +994,24 @@ export function createWorldChunkStreamer(grid: any, { loadRadius = DEFAULT_STREA
     meshes.edgeMaterial.dispose();
   };
 
+  const invalidateAll = () => {
+    // Unload every loaded chunk so they get re-meshed with the current block registry.
+    for (const key of [...loaded.keys()]) unloadChunk(key);
+    viewKey = ''; // force update() to re-queue everything
+    if (lastPlayer) update(lastPlayer, lastCamera);
+    // Push the updated block registry to the worker if one is running.
+    if (meshWorker) {
+      meshWorker.postMessage({ type: 'block-registry', definitions: serializeBlockRegistry() });
+    }
+  };
+
   return {
     meshes,
     update,
     setLoadRadius,
     preload,
     dispose,
+    invalidateAll,
     /** Planet-bend uniforms for the terrain material — update each frame. */
     get planetUnis() {
       return meshes.material.userData.uniforms;

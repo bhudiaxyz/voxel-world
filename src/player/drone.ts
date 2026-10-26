@@ -9,7 +9,7 @@ const DRONE = {
   altitudeChangeRate: 12.0, // m/s per unit axis input
   enterLiftHeight: 18,
   keyYawSpeed: 1.2,
-  landingDescentRate: 8, // m/s hover-height reduction while landing
+  landingDescentRate: 20, // m/s hover-height reduction while landing
   landingCompleteHeight: 2.5,
   heightSmoothRate: 1.5,
   heightPGain: 2.2,
@@ -45,11 +45,6 @@ export function createDroneMode(grid: VoxelGrid): DroneMode {
   let yaw = 0;
   let smoothedTargetY = 0;
 
-  function getGroundY(x: number, z: number): number {
-    const top = grid.columnTop(Math.round(x), Math.round(z));
-    return top < 0 ? 0 : top + 1;
-  }
-
   return {
     get active(): boolean {
       return state !== 'idle';
@@ -63,7 +58,7 @@ export function createDroneMode(grid: VoxelGrid): DroneMode {
       isLanding = false;
       yaw = camera.rotation.y;
       smoothedTargetY = camera.position.y;
-      const groundY = getGroundY(camera.position.x, camera.position.z);
+      const groundY = grid.surfaceY(camera.position.x, camera.position.z);
       hoverAltitude = Math.max(DRONE.enterLiftHeight, camera.position.y - groundY);
     },
 
@@ -72,7 +67,7 @@ export function createDroneMode(grid: VoxelGrid): DroneMode {
     },
 
     getAltitude(camera: THREE.PerspectiveCamera): number {
-      return camera.position.y - getGroundY(camera.position.x, camera.position.z);
+      return camera.position.y - grid.surfaceY(camera.position.x, camera.position.z);
     },
 
     getSpeed(): number {
@@ -97,9 +92,9 @@ export function createDroneMode(grid: VoxelGrid): DroneMode {
 
       if (state === 'rising') {
         currentSpeed = 0;
-        const gY = getGroundY(camera.position.x, camera.position.z);
+        const gY = grid.surfaceY(camera.position.x, camera.position.z);
         const targetY = gY + hoverAltitude;
-        camera.position.y += (targetY - camera.position.y) * Math.min(1, dt * 2.5);
+        camera.position.y += (targetY - camera.position.y) * Math.min(1, dt * 8);
         smoothedTargetY = camera.position.y;
         camera.rotation.y = yaw;
         camera.rotation.x = 0;
@@ -127,7 +122,7 @@ export function createDroneMode(grid: VoxelGrid): DroneMode {
       camera.position.x -= Math.sin(yaw) * currentSpeed * dt;
       camera.position.z -= Math.cos(yaw) * currentSpeed * dt;
 
-      const gY = getGroundY(camera.position.x, camera.position.z);
+      const gY = grid.surfaceY(camera.position.x, camera.position.z);
       const rawTargetY = gY + hoverAltitude;
       smoothedTargetY += (rawTargetY - smoothedTargetY) * Math.min(1, dt * DRONE.heightSmoothRate);
 
