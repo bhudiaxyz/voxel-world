@@ -9,11 +9,17 @@ const DRONE = {
   altitudeChangeRate: 12.0, // m/s per unit axis input
   enterLiftHeight: 18,
   keyYawSpeed: 1.2,
-  landingDescentRate: 45, // m/s hover-height reduction while landing
+  landingDescentRate: 45,  // m/s hover-height reduction while landing
   landingCompleteHeight: 2.5,
-  heightSmoothRate: 1.5,
-  heightPGain: 2.2,
-  vertVelMax: 8.0,
+  // Terrain-follow tuning:
+  //   heightSmoothRate — lerp rate for the ground-height target.
+  //     1.5 was too slow: at 18 m/s the smoothed target lagged ~20 blocks
+  //     behind steep terrain, so the drone floated far above valleys.
+  //     3.5 tracks terrace-scale features (3–6 blocks over a few seconds)
+  //     while still filtering individual voxel bumps.
+  heightSmoothRate: 3.5,
+  heightPGain: 4.0,   // proportional gain on altitude error
+  vertVelMax: 14.0,   // max vertical speed (m/s) — enough for steep slopes at cruise
   pitchSmoothRate: 1.8,
 };
 

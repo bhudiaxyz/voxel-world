@@ -79,7 +79,8 @@ export class FPCamera {
       if (!this.isLocked) return;
       if (this.droneActive) {
         this._droneMX += e.movementX;
-        this._droneAltDelta += e.movementY;
+        // Mouse Y is intentionally NOT wired to altitude — any tiny upward
+        // mouse drift would cause continuous climb. Space/C/scroll handle it.
         return;
       }
       // fly mode shares direct yaw/pitch update (falls through here intentionally)
@@ -193,13 +194,17 @@ export class FPCamera {
 
   /**
    * Drain accumulated drone altitude delta since last call.
-   * Space / touch-ascend = up; C / touch-descend = down (rate: 12 m/s).
+   * Returns a value in m/s so that the caller can do `hoverAltitude += result * dt`.
+   *   Keys / touch: ±12 m/s rate.
+   *   Scroll wheel:  direct-delta converted to rate by dividing by dt,
+   *                  so `rate * dt` restores the original per-tick offset.
    */
   drainDroneAltDelta(dt = 0): number {
     const keyAxis = (this._keys.has('Space') ? 1 : 0) - (this._keys.has('KeyC') ? 1 : 0);
-    const v = this._droneAltDelta + (keyAxis + this.touchAltAxis) * 12 * dt;
+    // Scroll gives a direct position delta; convert to rate so dt cancels cleanly.
+    const scrollRate = dt > 0 ? this._droneAltDelta / dt : 0;
     this._droneAltDelta = 0;
-    return v;
+    return scrollRate + (keyAxis + this.touchAltAxis) * 12;
   }
 
   /**
