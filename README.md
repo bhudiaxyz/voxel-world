@@ -6,7 +6,7 @@ A first-person explorer for a procedurally generated spherical voxel world (Thre
 
 ## Highlights
 
-- **Curved planet** — GPU vertex bending gives the island a Mario-Galaxy-style curvature. Physics stay flat; only the visuals curve.
+- **Curved planet** — GPU vertex bending gives the planet a Mario-Galaxy-style curvature. Physics stay flat; only the visuals curve.
 - **Day/night cycle** — a 20-minute day with seven keyframed sky palettes. Watch the sun rise through orange haze, reach a pale noon, and set again.
 - **Night sky** — procedural stars, a Milky Way with Great Rift dust lane, emission nebulae, and a moon disc. Fades out near sunrise.
 - **Aurora** — animated curtain aurora appears at deep night: flickering vertical rays, sweeping pulse waves, slow breathing intensity, and colour that shifts from green through cyan to magenta and ghostly white at peaks.
@@ -29,7 +29,7 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:5180/voxel-world](http://localhost:5180/voxel-world). First load generates the island — give it a few seconds.
+Open [http://localhost:5180/voxel-world](http://localhost:5180/voxel-world). First load generates the world — give it a few seconds.
 
 ```bash
 npm run build     # production bundle → dist/
