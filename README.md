@@ -2,7 +2,7 @@
 
 A first-person explorer for a procedurally generated spherical voxel world (Three.js + TypeScript + Vite). Walk, drone, or fly across the planet, exploring terraced terrain, rivers, blossom trees, bridges, a companion dog, and a real-time day/night cycle with animated aurora. Walk the curved surface of a tiny planet — the world bends away from you at the horizon.
 
-*Voxel World* inspiration came from **Verdant** [https://github.com/xikhar/verdant] and **Petalfell** [https://github.com/xikhar/voxel-game-original], along with aspects of **Beyond Fable** [https://github.com/xikhar/beyond-fable].
+Inspired by **Verdant** [https://github.com/xikhar/verdant] and **Petalfell** [https://github.com/xikhar/voxel-game-original], along with aspects of **Beyond Fable** [https://github.com/xikhar/beyond-fable].
 
 ## Highlights
 
@@ -19,6 +19,8 @@ A first-person explorer for a procedurally generated spherical voxel world (Thre
 - **Touch controls** — full nippleJS virtual joystick overlay on phones and tablets. Left stick moves, right-half swipe looks, dedicated buttons for jump, ascend/descend, sprint, drone, land, edge toggle, and time stepping. Adapts automatically on load.
 - **GPU tiering** — detects device capability at startup (cores + memory + UA) and adjusts DPR cap, shadow resolution, bloom, AO taps, and blur samples across four tiers (high / mid / low / very-low). Tested against Samsung Galaxy S22 Ultra, Apple iPad, and budget devices up to seven years old.
 - **TypeScript** — the entire codebase is strict-mode TypeScript.
+
+For architecture and implementation details, see [DESIGN.md](DESIGN.md).
 
 ## Run
 
@@ -88,54 +90,6 @@ The settings panel (`` ` ``) exposes:
 | Load radius | — | How many chunks stream around the player |
 | Shadow resolution | — | Shadow map quality |
 | Bloom | — | Post-process bloom intensity |
-
-## Architecture
-
-### Source layout
-
-| Path | What it does |
-| --- | --- |
-| `src/main.ts` | Scene setup, game loop, and input wiring |
-| `src/core/` | Voxel grid, greedy mesher, worker threads, palette, RNG |
-| `src/world/` | Terrain generator, vegetation, props, stamps, water |
-| `src/render/` | Renderer, FP camera, lighting/atmosphere, sky shader, day/night, planet GLSL, post-FX, GPU tier |
-| `src/player/` | Character, physics controller, pathfinding, dog AI, drone mode, fly mode |
-| `src/ui/` | HUD, map, pause menu, settings panel, speech bubbles, touch controls |
-| `src/fx/` | Particles |
-
-### Rendering pipeline
-
-Post-processing is built on Three.js `EffectComposer` with a custom pass chain:
-
-```text
-SceneDepthPass → EdgeMaskPass → Atmosphere → Bloom → Crepuscular → Grade/Output → SMAA
-```
-
-- **SceneDepthPass** — renders the scene to a dedicated FBO that owns the depth texture, then blits colour to the read buffer. Keeps the depth texture outside the ping-pong chain to prevent WebGL feedback loops.
-- **EdgeMaskPass** — renders a dedicated edge layer to a separate render target sampled by the grade shader.
-- **Atmosphere** — large-scale AO via 8-tap depth rosette (tier-scaled), defocus blur, and aerial perspective using the shared sky model so distant land fades seamlessly into the sky colour.
-- **GradeShader** — composites the edge mask, applies colour grading, tone mapping, and outputs to the screen.
-
-### Sky model
-
-`src/render/sky.ts` exports a shared GLSL function block (`skyRadiance`) used by both the sky dome mesh and the aerial-perspective atmosphere pass. Sharing the same function ensures the colour distant geometry fades toward is bit-for-bit the sky colour in that direction — no seam at the horizon. The same file implements `nightSkyAddons` (stars, Milky Way, nebulae, moon) and `_aurora` (animated curtain).
-
-### GPU tiering
-
-`src/render/gpu-tier.ts` buckets devices at startup:
-
-| Tier | DPR cap | Shadow | Blur samples | Bloom | AO taps | DoF |
-| --- | --- | --- | --- | --- | --- | --- |
-| high | 2× | 3072 px | 16 | ✓ | 8 | ✓ |
-| mid | 1.25× | 2048 px | 8 | ✓ | 4 | ✓ |
-| low | 1× | 1024 px | 4 | — | 4 | — |
-| very-low | 1× | 512 px | 2 | — | 0 | — |
-
-Detection uses `hardwareConcurrency`, `deviceMemory`, and the mobile user-agent string (including iPad). Shadow map auto-update is disabled on very-low tier; the day/night cycle triggers a single update per animation frame instead.
-
-### Touch input
-
-`src/ui/touch-controls.ts` creates a nippleJS joystick zone on the left half of the screen and a raw-touch swipe-to-look zone on the right half. All touch state flows through `FPCamera` alongside keyboard/mouse state so the game loop is unaware of the input source. Fly and drone modes receive raw joystick axes (`_joyX`, `_joyY`): drone steers yaw with `joyX` and brakes with negative `joyY`; fly strafe-moves in the camera's yaw direction.
 
 ## Dependencies
 

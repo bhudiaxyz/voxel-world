@@ -45,7 +45,6 @@ ref_images/
 
 # Keep only the public README; omit working notes
 *.md
-!README.md
 
 # Local environment and logs
 .env
