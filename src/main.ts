@@ -30,8 +30,8 @@ let _lastPlanetX = Infinity, _lastPlanetZ = Infinity;
 
 const container = document.getElementById('app')!;
 const bootEl = document.getElementById('boot')!;
-const barEl = bootEl.querySelector('#bar i')!;
-const subEl = bootEl.querySelector('.sub')!;
+const barEl = bootEl.querySelector('.ls-bar span')!;
+const subEl = bootEl.querySelector('.ls-sub')!;
 
 const setProgress = (p: number): void => {
   (barEl as HTMLElement).style.width = `${Math.round(p * 100)}%`;
@@ -239,7 +239,11 @@ async function start(): Promise<void> {
 
     if (!started) {
       started = true;
-      requestAnimationFrame(() => bootEl.classList.add('gone'));
+      bootEl.classList.add('ready');
+      bootEl.addEventListener('click', () => {
+        bootEl.classList.add('dismissed');
+        bootEl.addEventListener('transitionend', () => bootEl.classList.add('gone'), { once: true });
+      }, { once: true });
     }
   }
 

@@ -291,11 +291,6 @@ export class DetailField {
         for (const mesh of group.children as THREE.Mesh[]) {
           if (!mesh.userData.lodFading) continue;
           mesh.userData.lodAlpha = Math.min(1.0, mesh.userData.lodAlpha + dt * 1.5);
-          if (mesh.userData.lodAlpha >= 1.0) {
-            mesh.userData.lodFading = false;
-            mesh.onBeforeRender = () => {};
-            mesh.onAfterRender  = () => {};
-          }
         }
       },
     };

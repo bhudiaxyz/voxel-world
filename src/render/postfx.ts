@@ -290,7 +290,6 @@ class SceneDepthPass extends Pass {
 
   render(renderer: THREE.WebGLRenderer, _write: THREE.WebGLRenderTarget, read: THREE.WebGLRenderTarget) {
     renderer.setRenderTarget(this._fbo);
-    renderer.clear();
     renderer.render(this._scene, this._camera);
 
     renderer.setRenderTarget(read);

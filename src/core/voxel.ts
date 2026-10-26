@@ -595,9 +595,12 @@ export function createWorldChunkStreamer(grid: any, {
     }
     if (record.edges) {
       const edgeUniforms = (meshes.edgeMaterial as any).uniforms;
+      const resolveCb = record.edges.onBeforeRender; // resolution callback from prepareEdgeObject
       record.edges.userData.lodAlpha = 0.0;
       record.edges.userData.lodFading = true;
-      record.edges.onBeforeRender = () => {
+      record.edges.userData.resolveCb = resolveCb;
+      record.edges.onBeforeRender = (renderer: any) => {
+        resolveCb.call(record.edges, renderer);
         edgeUniforms.uLodAlpha.value = record.edges.userData.lodAlpha;
       };
       record.edges.onAfterRender = () => {
@@ -738,7 +741,7 @@ export function createWorldChunkStreamer(grid: any, {
           mesh.userData.lodAlpha = Math.min(1.0, mesh.userData.lodAlpha + dt * 1.5);
           if (mesh.userData.lodAlpha >= 1.0) {
             mesh.userData.lodFading = false;
-            mesh.onBeforeRender = () => {};
+            mesh.onBeforeRender = mesh.userData.resolveCb ?? (() => {});
             mesh.onAfterRender  = () => {};
           }
         }
