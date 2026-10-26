@@ -232,14 +232,14 @@ const BIOME_FLORA = {
   },
   [BIOME.MEADOW]: {
     leaves: [BLOCKS.LEAF_CREAM, BLOCKS.LEAF_BLUSH, BLOCKS.LEAF_LILAC],
-    forms: ['round', 'bunch', 'twin', 'stack'],
+    forms: ['round', 'bunch', 'twin', 'stack', 'umbrella'],
     scale: [0.2, 0.92],
     density: 0.55,
     bushes: [BUSH_CREAM, BUSH_ROSE, BUSH_MAUVE],
   },
   [BIOME.WETLAND]: {
     leaves: [BLOCKS.LEAF_MINT, BLOCKS.LEAF_CREAM, BLOCKS.LEAF_MINT],
-    forms: ['broad', 'bunch', 'round'],
+    forms: ['broad', 'bunch', 'round', 'umbrella'],
     scale: [0.26, 0.78],
     density: 0.75,
     bushes: [BUSH_DUSK, BUSH_MAUVE, BUSH_CREAM],
@@ -253,7 +253,7 @@ const BIOME_FLORA = {
   },
   [BIOME.SHORE]: {
     leaves: [BLOCKS.LEAF_CREAM, BLOCKS.LEAF_BLUSH],
-    forms: ['bunch', 'round', 'nub'],
+    forms: ['bunch', 'round', 'nub', 'umbrella'],
     scale: [0.16, 0.6],
     density: 0.22,
     bushes: [BUSH_CREAM, SCRUB],
@@ -315,8 +315,8 @@ function buildTrunk(
 }
 
 function pickForm(scale: number, rng: any) {
-  if (scale > 0.72) return rng.pick(['round', 'stack', 'twin', 'bunch', 'broad', 'spire', 'stack', 'bunch']);
-  if (scale > 0.46) return rng.pick(['round', 'bunch', 'spire', 'twin', 'stack']);
+  if (scale > 0.72) return rng.pick(['stack', 'round', 'twin', 'bunch', 'broad', 'umbrella', 'stack', 'round']);
+  if (scale > 0.46) return rng.pick(['round', 'bunch', 'spire', 'twin', 'stack', 'umbrella']);
   if (scale > 0.26) return rng.pick(['round', 'bunch', 'spire', 'nub']);
   return 'nub';
 }
@@ -324,6 +324,10 @@ function pickForm(scale: number, rng: any) {
 /**
  * Place a blossom tree with its base at (x, y, z).
  * Returns the record consumed by particles and the capture rig.
+ *
+ * `form` drives silhouette; `scale` drives overall size within each form.
+ * Previously `form` was selected but ignored — every tree was the same
+ * stacked-box architecture at different scales.
  */
 export function plantTree(grid: any, x: number, y: number, z: number, rng: any, opts: Record<string, any> = {}) {
   const scale = opts.scale ?? rng.range(0.26, 1.0);
@@ -334,16 +338,17 @@ export function plantTree(grid: any, x: number, y: number, z: number, rng: any, 
 
   const trunkBlock = rng.chance(0.55) ? BLOCKS.TRUNK : rng.chance(0.5) ? BLOCKS.TRUNK_PALE : TRUNK_ROSE;
 
-  /*
-   * A compact stack of large cuboids. There are no rings and no voxel-cloud
-   * shell: a broad lower mass, a few asymmetric shoulders, a smaller raised
-   * mass, and one crown block produce a clean blossom-tree silhouette even
-   * when every coplanar face is rendered as one uninterrupted colour field.
-   */
   const unit = scale >= 0.42 ? 2 : 1;
   const large = scale >= 0.72;
   const tw = scale >= 0.82 ? 2 : 1;
-  const bare = Math.max(2, Math.round(2.5 + scale * 3.5));
+
+  // Form-specific trunk height: spire/umbrella = taller trunk, broad = shorter.
+  const bare =
+    form === 'spire' ? Math.max(3, Math.round(3 + scale * 5)) :
+    form === 'umbrella' ? Math.max(3, Math.round(3 + scale * 3.5)) :
+    form === 'broad' ? Math.max(1, Math.round(1 + scale * 2)) :
+    Math.max(2, Math.round(2.5 + scale * 3.5));
+
   const canopyY = y + bare;
   const [ax, az] = buildTrunk(grid, x, y, z, bare + unit, tw, trunkBlock.id, 0, 0);
   const cx = x + ax,
@@ -370,38 +375,164 @@ export function plantTree(grid: any, x: number, y: number, z: number, rng: any, 
     topY = Math.max(topY, py + sy - 1);
   };
 
-  if (large) {
-    // Broad heart and four deliberately uneven shoulders.
-    fillBox(0, 0, 0, 6, 2, 4, leaf.id);
-    fillBox(-4 * dx, 0, 0, 2, 2, 2, leaf.id);
-    fillBox(4 * dx, 1, dz, 2, 2, 2, lightId);
-    fillBox(-dx, 0, -3 * dz, 2, 2, 2, leaf.id);
-    fillBox(dx, 1, 3 * dz, 2, 2, 2, lightId);
-    // Smaller raised mass, two side sprays, then one offset crown block.
-    fillBox(dx, 2, -dz, 4, 2, 4, lightId);
-    fillBox(-3 * dx, 2, dz, 2, 2, 2, leaf.id);
-    fillBox(3 * dx, 3, -dz, 2, 2, 2, lightId);
-    fillBox(-dx, 4, dz, 2, 2, 2, lightId);
-  } else if (unit === 2) {
-    fillBox(0, 0, 0, 4, 2, 4, leaf.id);
-    fillBox(-3 * dx, 0, 0, 2, 2, 2, leaf.id);
-    fillBox(3 * dx, 1, dz, 2, 2, 2, lightId);
-    fillBox(0, 0, -3 * dz, 2, 2, 2, leaf.id);
-    fillBox(dx, 2, 0, 4, 2, 2, lightId);
-    fillBox(-dx, 4, dz, 2, 2, 2, lightId);
-  } else {
-    fillBox(0, 0, 0, 3, 1, 3, leaf.id);
-    fillBox(-2 * dx, 0, 0, 1, 1, 2, leaf.id);
-    fillBox(2 * dx, 1, dz, 1, 1, 1, lightId);
-    fillBox(dx, 1, 0, 2, 1, 2, lightId);
-    fillBox(-dx, 2, dz, 1, 1, 1, lightId);
+  switch (form) {
+    case 'round': {
+      // Spherical mounded crown — even silhouette, good contrast to stack.
+      if (large) {
+        fillBox(0, 0, 0, 5, 2, 5, leaf.id);
+        fillBox(3 * dx, 0, dz, 2, 2, 3, leaf.id);
+        fillBox(-2 * dx, 0, 3 * dz, 3, 2, 2, leaf.id);
+        fillBox(dx, 2, -dz, 4, 2, 4, lightId);
+        fillBox(-2 * dx, 2, dz, 2, 2, 2, leaf.id);
+        fillBox(dx, 4, dz, 2, 2, 2, lightId);
+      } else if (unit === 2) {
+        fillBox(0, 0, 0, 4, 2, 4, leaf.id);
+        fillBox(2 * dx, 0, dz, 2, 2, 2, leaf.id);
+        fillBox(-dx, 2, 2 * dz, 2, 2, 2, lightId);
+        fillBox(0, 3, 0, 3, 1, 3, lightId);
+        fillBox(dx, 4, dz, 2, 1, 2, lightId);
+      } else {
+        fillBox(0, 0, 0, 3, 1, 3, leaf.id);
+        fillBox(dx, 1, dz, 2, 1, 2, lightId);
+        fillBox(0, 2, 0, 2, 1, 2, lightId);
+      }
+      break;
+    }
+    case 'broad': {
+      // Wide flat spreading crown — Japanese maple / spreading oak.
+      if (large) {
+        fillBox(0, 0, 0, 7, 1, 5, leaf.id);
+        fillBox(4 * dx, 0, dz, 2, 1, 3, leaf.id);
+        fillBox(-3 * dx, 0, -2 * dz, 3, 1, 2, leaf.id);
+        fillBox(dx, 1, -dz, 4, 1, 4, lightId);
+        fillBox(-2 * dx, 1, 2 * dz, 2, 1, 2, lightId);
+        fillBox(0, 2, 0, 3, 1, 3, lightId);
+      } else if (unit === 2) {
+        fillBox(0, 0, 0, 5, 1, 4, leaf.id);
+        fillBox(3 * dx, 0, dz, 2, 1, 2, leaf.id);
+        fillBox(dx, 1, 0, 3, 1, 3, lightId);
+        fillBox(-dx, 1, 2 * dz, 2, 1, 2, lightId);
+      } else {
+        fillBox(0, 0, 0, 4, 1, 3, leaf.id);
+        fillBox(2 * dx, 0, dz, 2, 1, 2, leaf.id);
+        fillBox(dx, 1, dz, 2, 1, 2, lightId);
+      }
+      break;
+    }
+    case 'spire': {
+      // Narrow conical — pine / cypress / fir.
+      if (large) {
+        fillBox(0, 0, 0, 4, 2, 4, leaf.id);
+        fillBox(dx, 2, dz, 3, 2, 3, lightId);
+        fillBox(0, 4, 0, 2, 2, 2, leaf.id);
+        fillBox(dx, 6, 0, 2, 2, 2, lightId);
+        fillBox(0, 8, 0, 1, 2, 1, leaf.id);
+        fillBox(0, 10, 0, 1, 1, 1, lightId);
+      } else if (unit === 2) {
+        fillBox(0, 0, 0, 3, 2, 3, leaf.id);
+        fillBox(dx, 2, dz, 2, 2, 2, lightId);
+        fillBox(0, 4, 0, 2, 2, 2, leaf.id);
+        fillBox(0, 6, 0, 1, 2, 1, lightId);
+      } else {
+        fillBox(0, 0, 0, 2, 2, 2, leaf.id);
+        fillBox(dx, 2, dz, 1, 2, 1, lightId);
+        fillBox(0, 4, 0, 1, 1, 1, leaf.id);
+      }
+      break;
+    }
+    case 'twin': {
+      // Two crown masses side by side — forked canopy.
+      if (large) {
+        fillBox(-3 * dx, 0, 0, 4, 2, 4, leaf.id);
+        fillBox(3 * dx, 1, dz, 3, 2, 3, lightId);
+        fillBox(-dx, 2, -dz, 2, 2, 2, lightId);
+        fillBox(2 * dx, 3, 0, 2, 2, 2, lightId);
+      } else if (unit === 2) {
+        fillBox(-2 * dx, 0, 0, 3, 2, 3, leaf.id);
+        fillBox(2 * dx, 1, dz, 3, 2, 3, lightId);
+        fillBox(0, 2, 0, 2, 1, 2, lightId);
+      } else {
+        fillBox(-dx, 0, 0, 2, 1, 2, leaf.id);
+        fillBox(dx, 1, dz, 2, 1, 2, lightId);
+      }
+      break;
+    }
+    case 'bunch': {
+      // Loose cluster of smaller irregular blobs.
+      if (large) {
+        fillBox(0, 0, 0, 3, 2, 3, leaf.id);
+        fillBox(4 * dx, 0, dz, 3, 2, 3, leaf.id);
+        fillBox(-2 * dx, 1, 3 * dz, 2, 2, 2, lightId);
+        fillBox(dx, 2, -2 * dz, 2, 2, 2, lightId);
+        fillBox(-dx, 3, dz, 2, 1, 2, lightId);
+      } else if (unit === 2) {
+        fillBox(0, 0, 0, 2, 2, 2, leaf.id);
+        fillBox(3 * dx, 0, dz, 2, 2, 2, leaf.id);
+        fillBox(-dx, 1, 2 * dz, 2, 2, 2, lightId);
+        fillBox(dx, 2, 0, 2, 1, 2, lightId);
+      } else {
+        fillBox(0, 0, 0, 2, 1, 2, leaf.id);
+        fillBox(2 * dx, 0, dz, 1, 1, 2, leaf.id);
+        fillBox(dx, 1, dz, 1, 1, 1, lightId);
+      }
+      break;
+    }
+    case 'nub': {
+      // Tiny rounded cap — mostly for small/highland scrub trees.
+      if (unit === 2) {
+        fillBox(0, 0, 0, 3, 1, 3, leaf.id);
+        fillBox(dx, 1, dz, 2, 1, 2, lightId);
+      } else {
+        fillBox(0, 0, 0, 2, 1, 2, leaf.id);
+        fillBox(dx, 1, dz, 1, 1, 1, lightId);
+      }
+      break;
+    }
+    case 'umbrella': {
+      // Wide flat disc crown — acacia / lone savanna tree.
+      // Tall trunk, then a very flat broad canopy.
+      const w = large ? 7 : unit === 2 ? 5 : 4;
+      fillBox(0, 0, 0, w, 1, w, leaf.id);
+      fillBox(dx * 2, 0, dz, Math.ceil(w / 2), 1, Math.ceil(w / 3), leaf.id);
+      fillBox(-dx, 1, -dz, Math.ceil(w / 2), 1, Math.ceil(w / 2), lightId);
+      if (unit === 2) fillBox(dx, 2, dz, 2, 1, 2, lightId);
+      break;
+    }
+    case 'stack':
+    default: {
+      // Original architecture: broad lower mass + asymmetric shoulders + offset crown.
+      if (large) {
+        fillBox(0, 0, 0, 6, 2, 4, leaf.id);
+        fillBox(-4 * dx, 0, 0, 2, 2, 2, leaf.id);
+        fillBox(4 * dx, 1, dz, 2, 2, 2, lightId);
+        fillBox(-dx, 0, -3 * dz, 2, 2, 2, leaf.id);
+        fillBox(dx, 1, 3 * dz, 2, 2, 2, lightId);
+        fillBox(dx, 2, -dz, 4, 2, 4, lightId);
+        fillBox(-3 * dx, 2, dz, 2, 2, 2, leaf.id);
+        fillBox(3 * dx, 3, -dz, 2, 2, 2, lightId);
+        fillBox(-dx, 4, dz, 2, 2, 2, lightId);
+      } else if (unit === 2) {
+        fillBox(0, 0, 0, 4, 2, 4, leaf.id);
+        fillBox(-3 * dx, 0, 0, 2, 2, 2, leaf.id);
+        fillBox(3 * dx, 1, dz, 2, 2, 2, lightId);
+        fillBox(0, 0, -3 * dz, 2, 2, 2, leaf.id);
+        fillBox(dx, 2, 0, 4, 2, 2, lightId);
+        fillBox(-dx, 4, dz, 2, 2, 2, lightId);
+      } else {
+        fillBox(0, 0, 0, 3, 1, 3, leaf.id);
+        fillBox(-2 * dx, 0, 0, 1, 1, 2, leaf.id);
+        fillBox(2 * dx, 1, dz, 1, 1, 1, lightId);
+        fillBox(dx, 1, 0, 2, 1, 2, lightId);
+        fillBox(-dx, 2, dz, 1, 1, 1, lightId);
+      }
+    }
   }
 
   // Keep the visible trunk perfectly vertical and terminate it at the crown.
   const trunkOffset = -Math.floor((tw - 1) / 2);
   for (let ty = 0; ty < bare; ty++)
-    for (let dx = 0; dx < tw; dx++)
-      for (let dz = 0; dz < tw; dz++) grid.set(cx + trunkOffset + dx, y + ty, cz + trunkOffset + dz, trunkBlock.id);
+    for (let ddx = 0; ddx < tw; ddx++)
+      for (let ddz = 0; ddz < tw; ddz++) grid.set(cx + trunkOffset + ddx, y + ty, cz + trunkOffset + ddz, trunkBlock.id);
 
   const width = Math.max(maxX - minX + 1, maxZ - minZ + 1);
   const R = width * 0.5;
@@ -424,10 +555,14 @@ export function plantTree(grid: any, x: number, y: number, z: number, rng: any, 
  * Bushes & scrub
  * ================================================================== */
 
+type BushForm = 'mound' | 'spread' | 'tall' | 'cluster';
+
 /**
- * A low bush. Squat, and every voxel is checked against the column it stands
- * on — the previous pass grew plus-shapes whose arms hung out over terrace
- * lips, which is why shrubs appeared to float.
+ * A low bush in one of four silhouettes. Every voxel is checked against the
+ * column height to prevent cantilevering over terrace lips.
+ *
+ * @param size  0 = tiny (1-wide), 1 = small, 2 = medium
+ * @param form  shape variant; defaults to random
  */
 export function plantBush(
   grid: any,
@@ -438,22 +573,90 @@ export function plantBush(
   rng: any,
   block: any,
   size: number,
+  form: BushForm = rng.pick(['mound', 'mound', 'spread', 'tall', 'cluster']) as BushForm,
 ) {
   const top = heights[z * S + x];
-  const w = size;
-  const h = size >= 2 ? rng.int(2, 3) : size === 1 ? rng.int(1, 2) : 1;
-  for (let dz = -w; dz <= w; dz++)
-    for (let dx = -w; dx <= w; dx++) {
-      const xx = x + dx,
-        zz = z + dz;
-      if (xx < 1 || zz < 1 || xx >= S - 1 || zz >= S - 1) continue;
-      if (heights[zz * S + xx] !== top) continue; // no cantilevering
-      if (grid.isSolid(xx, top + 1, zz)) continue;
-      const e = Math.abs(dx) + Math.abs(dz);
-      if (e > w + (w >= 2 ? 1 : 0)) continue;
-      const hh = Math.max(1, h - (e >= w ? 1 : 0));
-      for (let dy = 0; dy < hh; dy++) grid.set(xx, top + 1 + dy, zz, block.id);
+
+  /** Place one voxel only if it sits on a column matching `top` and is unoccupied. */
+  const put = (xx: number, yy: number, zz: number) => {
+    if (xx < 1 || zz < 1 || xx >= S - 1 || zz >= S - 1) return;
+    if (heights[zz * S + xx] !== top) return; // no cantilevering
+    if (grid.isSolid(xx, top + 1, zz)) return;
+    grid.set(xx, top + yy, zz, block.id);
+  };
+
+  switch (form) {
+    case 'spread': {
+      // Very flat and wide — single layer, larger footprint.
+      const w = size + 1;
+      for (let dz = -w; dz <= w; dz++)
+        for (let dx = -w; dx <= w; dx++) {
+          if (Math.abs(dx) + Math.abs(dz) > w + 1) continue;
+          put(x + dx, 1, z + dz);
+        }
+      // Low raised centre
+      if (size >= 1) put(x, 2, z);
+      break;
     }
+    case 'tall': {
+      // Narrow at base, taller — upright shrub / small hedge.
+      const w = Math.max(0, size - 1);
+      const h = size >= 2 ? rng.int(3, 4) : size === 1 ? rng.int(2, 3) : 2;
+      for (let dz = -w; dz <= w; dz++)
+        for (let dx = -w; dx <= w; dx++) {
+          const e = Math.abs(dx) + Math.abs(dz);
+          if (e > w) continue;
+          const hh = Math.max(1, h - e);
+          for (let dy = 1; dy <= hh; dy++) put(x + dx, dy, z + dz);
+        }
+      // Slightly wider cap at mid-height
+      if (size >= 1) {
+        const capH = Math.floor(h / 2);
+        for (let dz = -1; dz <= 1; dz++)
+          for (let dx = -1; dx <= 1; dx++) {
+            if (Math.abs(dx) + Math.abs(dz) > 1) continue;
+            put(x + dx, capH, z + dz);
+          }
+      }
+      break;
+    }
+    case 'cluster': {
+      // Two offset blobs — forked shrub / twin tufts.
+      const ox = rng.pick([-1, 1]) * (size + 1);
+      const oz = rng.pick([-1, 1]);
+      const h = size >= 2 ? 2 : 1;
+      // Primary blob
+      for (let dz = -1; dz <= 1; dz++)
+        for (let dx = -1; dx <= 1; dx++) {
+          if (Math.abs(dx) + Math.abs(dz) > 1 + (size >= 2 ? 1 : 0)) continue;
+          for (let dy = 1; dy <= h; dy++) put(x + dx, dy, z + dz);
+        }
+      // Secondary blob — offset, slightly shorter
+      for (let dz = -1; dz <= 1; dz++)
+        for (let dx = -1; dx <= 1; dx++) {
+          if (Math.abs(dx) + Math.abs(dz) > 1) continue;
+          put(x + ox + dx, 1, z + oz + dz);
+        }
+      break;
+    }
+    case 'mound':
+    default: {
+      // Original diamond-taper mound — the reliable baseline.
+      const w = size;
+      const h = size >= 2 ? rng.int(2, 3) : size === 1 ? rng.int(1, 2) : 1;
+      for (let dz = -w; dz <= w; dz++)
+        for (let dx = -w; dx <= w; dx++) {
+          const xx = x + dx, zz = z + dz;
+          if (xx < 1 || zz < 1 || xx >= S - 1 || zz >= S - 1) continue;
+          if (heights[zz * S + xx] !== top) continue;
+          if (grid.isSolid(xx, top + 1, zz)) continue;
+          const e = Math.abs(dx) + Math.abs(dz);
+          if (e > w + (w >= 2 ? 1 : 0)) continue;
+          const hh = Math.max(1, h - (e >= w ? 1 : 0));
+          for (let dy = 0; dy < hh; dy++) grid.set(xx, top + 1 + dy, zz, block.id);
+        }
+    }
+  }
 }
 
 /* ================================================================== *
