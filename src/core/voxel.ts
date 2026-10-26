@@ -682,6 +682,7 @@ export function createWorldChunkStreamer(grid: any, { loadRadius = DEFAULT_STREA
   const chunksX = Math.ceil(grid.sx / CHUNK);
   const chunksZ = Math.ceil(grid.sz / CHUNK);
   const loaded = new Map<string, any>();
+  const fadingMeshes = new Set<any>(); // only meshes actively fading in
   let loadQueue: any[] = [];
   let unloadQueue: string[] = [];
   let desiredLoadKeys = new Set<string>();
@@ -723,6 +724,7 @@ export function createWorldChunkStreamer(grid: any, { loadRadius = DEFAULT_STREA
       if (!mesh) continue;
       mesh.userData.lodAlpha = 0.0;
       mesh.userData.lodFading = true;
+      fadingMeshes.add(mesh);
       mesh.onBeforeRender = () => {
         uniforms.uLodAlpha.value = mesh.userData.lodAlpha;
       };
@@ -735,6 +737,7 @@ export function createWorldChunkStreamer(grid: any, { loadRadius = DEFAULT_STREA
       const resolveCb = record.edges.onBeforeRender; // resolution callback from prepareEdgeObject
       record.edges.userData.lodAlpha = 0.0;
       record.edges.userData.lodFading = true;
+      fadingMeshes.add(record.edges);
       record.edges.userData.resolveCb = resolveCb;
       record.edges.onBeforeRender = (renderer: any) => {
         resolveCb.call(record.edges, renderer);
@@ -757,6 +760,9 @@ export function createWorldChunkStreamer(grid: any, { loadRadius = DEFAULT_STREA
   const unloadChunk = (key: any) => {
     const record = loaded.get(key);
     if (!record) return;
+    for (const mesh of [record.solid, record.glow, record.edges]) {
+      if (mesh) fadingMeshes.delete(mesh);
+    }
     removeMeshChunk(meshes, record);
     loaded.delete(key);
   };
@@ -871,16 +877,15 @@ export function createWorldChunkStreamer(grid: any, { loadRadius = DEFAULT_STREA
   const update = (player: any, camera = player, trimToRadius = false, dt = 0) => {
     if (disposed || !player) return;
     // Advance LOD fade-in for newly loaded chunks.
-    if (dt > 0) {
-      for (const record of loaded.values()) {
-        for (const mesh of [record.solid, record.glow, record.edges]) {
-          if (!mesh || !mesh.userData.lodFading) continue;
-          mesh.userData.lodAlpha = Math.min(1.0, mesh.userData.lodAlpha + dt * 1.5);
-          if (mesh.userData.lodAlpha >= 1.0) {
-            mesh.userData.lodFading = false;
-            mesh.onBeforeRender = mesh.userData.resolveCb ?? (() => {});
-            mesh.onAfterRender = () => {};
-          }
+    // Only meshes actively fading are in fadingMeshes, so this is O(fading) not O(all loaded).
+    if (dt > 0 && fadingMeshes.size > 0) {
+      for (const mesh of fadingMeshes) {
+        mesh.userData.lodAlpha = Math.min(1.0, mesh.userData.lodAlpha + dt * 1.5);
+        if (mesh.userData.lodAlpha >= 1.0) {
+          mesh.userData.lodFading = false;
+          mesh.onBeforeRender = mesh.userData.resolveCb ?? (() => {});
+          mesh.onAfterRender = () => {};
+          fadingMeshes.delete(mesh);
         }
       }
     }

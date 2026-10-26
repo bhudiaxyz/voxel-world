@@ -949,6 +949,14 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
   decorateCliffs(grid, heights, land, S, rng, nRock, AREA);
   addCascades(grid, heights, land, S, riverPath, rng, CASCADE.id, AREA);
 
+  // Bake normalised river proximity (0=land, 255=channel centre) for the water shader.
+  const rivFlow = new Uint8Array(S * S);
+  for (let i = 0; i < S * S; i++) {
+    const d = rivD[i];
+    const hw = rivHalf[i];
+    if (hw > 0 && d < hw) rivFlow[i] = Math.round((1 - d / hw) * 255);
+  }
+
   return {
     grid,
     heights,
@@ -960,6 +968,7 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
     stairMask,
     lake: LAKE,
     riverDist,
+    rivFlow,
   };
 }
 

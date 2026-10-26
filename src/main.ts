@@ -55,7 +55,7 @@ async function start(): Promise<void> {
   const dayNight = new DayNight(atmo, renderer);
 
   const waterDepth = makeDepthMap(world);
-  const water = createWater(world.size, waterDepth);
+  const water = createWater(world.size, waterDepth, tier);
   scene.add(water.mesh);
   setVoxelWaterline(world.meshes.material, waterDepth, world.size, DEPTH_RANGE);
 
@@ -312,7 +312,7 @@ async function start(): Promise<void> {
     // Update planet-bend uniforms only when the player has moved (saves an
     // iteration over all materials every frame while standing still or hovering).
     const bendOrigin = fpCam.droneActive || fpCam.flyActive ? fpCam.camera.position : controller.pos;
-    if (Math.abs(bendOrigin.x - _lastPlanetX) + Math.abs(bendOrigin.z - _lastPlanetZ) > 0.001) {
+    if (Math.abs(bendOrigin.x - _lastPlanetX) + Math.abs(bendOrigin.z - _lastPlanetZ) > 0.1) {
       _lastPlanetX = bendOrigin.x;
       _lastPlanetZ = bendOrigin.z;
       for (const unis of world.allPlanetUnis) updatePlanetUniforms(unis, bendOrigin);
@@ -334,6 +334,9 @@ async function start(): Promise<void> {
           bootEl.addEventListener('transitionend', () => bootEl.classList.add('gone'), {
             once: true,
           });
+          // Boot overlay sits above the canvas, so the click never reaches it —
+          // request pointer lock here so the player can act immediately.
+          renderer.domElement.requestPointerLock();
         },
         { once: true },
       );

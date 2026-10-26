@@ -183,6 +183,11 @@ export class DayNight {
     // Renderer clear colour (used for the brief gap before the sky dome covers it)
     if (this.renderer) {
       this.renderer.setClearColor(atmo.scene.fog.color);
+      // When shadowMap.autoUpdate is off (very-low tier) we must trigger an
+      // update here — once per animation tick is exactly the right cadence.
+      if (!this.renderer.shadowMap.autoUpdate) {
+        this.renderer.shadowMap.needsUpdate = true;
+      }
     }
   }
 }

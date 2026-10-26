@@ -50,16 +50,20 @@ export const DEPTH_RANGE = 34.0;
  */
 export function makeDepthMap(world: any) {
   const S = world.size;
-  const data = new Uint8Array(S * S);
+  // RG: R = signed water depth (same as before), G = river proximity 0–255
+  const data = new Uint8Array(S * S * 2);
+  const rivFlow: Uint8Array | null = world.rivFlow ?? null;
   for (let z = 0; z < S; z++) {
     for (let x = 0; x < S; x++) {
-      const top = world.heights[z * S + x];
+      const i = z * S + x;
+      const top = world.heights[i];
       const d = WATER.level - (top + 1);
       const t = (d + DEPTH_RANGE) / (2 * DEPTH_RANGE);
-      data[z * S + x] = Math.max(0, Math.min(1, t)) * 255;
+      data[i * 2 + 0] = Math.max(0, Math.min(1, t)) * 255;
+      data[i * 2 + 1] = rivFlow ? rivFlow[i] : 0;
     }
   }
-  const tex = new THREE.DataTexture(data, S, S, THREE.RedFormat, THREE.UnsignedByteType);
+  const tex = new THREE.DataTexture(data, S, S, THREE.RGFormat, THREE.UnsignedByteType);
   tex.minFilter = THREE.LinearFilter;
   tex.magFilter = THREE.LinearFilter;
   tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
@@ -67,8 +71,9 @@ export function makeDepthMap(world: any) {
   return tex;
 }
 
-export function createWater(size: any, depthMap: any) {
-  const geo = new THREE.PlaneGeometry(size * 1.9, size * 1.9, 64, 64);
+export function createWater(size: any, depthMap: any, tier: string = 'high') {
+  const sub = tier === 'high' ? 64 : 32;
+  const geo = new THREE.PlaneGeometry(size * 1.9, size * 1.9, sub, sub);
   geo.rotateX(-Math.PI / 2);
 
   const mat = new THREE.ShaderMaterial({
@@ -195,12 +200,15 @@ export function createWater(size: any, depthMap: any) {
       /**
        * Signed distance from the waterline at a world XZ, in world units.
        * Positive under water, negative over land, zero exactly at the shore.
+       * Returns depth in .x and river proximity [0,1] in .y.
        */
-      float depthAt(vec2 worldXZ) {
+      vec2 sampleDepthMap(vec2 worldXZ) {
         vec2 t = worldXZ / uWorldSize;
-        if (t.x < 0.0 || t.x > 1.0 || t.y < 0.0 || t.y > 1.0) return uRange;
-        return (texture2D(uDepthMap, t).r * 2.0 - 1.0) * uRange;
+        if (t.x < 0.0 || t.x > 1.0 || t.y < 0.0 || t.y > 1.0) return vec2(uRange, 0.0);
+        vec2 s = texture2D(uDepthMap, t).rg;
+        return vec2((s.r * 2.0 - 1.0) * uRange, s.g);
       }
+      float depthAt(vec2 worldXZ) { return sampleDepthMap(worldXZ).x; }
 
       void main() {
         vec2 uv = vWorld.xz;
@@ -216,8 +224,13 @@ export function createWater(size: any, depthMap: any) {
          * the river, and needs to see out of it. */
         float above = step(uLevel, cameraPosition.y);
 
+        // River proximity [0,1] — 1 at channel centre, 0 on open water / land.
+        float rivProx = sampleDepthMap(uv).y;
+
         // --- surface -----------------------------------------------------
-        vec3 wave = waveField(uv, uTime);
+        // Rivers run faster: scale wave speed proportional to river proximity.
+        float riverSpeed = 1.0 + rivProx * 1.8;
+        vec3 wave = waveField(uv, uTime * riverSpeed);
         // A slow swell riding under the wave trains. Real caustics are not
         // uniformly bright — wave grouping gathers the focus into broad bands
         // and leaves the water between them dim — so this modulates the web's
@@ -299,6 +312,17 @@ export function createWater(size: any, depthMap: any) {
         // A tight sun glint riding on top of the reflection.
         vec3 Hv = normalize(uSunDir + V);
         col += uSunColor * pow(max(dot(N, Hv), 0.0), 90.0) * 0.22 * above;
+
+        /* --- bank foam -------------------------------------------------------
+         * A thin bright froth band right at the waterline. Confined to the
+         * 0.4–1.2 block shore strip so it is never visible on deep water. */
+        float foamBand = smoothstep(0.0, 0.4, shore) * (1.0 - smoothstep(0.4, 1.2, shore));
+        col = mix(col, vec3(0.90, 0.92, 0.96), foamBand * 0.50 * above);
+
+        /* --- river tint -----------------------------------------------------
+         * Subtly shift river channels toward a cooler, more turbid hue so they
+         * read distinct from the calm lake/ocean at a glance. */
+        col = mix(col, col * vec3(0.88, 0.95, 1.06), rivProx * 0.28);
 
         /* --- alpha -----------------------------------------------------------
          * Fading to nothing at the waterline is what removes the hard rim a

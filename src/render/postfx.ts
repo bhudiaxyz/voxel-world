@@ -42,6 +42,7 @@ import { Pass, FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js'
 import { GRADE, SKY, LIGHT } from '../core/palette';
 import { FOG_NEAR } from './lighting';
 import type { GpuTier } from './gpu-tier';
+import { TIER_SETTINGS } from './gpu-tier';
 import { EDGE_LAYER } from '../core/voxel';
 import { SKY_UNIFORMS_GLSL, SKY_FN_GLSL, skyUniformValues } from './sky';
 
@@ -358,7 +359,8 @@ function makeAtmosphereShader(sunDir: THREE.Vector3) {
 
       /* ---- extras ---- */
       uInscatter: { value: 0.28 },
-      uDof: { value: 1.2 }, // pixels of defocus at full haze
+      uDof: { value: 1.2 },    // pixels of defocus at full haze (0 = disabled)
+      uAOTaps: { value: 8 },   // rosette taps (0 = skip AO)
       uCloud: { value: 0.055 },
     },
     vertexShader: /* glsl */ `
@@ -371,7 +373,7 @@ function makeAtmosphereShader(sunDir: THREE.Vector3) {
       uniform float uNear, uFar, uAerialD, uFogNear, uDesat, uSkyBlend;
       uniform float uMistBase, uMistH, uMistDens, uMistMax;
       uniform float uAOStrength, uAORadius, uAORange;
-      uniform float uInscatter, uDof, uCloud, uTime, uFocal;
+      uniform float uInscatter, uDof, uAOTaps, uCloud, uTime, uFocal;
       uniform vec3 uCamPos, uMistColor, uAOTint;
       uniform vec2 uResolution;
       uniform mat4 uInvProj, uInvView;
@@ -444,7 +446,7 @@ function makeAtmosphereShader(sunDir: THREE.Vector3) {
         // a photographic effect.
         float blurPx = uDof * pow(max(fog, mist), 1.4);
         vec3 col = src.rgb;
-        if (blurPx > 0.12) {
+        if (uDof > 0.0 && blurPx > 0.12) {
           vec2 px = blurPx / uResolution;
           vec3 acc = col;
           for (int i = 0; i < 4; i++) {
@@ -454,24 +456,29 @@ function makeAtmosphereShader(sunDir: THREE.Vector3) {
         }
 
         // ---- large-scale AO ---------------------------------------------
-        float zc = viewZ(vUv);
-        float px = clamp(uAORadius * uFocal / max(-zc, 1.0), 2.0, 64.0);
-        vec2 aoStep = px / uResolution;
-        float occ = 0.0;
-        for (int i = 0; i < 8; i++) {
-          // two radii per direction: near ring finds contact, far ring finds
-          // the big overhangs the baked AO has no idea about
-          float zs1 = viewZ(vUv + AO_DIR[i] * aoStep * 0.45);
-          float zs2 = viewZ(vUv + AO_DIR[i] * aoStep);
-          float d1 = zs1 - zc;
-          float d2 = zs2 - zc;
-          occ += clamp(d1 / uAORange, 0.0, 1.0) * (1.0 - smoothstep(uAORange, uAORange * 4.0, d1)) * 0.6;
-          occ += clamp(d2 / uAORange, 0.0, 1.0) * (1.0 - smoothstep(uAORange, uAORange * 4.0, d2)) * 0.4;
+        // uAOTaps = 0 skips entirely (very-low / low tier).
+        // uAOTaps = 4 runs the near ring only (mid tier, half the fetches).
+        float ao = 1.0;
+        if (uAOTaps > 0.0) {
+          float zc = viewZ(vUv);
+          float px = clamp(uAORadius * uFocal / max(-zc, 1.0), 2.0, 64.0);
+          vec2 aoStep = px / uResolution;
+          float occ = 0.0;
+          int taps = int(uAOTaps);
+          for (int i = 0; i < 8; i++) {
+            if (i >= taps) break;
+            float zs1 = viewZ(vUv + AO_DIR[i] * aoStep * 0.45);
+            float zs2 = viewZ(vUv + AO_DIR[i] * aoStep);
+            float d1 = zs1 - zc;
+            float d2 = zs2 - zc;
+            occ += clamp(d1 / uAORange, 0.0, 1.0) * (1.0 - smoothstep(uAORange, uAORange * 4.0, d1)) * 0.6;
+            occ += clamp(d2 / uAORange, 0.0, 1.0) * (1.0 - smoothstep(uAORange, uAORange * 4.0, d2)) * 0.4;
+          }
+          occ = clamp(occ / float(taps), 0.0, 1.0);
+          // Fade AO out with distance: it has nothing to say once the air has
+          // eaten the contrast anyway, and it keeps the far field clean.
+          ao = 1.0 - uAOStrength * occ * (1.0 - fog);
         }
-        occ = clamp(occ / 8.0, 0.0, 1.0);
-        // Fade AO out with distance: it has nothing to say once the air has
-        // eaten the contrast anyway, and it keeps the far field clean.
-        float ao = 1.0 - uAOStrength * occ * (1.0 - fog);
         col *= mix(uAOTint, vec3(1.0), ao);
 
         // ---- drifting cloud shadow ---------------------------------------
@@ -549,6 +556,9 @@ export function createPostFX(
 
   const haze = new ShaderPass(makeAtmosphereShader(LIGHT.sunDir));
   haze.uniforms.tDepth.value = depthTexture;
+  const ts = TIER_SETTINGS[tier];
+  haze.uniforms.uAOTaps.value = ts.aoTaps;
+  haze.uniforms.uDof.value = ts.dof ? 1.2 : 0.0;
   const authoredMistMax = haze.uniforms.uMistMax.value;
   composer.addPass(haze);
 
@@ -567,7 +577,7 @@ export function createPostFX(
   bloom.threshold = 1.25;
   bloom.strength = 0.22;
   bloom.radius = 0.9;
-  if (tier !== 'low') composer.addPass(bloom);
+  if (ts.bloom) composer.addPass(bloom);
 
   const CrepuscularShader = {
     uniforms: {

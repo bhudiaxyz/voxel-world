@@ -33,7 +33,8 @@ export function createRenderer(container: any, tier: GpuTier = 'high') {
   // penumbra. The former five-sample rotated PCF kernel was responsible for
   // the visible grain/crawling in broad tree shadows.
   renderer.shadowMap.type = THREE.VSMShadowMap;
-  renderer.shadowMap.autoUpdate = true;
+  // very-low: shadow map is expensive; DayNight will set needsUpdate manually.
+  renderer.shadowMap.autoUpdate = tier !== 'very-low';
 
   // Palette colours are stored linear. getHex() encodes back to sRGB, which is
   // what setClearColor expects; the previous convertLinearToSRGB() *before*
