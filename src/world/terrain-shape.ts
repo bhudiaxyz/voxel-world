@@ -45,10 +45,12 @@ export function modeFilter(lev: any, S: any, radius: any, land: any, iterations 
             counts.set(v, (counts.get(v) || 0) + 1);
           }
         }
-        let best = self, bestC = -1;
+        let best = self,
+          bestC = -1;
         for (const [v, c] of counts) {
           if (c > bestC || (c === bestC && Math.abs(v - self) < Math.abs(best - self))) {
-            best = v; bestC = c;
+            best = v;
+            bestC = c;
           }
         }
         out[i] = best;
@@ -75,13 +77,15 @@ export function labelWalk(lev: any, S: any, land: any, maxStep = 1) {
   for (let start = 0; start < S * S; start++) {
     if (!land[start] || label[start] >= 0) continue;
     const id = next++;
-    let sp = 0, size = 0;
+    let sp = 0,
+      size = 0;
     stack[sp++] = start;
     label[start] = id;
     while (sp > 0) {
       const i = stack[--sp];
       size++;
-      const x = i % S, z = (i / S) | 0;
+      const x = i % S,
+        z = (i / S) | 0;
       const h = lev[i];
       for (let d = 0; d < 4; d++) {
         const nx = x + (d === 0 ? 1 : d === 1 ? -1 : 0);
@@ -111,11 +115,13 @@ export function despeckle(lev: any, S: any, land: any, minArea = 14) {
   const members = [];
   for (let id = 0; id < sizes.length; id++) {
     if (sizes[id] >= minArea) continue;
-    border.clear(); members.length = 0;
+    border.clear();
+    members.length = 0;
     for (let i = 0; i < S * S; i++) {
       if (label[i] !== id) continue;
       members.push(i);
-      const x = i % S, z = (i / S) | 0;
+      const x = i % S,
+        z = (i / S) | 0;
       for (let d = 0; d < 4; d++) {
         const nx = x + (d === 0 ? 1 : d === 1 ? -1 : 0);
         const nz = z + (d === 2 ? 1 : d === 3 ? -1 : 0);
@@ -125,8 +131,13 @@ export function despeckle(lev: any, S: any, land: any, minArea = 14) {
         border.set(lev[j], (border.get(lev[j]) || 0) + 1);
       }
     }
-    let best = null, bestC = 0;
-    for (const [v, c] of border) if (c > bestC) { best = v; bestC = c; }
+    let best = null,
+      bestC = 0;
+    for (const [v, c] of border)
+      if (c > bestC) {
+        best = v;
+        bestC = c;
+      }
     if (best === null) continue;
     for (const i of members) out[i] = best;
   }
@@ -147,11 +158,11 @@ export function despeckle(lev: any, S: any, land: any, minArea = 14) {
  */
 export function carveStairs(lev: any, S: any, land: any, opts: any = {}) {
   const {
-    minArea = 30,     // regions smaller than this are scenery, not destinations
-    tread = 2,        // columns per 1-block rise
+    minArea = 30, // regions smaller than this are scenery, not destinations
+    tread = 2, // columns per 1-block rise
     width = 3,
     maxStairs = 90,
-    skip = null,      // columns that must never be cut (landmark pillars)
+    skip = null, // columns that must never be cut (landmark pillars)
   } = opts;
 
   const stairMask = new Uint8Array(S * S);
@@ -200,9 +211,10 @@ export function carveStairs(lev: any, S: any, land: any, opts: any = {}) {
       break;
     }
 
-    const hi = lev[best.i] > lev[best.j]
-      ? { x: best.x, z: best.z, o: { x: best.nx, z: best.nz } }
-      : { x: best.nx, z: best.nz, o: { x: best.x, z: best.z } };
+    const hi =
+      lev[best.i] > lev[best.j]
+        ? { x: best.x, z: best.z, o: { x: best.nx, z: best.nz } }
+        : { x: best.nx, z: best.nz, o: { x: best.x, z: best.z } };
     cutStair(lev, S, land, stairMask, hi.o.x, hi.o.z, hi.x - hi.o.x, hi.z - hi.o.z, tread, width, skip);
     sites.push({ x: hi.o.x, z: hi.o.z, ux: hi.x - hi.o.x, uz: hi.z - hi.o.z });
   }
@@ -210,24 +222,41 @@ export function carveStairs(lev: any, S: any, land: any, opts: any = {}) {
 }
 
 /** One staircase: from the low column, biting up into the high ground. */
-function cutStair(lev: any, S: any, land: any, mask: any, lx: any, lz: any, ux: any, uz: any, tread: any, width: any, skip: any) {
+function cutStair(
+  lev: any,
+  S: any,
+  land: any,
+  mask: any,
+  lx: any,
+  lz: any,
+  ux: any,
+  uz: any,
+  tread: any,
+  width: any,
+  skip: any,
+) {
   const lo = lev[lz * S + lx];
-  const px = uz, pz = ux;                 // perpendicular, for the stair width
+  const px = uz,
+    pz = ux; // perpendicular, for the stair width
   const half = (width - 1) / 2;
   for (let s = 1; s < 96; s++) {
-    const x = lx + ux * s, z = lz + uz * s;
+    const x = lx + ux * s,
+      z = lz + uz * s;
     if (x < 1 || z < 1 || x >= S - 1 || z >= S - 1) break;
     const i = z * S + x;
     if (!land[i] || (skip && skip[i])) break;
     const target = lo + Math.ceil(s / tread);
-    if (lev[i] <= target) break;          // we have reached the upper shelf
+    if (lev[i] <= target) break; // we have reached the upper shelf
     for (let w = -half; w <= half; w++) {
-      const wx = x + px * w, wz = z + pz * w;
+      const wx = x + px * w,
+        wz = z + pz * w;
       if (wx < 0 || wz < 0 || wx >= S || wz >= S) continue;
       const j = wz * S + wx;
       if (!land[j] || (skip && skip[j])) continue;
-      if (lev[j] > target) { lev[j] = target; mask[j] = 1; }
-      else if (w === 0) mask[j] = 1;
+      if (lev[j] > target) {
+        lev[j] = target;
+        mask[j] = 1;
+      } else if (w === 0) mask[j] = 1;
     }
   }
 }

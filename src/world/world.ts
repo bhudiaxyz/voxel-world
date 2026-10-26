@@ -1,4 +1,3 @@
-
 /**
  * World assembly — runs the generators in order and turns the finished voxel
  * grid into renderable meshes.
@@ -111,7 +110,8 @@ function findSpawn(world: any) {
     // and is open air now that they follow the channel.
     return new THREE.Vector3(b.x + 0.5, b.deckY + 1.2, b.z + 0.5);
   }
-  const cx = Math.floor(S / 2), cz = Math.floor(S / 2);
+  const cx = Math.floor(S / 2),
+    cz = Math.floor(S / 2);
   for (let r = 0; r < S / 2; r++) {
     for (let a = 0; a < 24; a++) {
       const th = (a / 24) * Math.PI * 2;
@@ -120,8 +120,7 @@ function findSpawn(world: any) {
       if (x < 4 || z < 4 || x > S - 5 || z > S - 5) continue;
       const top = heights[z * S + x];
       const id = grid.get(x, top, z);
-      if (BLOCK_BY_ID[id]?.grassCap ||
-          id === BLOCKS.PATH.id || id === BLOCKS.SAND.id) {
+      if (BLOCK_BY_ID[id]?.grassCap || id === BLOCKS.PATH.id || id === BLOCKS.SAND.id) {
         return new THREE.Vector3(x + 0.5, top + 1.2, z + 0.5);
       }
     }

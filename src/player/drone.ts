@@ -2,19 +2,19 @@ import * as THREE from 'three';
 import type { VoxelGrid } from '../core/voxel';
 
 const DRONE = {
-  cruiseSpeed:           18,
-  sprintSpeed:           45,
-  hoverAltitude:         12,
-  yawSensitivity:        0.7,
-  altitudeChangeRate:    12.0,   // m/s per unit axis input
-  enterLiftHeight:       18,
-  keyYawSpeed:           1.2,
-  landingDescentRate:    8,      // m/s hover-height reduction while landing
+  cruiseSpeed: 18,
+  sprintSpeed: 45,
+  hoverAltitude: 12,
+  yawSensitivity: 0.7,
+  altitudeChangeRate: 12.0, // m/s per unit axis input
+  enterLiftHeight: 18,
+  keyYawSpeed: 1.2,
+  landingDescentRate: 8, // m/s hover-height reduction while landing
   landingCompleteHeight: 2.5,
-  heightSmoothRate:      1.5,
-  heightPGain:           2.2,
-  vertVelMax:            8.0,
-  pitchSmoothRate:       1.8,
+  heightSmoothRate: 1.5,
+  heightPGain: 2.2,
+  vertVelMax: 8.0,
+  pitchSmoothRate: 1.8,
 };
 
 type State = 'idle' | 'rising' | 'cruising';
@@ -39,10 +39,10 @@ export interface DroneMode {
 
 export function createDroneMode(grid: VoxelGrid): DroneMode {
   let state: State = 'idle';
-  let isLanding     = false;
+  let isLanding = false;
   let hoverAltitude = DRONE.hoverAltitude;
-  let currentSpeed  = 0;
-  let yaw           = 0;
+  let currentSpeed = 0;
+  let yaw = 0;
   let smoothedTargetY = 0;
 
   function getGroundY(x: number, z: number): number {
@@ -51,16 +51,20 @@ export function createDroneMode(grid: VoxelGrid): DroneMode {
   }
 
   return {
-    get active():  boolean { return state !== 'idle'; },
-    get landing(): boolean { return isLanding; },
+    get active(): boolean {
+      return state !== 'idle';
+    },
+    get landing(): boolean {
+      return isLanding;
+    },
 
     enter(camera: THREE.PerspectiveCamera): void {
-      state     = 'rising';
+      state = 'rising';
       isLanding = false;
-      yaw       = camera.rotation.y;
+      yaw = camera.rotation.y;
       smoothedTargetY = camera.position.y;
-      const groundY  = getGroundY(camera.position.x, camera.position.z);
-      hoverAltitude  = Math.max(DRONE.enterLiftHeight, camera.position.y - groundY);
+      const groundY = getGroundY(camera.position.x, camera.position.z);
+      hoverAltitude = Math.max(DRONE.enterLiftHeight, camera.position.y - groundY);
     },
 
     beginLanding(): void {
@@ -71,7 +75,9 @@ export function createDroneMode(grid: VoxelGrid): DroneMode {
       return camera.position.y - getGroundY(camera.position.x, camera.position.z);
     },
 
-    getSpeed(): number { return currentSpeed; },
+    getSpeed(): number {
+      return currentSpeed;
+    },
 
     update(
       dt: number,
@@ -84,19 +90,19 @@ export function createDroneMode(grid: VoxelGrid): DroneMode {
     ): boolean {
       if (state === 'idle') return false;
       camera.rotation.order = 'YXZ';
-      camera.rotation.z     = 0;
+      camera.rotation.z = 0;
 
       // Yaw: mouse
       yaw -= mouseDeltaX * DRONE.yawSensitivity * 0.001;
 
       if (state === 'rising') {
         currentSpeed = 0;
-        const gY      = getGroundY(camera.position.x, camera.position.z);
+        const gY = getGroundY(camera.position.x, camera.position.z);
         const targetY = gY + hoverAltitude;
         camera.position.y += (targetY - camera.position.y) * Math.min(1, dt * 2.5);
-        smoothedTargetY    = camera.position.y;
-        camera.rotation.y  = yaw;
-        camera.rotation.x  = 0;
+        smoothedTargetY = camera.position.y;
+        camera.rotation.y = yaw;
+        camera.rotation.x = 0;
         if (Math.abs(camera.position.y - targetY) < 0.8) state = 'cruising';
         return false;
       }
@@ -112,16 +118,16 @@ export function createDroneMode(grid: VoxelGrid): DroneMode {
       }
 
       const sprinting = keys.has('ShiftLeft') || keys.has('ShiftRight');
-      currentSpeed    = sprinting ? DRONE.sprintSpeed : DRONE.cruiseSpeed;
+      currentSpeed = sprinting ? DRONE.sprintSpeed : DRONE.cruiseSpeed;
 
       // A/D + joystick X steer (yaw); always advance forward
-      if (keys.has('KeyA') || keys.has('ArrowLeft'))  yaw += DRONE.keyYawSpeed * dt;
+      if (keys.has('KeyA') || keys.has('ArrowLeft')) yaw += DRONE.keyYawSpeed * dt;
       if (keys.has('KeyD') || keys.has('ArrowRight')) yaw -= DRONE.keyYawSpeed * dt;
       yaw -= joyX * DRONE.keyYawSpeed * dt;
       camera.position.x -= Math.sin(yaw) * currentSpeed * dt;
       camera.position.z -= Math.cos(yaw) * currentSpeed * dt;
 
-      const gY         = getGroundY(camera.position.x, camera.position.z);
+      const gY = getGroundY(camera.position.x, camera.position.z);
       const rawTargetY = gY + hoverAltitude;
       smoothedTargetY += (rawTargetY - smoothedTargetY) * Math.min(1, dt * DRONE.heightSmoothRate);
 
@@ -131,14 +137,14 @@ export function createDroneMode(grid: VoxelGrid): DroneMode {
 
       if (camera.position.y < gY + 2.0) camera.position.y = gY + 2.0;
 
-      camera.rotation.y  = yaw;
-      const pitchTarget  = -0.06;
+      camera.rotation.y = yaw;
+      const pitchTarget = -0.06;
       camera.rotation.x += (pitchTarget - camera.rotation.x) * Math.min(1, dt * DRONE.pitchSmoothRate);
 
       // Landing complete when close enough to ground
       if (isLanding && camera.position.y <= gY + DRONE.landingCompleteHeight) {
         camera.position.y = gY + DRONE.landingCompleteHeight;
-        state     = 'idle';
+        state = 'idle';
         isLanding = false;
         return true;
       }

@@ -25,8 +25,8 @@ const PREVIOUS_SHADOW_RESOLUTION_DEFAULT = 4096;
  */
 export const DEFAULTS = {
   inkWidth: INK_BASE * 1.85,
-  zoomMin:  50,
-  zoomMax:  120,
+  zoomMin: 50,
+  zoomMax: 120,
   fogEnabled: true,
   fogStart: 420,
   loadRadius: DEFAULT_STREAM_RADIUS,
@@ -37,11 +37,11 @@ export const DEFAULTS = {
 
 const RANGES = {
   // Half-thousandth precision keeps authored values such as 1.85x exact.
-  inkWidth: { min: 0.012, max: 0.16,  step: 0.0005 },
-  zoomMin:  { min: 12,    max: 50,    step: 1 },
-  zoomMax:  { min: 40,    max: 140,   step: 1 },
-  fogStart: { min: 70,    max: 420,   step: 2 },
-  loadRadius: { min: 3,   max: 12,    step: 1 },
+  inkWidth: { min: 0.012, max: 0.16, step: 0.0005 },
+  zoomMin: { min: 12, max: 50, step: 1 },
+  zoomMax: { min: 40, max: 140, step: 1 },
+  fogStart: { min: 70, max: 420, step: 2 },
+  loadRadius: { min: 3, max: 12, step: 1 },
   shadowResolution: { min: 0, max: 4096, step: 1024 },
   planetRadius: { min: 100, max: 1000, step: 10 },
   daySpeed: { min: 0.1, max: 5, step: 0.1 },
@@ -149,7 +149,7 @@ function load(): SettingsValues {
     if (Math.abs(out.inkWidth - PREVIOUS_INK_DEFAULT) < 1e-7) {
       out.inkWidth = DEFAULTS.inkWidth;
     }
-    if ((parsed['_version'] as number || 1) < SETTINGS_VERSION) {
+    if (((parsed['_version'] as number) || 1) < SETTINGS_VERSION) {
       if (out.loadRadius === PREVIOUS_LOAD_RADIUS_DEFAULT) {
         out.loadRadius = DEFAULTS.loadRadius;
       }
@@ -166,24 +166,31 @@ function load(): SettingsValues {
 function save(values: SettingsValues): void {
   try {
     localStorage.setItem(STORE_KEY, JSON.stringify({ ...values, _version: SETTINGS_VERSION }));
-  } catch { /* private mode */ }
+  } catch {
+    /* private mode */
+  }
 }
 
 function clampAll(v: SettingsValues): SettingsValues {
-  const ink = RANGES.inkWidth, zmin = RANGES.zoomMin, zmax = RANGES.zoomMax;
-  const fog = RANGES.fogStart, loadRadius = RANGES.loadRadius;
+  const ink = RANGES.inkWidth,
+    zmin = RANGES.zoomMin,
+    zmax = RANGES.zoomMax;
+  const fog = RANGES.fogStart,
+    loadRadius = RANGES.loadRadius;
   const shadowResolution = RANGES.shadowResolution;
   v.inkWidth = clamp(v.inkWidth, ink.min, ink.max);
-  v.zoomMin  = clamp(v.zoomMin,  zmin.min, zmin.max);
-  v.zoomMax  = clamp(v.zoomMax,  zmax.min, zmax.max);
+  v.zoomMin = clamp(v.zoomMin, zmin.min, zmin.max);
+  v.zoomMax = clamp(v.zoomMax, zmax.min, zmax.max);
   if (v.zoomMax < v.zoomMin + 4) v.zoomMax = v.zoomMin + 4;
   v.fogEnabled = v.fogEnabled !== false;
   v.fogStart = clamp(v.fogStart, fog.min, fog.max);
   v.loadRadius = Math.round(clamp(v.loadRadius, loadRadius.min, loadRadius.max));
-  v.shadowResolution = Math.round(
-    clamp(v.shadowResolution, shadowResolution.min, shadowResolution.max) /
-    shadowResolution.step) * shadowResolution.step;
-  v.planetRadius = Math.round(clamp(v.planetRadius, RANGES.planetRadius.min, RANGES.planetRadius.max) / RANGES.planetRadius.step) * RANGES.planetRadius.step;
+  v.shadowResolution =
+    Math.round(clamp(v.shadowResolution, shadowResolution.min, shadowResolution.max) / shadowResolution.step) *
+    shadowResolution.step;
+  v.planetRadius =
+    Math.round(clamp(v.planetRadius, RANGES.planetRadius.min, RANGES.planetRadius.max) / RANGES.planetRadius.step) *
+    RANGES.planetRadius.step;
   v.daySpeed = Math.round(clamp(v.daySpeed, RANGES.daySpeed.min, RANGES.daySpeed.max) * 10) / 10;
   return v;
 }
@@ -192,21 +199,30 @@ const clamp = (n: number, a: number, b: number) => Math.min(b, Math.max(a, n));
 
 const fmt = {
   inkWidth: (n: number) => `${(n / INK_BASE).toFixed(2)} px`,
-  zoomMin:  (n: number) => String(Math.round(n)),
-  zoomMax:  (n: number) => String(Math.round(n)),
+  zoomMin: (n: number) => String(Math.round(n)),
+  zoomMax: (n: number) => String(Math.round(n)),
   fogStart: (n: number) => String(Math.round(n)),
-  shadowResolution: (n: number) => n > 0 ? `${Math.round(n / 1024)}K` : 'Off',
+  shadowResolution: (n: number) => (n > 0 ? `${Math.round(n / 1024)}K` : 'Off'),
   planetRadius: (n: number) => String(Math.round(n)),
   daySpeed: (n: number) => `${n.toFixed(1)}×`,
 };
 
 interface SettingsDeps {
   rig: { setZoomRange(a: number, b: number): void };
-  atmo: { setAerialD(v: number): void; setFogEnabled(v: boolean): void; setShadowResolution(v: number): void };
+  atmo: {
+    setAerialD(v: number): void;
+    setFogEnabled(v: boolean): void;
+    setShadowResolution(v: number): void;
+  };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   input: any;
   world: {
-    streaming?: { loadRadius?: number; loadedCount?: number; pendingCount?: number; setLoadRadius(r: number): void };
+    streaming?: {
+      loadRadius?: number;
+      loadedCount?: number;
+      pendingCount?: number;
+      setLoadRadius(r: number): void;
+    };
     meshes?: { edgeMaterial?: { linewidth: number } };
     allPlanetUnis: Array<{ uPlanetRadius: { value: number } }>;
   };
@@ -298,21 +314,21 @@ export function createSettings({ rig, atmo, input, world, dayNight }: SettingsDe
   document.body.appendChild(root);
 
   const els = {
-    ink:  root.querySelector('#set-ink') as HTMLInputElement,
+    ink: root.querySelector('#set-ink') as HTMLInputElement,
     zmin: root.querySelector('#set-zmin') as HTMLInputElement,
     zmax: root.querySelector('#set-zmax') as HTMLInputElement,
     fogEnabled: root.querySelector('#set-fog-enabled') as HTMLInputElement,
-    fog:  root.querySelector('#set-fog') as HTMLInputElement,
+    fog: root.querySelector('#set-fog') as HTMLInputElement,
     loadRadius: root.querySelector('#set-load-radius') as HTMLInputElement,
     shadowResolution: root.querySelector('#set-shadow-resolution') as HTMLInputElement,
     planetRadius: root.querySelector('#set-planet-radius') as HTMLInputElement,
     daySpeed: root.querySelector('#set-day-speed') as HTMLInputElement,
   };
   const vals = {
-    ink:  root.querySelector('#set-ink-val') as HTMLElement,
+    ink: root.querySelector('#set-ink-val') as HTMLElement,
     zmin: root.querySelector('#set-zmin-val') as HTMLElement,
     zmax: root.querySelector('#set-zmax-val') as HTMLElement,
-    fog:  root.querySelector('#set-fog-val') as HTMLElement,
+    fog: root.querySelector('#set-fog-val') as HTMLElement,
     loadRadius: root.querySelector('#set-load-radius-val') as HTMLElement,
     shadowResolution: root.querySelector('#set-shadow-resolution-val') as HTMLElement,
     planetRadius: root.querySelector('#set-planet-radius-val') as HTMLElement,
@@ -331,8 +347,7 @@ export function createSettings({ rig, atmo, input, world, dayNight }: SettingsDe
     const radius = streaming?.loadRadius ?? values.loadRadius;
     const loaded = streaming?.loadedCount ?? 0;
     const pending = streaming?.pendingCount ?? 0;
-    const next = `${Math.round(radius)} chunks · ${loaded} loaded` +
-      (pending > 0 ? ` · ${pending} queued` : '');
+    const next = `${Math.round(radius)} chunks · ${loaded} loaded` + (pending > 0 ? ` · ${pending} queued` : '');
     if (next === streamStatus) return;
     streamStatus = next;
     vals.loadRadius.textContent = next;
@@ -356,36 +371,52 @@ export function createSettings({ rig, atmo, input, world, dayNight }: SettingsDe
   };
 
   const syncUi = () => {
-    els.ink.value  = String(values.inkWidth);
+    els.ink.value = String(values.inkWidth);
     els.zmin.value = String(values.zoomMin);
     els.zmax.value = String(values.zoomMax);
     els.fogEnabled.checked = values.fogEnabled;
-    els.fog.value  = String(values.fogStart);
+    els.fog.value = String(values.fogStart);
     els.loadRadius.value = String(values.loadRadius);
     els.shadowResolution.value = String(values.shadowResolution);
     els.planetRadius.value = String(values.planetRadius);
     els.daySpeed.value = String(values.daySpeed);
     els.fog.disabled = !values.fogEnabled;
-    vals.ink.textContent  = fmt.inkWidth(values.inkWidth);
+    vals.ink.textContent = fmt.inkWidth(values.inkWidth);
     vals.zmin.textContent = fmt.zoomMin(values.zoomMin);
     vals.zmax.textContent = fmt.zoomMax(values.zoomMax);
-    vals.fog.textContent  = fmt.fogStart(values.fogStart);
+    vals.fog.textContent = fmt.fogStart(values.fogStart);
     syncStreamStatus();
     vals.shadowResolution.textContent = fmt.shadowResolution(values.shadowResolution);
     vals.planetRadius.textContent = fmt.planetRadius(values.planetRadius);
     vals.daySpeed.textContent = fmt.daySpeed(values.daySpeed);
   };
 
-  const commit = () => { apply(); save(values); syncUi(); };
+  const commit = () => {
+    apply();
+    save(values);
+    syncUi();
+  };
 
-  els.ink.addEventListener('input',  () => { values.inkWidth = +els.ink.value;  commit(); });
-  els.zmin.addEventListener('input', () => { values.zoomMin  = +els.zmin.value; commit(); });
-  els.zmax.addEventListener('input', () => { values.zoomMax  = +els.zmax.value; commit(); });
+  els.ink.addEventListener('input', () => {
+    values.inkWidth = +els.ink.value;
+    commit();
+  });
+  els.zmin.addEventListener('input', () => {
+    values.zoomMin = +els.zmin.value;
+    commit();
+  });
+  els.zmax.addEventListener('input', () => {
+    values.zoomMax = +els.zmax.value;
+    commit();
+  });
   els.fogEnabled.addEventListener('change', () => {
     values.fogEnabled = els.fogEnabled.checked;
     commit();
   });
-  els.fog.addEventListener('input',  () => { values.fogStart = +els.fog.value;  commit(); });
+  els.fog.addEventListener('input', () => {
+    values.fogStart = +els.fog.value;
+    commit();
+  });
   els.loadRadius.addEventListener('input', () => {
     values.loadRadius = +els.loadRadius.value;
     commit();
@@ -440,7 +471,9 @@ export function createSettings({ rig, atmo, input, world, dayNight }: SettingsDe
   syncUi();
 
   return {
-    get open() { return open; },
+    get open() {
+      return open;
+    },
     values,
     update() {
       if (!open) return;

@@ -36,32 +36,57 @@ const c = (hex: number) => new THREE.Color(hex);
  * ground, half a step deeper, so they read as mass rather than as sprinkles.
  * ------------------------------------------------------------------ */
 const BUSH_ROSE = registerBlock('BUSH_ROSE', {
-  top: c(0xdec3c8), side: c(0xd3b5bc), bottom: c(0xc1a3aa),
-  tint: c(0xd0adb4), topTint: c(0xd6b9be),
-  pattern: PATTERN.GRASS, topPattern: PATTERN.GRASS, rough: 0.45,
+  top: c(0xdec3c8),
+  side: c(0xd3b5bc),
+  bottom: c(0xc1a3aa),
+  tint: c(0xd0adb4),
+  topTint: c(0xd6b9be),
+  pattern: PATTERN.GRASS,
+  topPattern: PATTERN.GRASS,
+  rough: 0.45,
 });
 const BUSH_MAUVE = registerBlock('BUSH_MAUVE', {
-  top: c(0xd2c3ca), side: c(0xc6b5be), bottom: c(0xb3a3ab),
-  tint: c(0xc2afb8), topTint: c(0xcabac1),
-  pattern: PATTERN.GRASS, topPattern: PATTERN.GRASS, rough: 0.45,
+  top: c(0xd2c3ca),
+  side: c(0xc6b5be),
+  bottom: c(0xb3a3ab),
+  tint: c(0xc2afb8),
+  topTint: c(0xcabac1),
+  pattern: PATTERN.GRASS,
+  topPattern: PATTERN.GRASS,
+  rough: 0.45,
 });
 const BUSH_DUSK = registerBlock('BUSH_DUSK', {
-  top: c(0xcbc1dc), side: c(0xbfb3d1), bottom: c(0xaca0bd),
-  tint: c(0xbbaecb), topTint: c(0xc4b9d5),
-  pattern: PATTERN.GRASS, topPattern: PATTERN.GRASS, rough: 0.45,
+  top: c(0xcbc1dc),
+  side: c(0xbfb3d1),
+  bottom: c(0xaca0bd),
+  tint: c(0xbbaecb),
+  topTint: c(0xc4b9d5),
+  pattern: PATTERN.GRASS,
+  topPattern: PATTERN.GRASS,
+  rough: 0.45,
 });
 const BUSH_CREAM = registerBlock('BUSH_CREAM', {
-  top: c(0xe6dac9), side: c(0xdbcdbb), bottom: c(0xc8baa8),
-  tint: c(0xd6c7b4), topTint: c(0xdfd2c1),
-  pattern: PATTERN.GRASS, topPattern: PATTERN.GRASS, rough: 0.45,
+  top: c(0xe6dac9),
+  side: c(0xdbcdbb),
+  bottom: c(0xc8baa8),
+  tint: c(0xd6c7b4),
+  topTint: c(0xdfd2c1),
+  pattern: PATTERN.GRASS,
+  topPattern: PATTERN.GRASS,
+  rough: 0.45,
 });
 const BUSHES = [BUSH_ROSE, BUSH_MAUVE, BUSH_ROSE, BUSH_CREAM, BUSH_DUSK, BUSH_MAUVE];
 
 /** Hardier, greyer low scrub for the exposed rocky tops — closest to stone. */
 const SCRUB = registerBlock('SCRUB', {
-  top: c(0xc6bcbe), side: c(0xbaafb2), bottom: c(0xa79ca0),
-  tint: c(0xb5a9ad), topTint: c(0xbfb4b7),
-  pattern: PATTERN.GRASS, topPattern: PATTERN.GRASS, rough: 0.6,
+  top: c(0xc6bcbe),
+  side: c(0xbaafb2),
+  bottom: c(0xa79ca0),
+  tint: c(0xb5a9ad),
+  topTint: c(0xbfb4b7),
+  pattern: PATTERN.GRASS,
+  topPattern: PATTERN.GRASS,
+  rough: 0.6,
 });
 
 /**
@@ -71,9 +96,16 @@ const SCRUB = registerBlock('SCRUB', {
  * that reaches a terrace lip still cuts exactly like turf does.
  */
 const BLOSSOM_DRIFT = registerBlock('BLOSSOM_DRIFT', {
-  top: c(0xf0dade), side: c(0xd0a89e), bottom: c(0xbb9086),
-  tint: c(0xc59d97), topTint: c(0xdfc7cb), fringeColor: c(0xe8ccd1),
-  pattern: PATTERN.STONE, topPattern: PATTERN.GRASS, fringe: 0.16, rough: 0.42,
+  top: c(0xf0dade),
+  side: c(0xd0a89e),
+  bottom: c(0xbb9086),
+  tint: c(0xc59d97),
+  topTint: c(0xdfc7cb),
+  fringeColor: c(0xe8ccd1),
+  pattern: PATTERN.STONE,
+  topPattern: PATTERN.GRASS,
+  fringe: 0.16,
+  rough: 0.42,
 });
 
 /**
@@ -82,46 +114,87 @@ const BLOSSOM_DRIFT = registerBlock('BLOSSOM_DRIFT', {
  * where turf meets stone, not to add a hue.
  */
 const MOSS = registerBlock('MOSS', {
-  top: c(0xc3cfa2), side: c(0xbac697), bottom: c(0xa5b184),
-  tint: c(0xaebb8c), fringeColor: c(0xccd8ab),
-  pattern: PATTERN.GRASS, topPattern: PATTERN.GRASS, fringe: 0.55, rough: 0.55,
+  top: c(0xc3cfa2),
+  side: c(0xbac697),
+  bottom: c(0xa5b184),
+  tint: c(0xaebb8c),
+  fringeColor: c(0xccd8ab),
+  pattern: PATTERN.GRASS,
+  topPattern: PATTERN.GRASS,
+  fringe: 0.55,
+  rough: 0.55,
 });
 
 const FERN = registerBlock('FERN', {
-  top: c(0x4a6b3e), side: c(0x3d5933), bottom: c(0x2e4226),
-  tint: c(0x3f5f35), topTint: c(0x5a7a48),
-  pattern: PATTERN.GRASS, topPattern: PATTERN.GRASS, rough: 0.55,
+  top: c(0x4a6b3e),
+  side: c(0x3d5933),
+  bottom: c(0x2e4226),
+  tint: c(0x3f5f35),
+  topTint: c(0x5a7a48),
+  pattern: PATTERN.GRASS,
+  topPattern: PATTERN.GRASS,
+  rough: 0.55,
 });
 const FERN_RED = registerBlock('FERN_RED', {
-  top: c(0x8b4a2e), side: c(0x7a3e26), bottom: c(0x612f1a),
-  tint: c(0x7a3e26), topTint: c(0x9e5535),
-  pattern: PATTERN.GRASS, topPattern: PATTERN.GRASS, rough: 0.55,
+  top: c(0x8b4a2e),
+  side: c(0x7a3e26),
+  bottom: c(0x612f1a),
+  tint: c(0x7a3e26),
+  topTint: c(0x9e5535),
+  pattern: PATTERN.GRASS,
+  topPattern: PATTERN.GRASS,
+  rough: 0.55,
 });
 const MOSS_THICK = registerBlock('MOSS_THICK', {
-  top: c(0x8ab068), side: c(0x7da05a), bottom: c(0x6a8a4c),
-  tint: c(0x7aa058), topTint: c(0x99c075), fringeColor: c(0xb0d08a),
-  pattern: PATTERN.GRASS, topPattern: PATTERN.GRASS, fringe: 0.45, rough: 0.50,
+  top: c(0x8ab068),
+  side: c(0x7da05a),
+  bottom: c(0x6a8a4c),
+  tint: c(0x7aa058),
+  topTint: c(0x99c075),
+  fringeColor: c(0xb0d08a),
+  pattern: PATTERN.GRASS,
+  topPattern: PATTERN.GRASS,
+  fringe: 0.45,
+  rough: 0.5,
 });
 export const LICHEN_PALE = registerBlock('LICHEN_PALE', {
-  top: c(0xc8cdb8), side: c(0xbcc1ab), bottom: c(0xadb295),
-  tint: c(0xb8bda8), fringeColor: c(0xd4d9c8),
-  pattern: PATTERN.STONE, rough: 0.65,
+  top: c(0xc8cdb8),
+  side: c(0xbcc1ab),
+  bottom: c(0xadb295),
+  tint: c(0xb8bda8),
+  fringeColor: c(0xd4d9c8),
+  pattern: PATTERN.STONE,
+  rough: 0.65,
 });
 const SHRUB_TALL = registerBlock('SHRUB_TALL', {
-  top: c(0xb8a0a8), side: c(0xac9298), bottom: c(0x9a8088),
-  tint: c(0xa89098), topTint: c(0xb8a2a8),
-  pattern: PATTERN.GRASS, topPattern: PATTERN.GRASS, rough: 0.50,
+  top: c(0xb8a0a8),
+  side: c(0xac9298),
+  bottom: c(0x9a8088),
+  tint: c(0xa89098),
+  topTint: c(0xb8a2a8),
+  pattern: PATTERN.GRASS,
+  topPattern: PATTERN.GRASS,
+  rough: 0.5,
 });
 const GRASS_TALL = registerBlock('GRASS_TALL', {
-  top: c(0x5a7245), side: c(0x4e643c), bottom: c(0x3f5230),
-  tint: c(0x526e3f), topTint: c(0x6a8450),
-  pattern: PATTERN.GRASS, topPattern: PATTERN.GRASS, rough: 0.48,
+  top: c(0x5a7245),
+  side: c(0x4e643c),
+  bottom: c(0x3f5230),
+  tint: c(0x526e3f),
+  topTint: c(0x6a8450),
+  pattern: PATTERN.GRASS,
+  topPattern: PATTERN.GRASS,
+  rough: 0.48,
 });
 
 /** A mid-value plum for trunk variety — still among the darkest things around. */
 const TRUNK_ROSE = registerBlock('TRUNK_ROSE', {
-  top: c(0x9c7783), side: c(0x8d6875), bottom: c(0x7b5866),
-  tint: c(0x775363), pattern: PATTERN.BARK, rough: 0.62,
+  top: c(0x9c7783),
+  side: c(0x8d6875),
+  bottom: c(0x7b5866),
+  tint: c(0x775363),
+  pattern: PATTERN.BARK,
+  rough: 0.62,
 });
 
 /**
@@ -153,51 +226,58 @@ const BIOME_FLORA = {
   [BIOME.SAKURA]: {
     leaves: [BLOCKS.LEAF_PINK, BLOCKS.LEAF_BLUSH, BLOCKS.LEAF_ROSE, BLOCKS.LEAF_PINK],
     forms: ['stack', 'round', 'broad', 'twin'],
-    scale: [0.42, 1.0], density: 1.65,
+    scale: [0.42, 1.0],
+    density: 1.65,
     bushes: [BUSH_ROSE, BUSH_ROSE, BUSH_MAUVE, BUSH_CREAM],
   },
   [BIOME.MEADOW]: {
     leaves: [BLOCKS.LEAF_CREAM, BLOCKS.LEAF_BLUSH, BLOCKS.LEAF_LILAC],
     forms: ['round', 'bunch', 'twin', 'stack'],
-    scale: [0.20, 0.92], density: 0.55,
+    scale: [0.2, 0.92],
+    density: 0.55,
     bushes: [BUSH_CREAM, BUSH_ROSE, BUSH_MAUVE],
   },
   [BIOME.WETLAND]: {
     leaves: [BLOCKS.LEAF_MINT, BLOCKS.LEAF_CREAM, BLOCKS.LEAF_MINT],
     forms: ['broad', 'bunch', 'round'],
-    scale: [0.26, 0.78], density: 0.75,
+    scale: [0.26, 0.78],
+    density: 0.75,
     bushes: [BUSH_DUSK, BUSH_MAUVE, BUSH_CREAM],
   },
   [BIOME.HIGHLAND]: {
     leaves: [BLOCKS.LEAF_LILAC, BLOCKS.LEAF_MINT],
     forms: ['spire', 'nub', 'spire'],
-    scale: [0.14, 0.46], density: 0.28,
+    scale: [0.14, 0.46],
+    density: 0.28,
     bushes: [SCRUB, SCRUB, BUSH_DUSK],
   },
   [BIOME.SHORE]: {
     leaves: [BLOCKS.LEAF_CREAM, BLOCKS.LEAF_BLUSH],
     forms: ['bunch', 'round', 'nub'],
-    scale: [0.16, 0.60], density: 0.22,
+    scale: [0.16, 0.6],
+    density: 0.22,
     bushes: [BUSH_CREAM, SCRUB],
   },
 };
 /** Paler partner used for the sunlit patches within one canopy. */
 const CANOPY_LIGHT = new Map([
-  [BLOCKS.LEAF_PINK,  BLOCKS.LEAF_BLUSH],
-  [BLOCKS.LEAF_ROSE,  BLOCKS.LEAF_PINK],
+  [BLOCKS.LEAF_PINK, BLOCKS.LEAF_BLUSH],
+  [BLOCKS.LEAF_ROSE, BLOCKS.LEAF_PINK],
   [BLOCKS.LEAF_LILAC, BLOCKS.LEAF_BLUSH],
   [BLOCKS.LEAF_CREAM, BLOCKS.LEAF_BLUSH],
   [BLOCKS.LEAF_BLUSH, BLOCKS.LEAF_CREAM],
 ]);
 
 const GRASS_IDS = new Set(
-  Object.values(BLOCKS).filter((block: any) => block.grassCap).map((block: any) => block.id));
+  Object.values(BLOCKS)
+    .filter((block: any) => block.grassCap)
+    .map((block: any) => block.id),
+);
 const STONE_IDS = new Set([BLOCKS.STONE.id, BLOCKS.STONE_PALE.id, BLOCKS.STONE_WARM.id]);
 
 /* ================================================================== *
  * Canopy construction
  * ================================================================== */
-
 
 /**
  * Trunk. Chunky by design — a 1-block trunk under a 9-block canopy is the
@@ -205,22 +285,34 @@ const STONE_IDS = new Set([BLOCKS.STONE.id, BLOCKS.STONE_PALE.id, BLOCKS.STONE_W
  * column sideways as it rises; the previous footprint is refilled at every
  * step so the trunk stays watertight.
  */
-function buildTrunk(grid: any, x: number, y: number, z: number, h: number, w: number, id: number, leanX: number, leanZ: number) {
+function buildTrunk(
+  grid: any,
+  x: number,
+  y: number,
+  z: number,
+  h: number,
+  w: number,
+  id: number,
+  leanX: number,
+  leanZ: number,
+) {
   const o = -Math.floor((w - 1) / 2);
-  let px = 0, pz = 0;
+  let px = 0,
+    pz = 0;
   for (let ty = 0; ty < h; ty++) {
     const t = h > 1 ? ty / (h - 1) : 0;
-    const ax = Math.round(leanX * t), az = Math.round(leanZ * t);
+    const ax = Math.round(leanX * t),
+      az = Math.round(leanZ * t);
     for (let dx = 0; dx < w; dx++)
       for (let dz = 0; dz < w; dz++) {
         grid.set(x + o + dx + ax, y + ty, z + o + dz + az, id);
         if (ax !== px || az !== pz) grid.set(x + o + dx + px, y + ty, z + o + dz + pz, id);
       }
-    px = ax; pz = az;
+    px = ax;
+    pz = az;
   }
   return [px, pz];
 }
-
 
 function pickForm(scale: number, rng: any) {
   if (scale > 0.72) return rng.pick(['round', 'stack', 'twin', 'bunch', 'broad', 'spire', 'stack', 'bunch']);
@@ -240,8 +332,7 @@ export function plantTree(grid: any, x: number, y: number, z: number, rng: any, 
   const pale = CANOPY_LIGHT.get(leaf) || leaf;
   const twoTone = opts.twoTone ?? rng.chance(0.62);
 
-  const trunkBlock = rng.chance(0.55) ? BLOCKS.TRUNK
-                   : rng.chance(0.5) ? BLOCKS.TRUNK_PALE : TRUNK_ROSE;
+  const trunkBlock = rng.chance(0.55) ? BLOCKS.TRUNK : rng.chance(0.5) ? BLOCKS.TRUNK_PALE : TRUNK_ROSE;
 
   /*
    * A compact stack of large cuboids. There are no rings and no voxel-cloud
@@ -255,65 +346,77 @@ export function plantTree(grid: any, x: number, y: number, z: number, rng: any, 
   const bare = Math.max(2, Math.round(2.5 + scale * 3.5));
   const canopyY = y + bare;
   const [ax, az] = buildTrunk(grid, x, y, z, bare + unit, tw, trunkBlock.id, 0, 0);
-  const cx = x + ax, cz = z + az;
+  const cx = x + ax,
+    cz = z + az;
 
   const lightId = twoTone ? pale.id : leaf.id;
-  const dx = rng.pick([-1, 1]), dz = rng.pick([-1, 1]);
-  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+  const dx = rng.pick([-1, 1]),
+    dz = rng.pick([-1, 1]);
+  let minX = Infinity,
+    maxX = -Infinity,
+    minZ = Infinity,
+    maxZ = -Infinity;
   let topY = canopyY;
   const fillBox = (ox: any, oy: any, oz: any, sx: any, sy: any, sz: any, id: any) => {
     const px = cx + ox - Math.floor(sx / 2);
     const py = canopyY + oy;
     const pz = cz + oz - Math.floor(sz / 2);
     for (let by = 0; by < sy; by++)
-      for (let bz = 0; bz < sz; bz++)
-        for (let bx = 0; bx < sx; bx++) grid.set(px + bx, py + by, pz + bz, id);
-    minX = Math.min(minX, px); maxX = Math.max(maxX, px + sx - 1);
-    minZ = Math.min(minZ, pz); maxZ = Math.max(maxZ, pz + sz - 1);
+      for (let bz = 0; bz < sz; bz++) for (let bx = 0; bx < sx; bx++) grid.set(px + bx, py + by, pz + bz, id);
+    minX = Math.min(minX, px);
+    maxX = Math.max(maxX, px + sx - 1);
+    minZ = Math.min(minZ, pz);
+    maxZ = Math.max(maxZ, pz + sz - 1);
     topY = Math.max(topY, py + sy - 1);
   };
 
   if (large) {
     // Broad heart and four deliberately uneven shoulders.
-    fillBox(0,       0, 0,       6, 2, 4, leaf.id);
-    fillBox(-4 * dx, 0, 0,       2, 2, 2, leaf.id);
-    fillBox( 4 * dx, 1, dz,      2, 2, 2, lightId);
-    fillBox(-dx,     0, -3 * dz, 2, 2, 2, leaf.id);
-    fillBox( dx,     1,  3 * dz, 2, 2, 2, lightId);
+    fillBox(0, 0, 0, 6, 2, 4, leaf.id);
+    fillBox(-4 * dx, 0, 0, 2, 2, 2, leaf.id);
+    fillBox(4 * dx, 1, dz, 2, 2, 2, lightId);
+    fillBox(-dx, 0, -3 * dz, 2, 2, 2, leaf.id);
+    fillBox(dx, 1, 3 * dz, 2, 2, 2, lightId);
     // Smaller raised mass, two side sprays, then one offset crown block.
-    fillBox(dx,      2, -dz,     4, 2, 4, lightId);
-    fillBox(-3 * dx, 2, dz,      2, 2, 2, leaf.id);
-    fillBox( 3 * dx, 3, -dz,     2, 2, 2, lightId);
-    fillBox(-dx,     4, dz,      2, 2, 2, lightId);
+    fillBox(dx, 2, -dz, 4, 2, 4, lightId);
+    fillBox(-3 * dx, 2, dz, 2, 2, 2, leaf.id);
+    fillBox(3 * dx, 3, -dz, 2, 2, 2, lightId);
+    fillBox(-dx, 4, dz, 2, 2, 2, lightId);
   } else if (unit === 2) {
-    fillBox(0,       0, 0,       4, 2, 4, leaf.id);
-    fillBox(-3 * dx, 0, 0,       2, 2, 2, leaf.id);
-    fillBox( 3 * dx, 1, dz,      2, 2, 2, lightId);
-    fillBox(0,       0, -3 * dz, 2, 2, 2, leaf.id);
-    fillBox(dx,      2, 0,       4, 2, 2, lightId);
-    fillBox(-dx,     4, dz,      2, 2, 2, lightId);
+    fillBox(0, 0, 0, 4, 2, 4, leaf.id);
+    fillBox(-3 * dx, 0, 0, 2, 2, 2, leaf.id);
+    fillBox(3 * dx, 1, dz, 2, 2, 2, lightId);
+    fillBox(0, 0, -3 * dz, 2, 2, 2, leaf.id);
+    fillBox(dx, 2, 0, 4, 2, 2, lightId);
+    fillBox(-dx, 4, dz, 2, 2, 2, lightId);
   } else {
-    fillBox(0,       0, 0,       3, 1, 3, leaf.id);
-    fillBox(-2 * dx, 0, 0,       1, 1, 2, leaf.id);
-    fillBox( 2 * dx, 1, dz,      1, 1, 1, lightId);
-    fillBox(dx,      1, 0,       2, 1, 2, lightId);
-    fillBox(-dx,     2, dz,      1, 1, 1, lightId);
+    fillBox(0, 0, 0, 3, 1, 3, leaf.id);
+    fillBox(-2 * dx, 0, 0, 1, 1, 2, leaf.id);
+    fillBox(2 * dx, 1, dz, 1, 1, 1, lightId);
+    fillBox(dx, 1, 0, 2, 1, 2, lightId);
+    fillBox(-dx, 2, dz, 1, 1, 1, lightId);
   }
 
   // Keep the visible trunk perfectly vertical and terminate it at the crown.
   const trunkOffset = -Math.floor((tw - 1) / 2);
   for (let ty = 0; ty < bare; ty++)
     for (let dx = 0; dx < tw; dx++)
-      for (let dz = 0; dz < tw; dz++)
-        grid.set(cx + trunkOffset + dx, y + ty, cz + trunkOffset + dz, trunkBlock.id);
+      for (let dz = 0; dz < tw; dz++) grid.set(cx + trunkOffset + dx, y + ty, cz + trunkOffset + dz, trunkBlock.id);
 
   const width = Math.max(maxX - minX + 1, maxZ - minZ + 1);
   const R = width * 0.5;
   return {
-    x: cx, y: canopyY, z: cz,
-    w: width, leaf,
+    x: cx,
+    y: canopyY,
+    z: cz,
+    w: width,
+    leaf,
     height: topY - y + 1,
-    form, trunkY: y, trunkW: tw, topY, R,
+    form,
+    trunkY: y,
+    trunkW: tw,
+    topY,
+    R,
   };
 }
 
@@ -326,15 +429,25 @@ export function plantTree(grid: any, x: number, y: number, z: number, rng: any, 
  * on — the previous pass grew plus-shapes whose arms hung out over terrace
  * lips, which is why shrubs appeared to float.
  */
-export function plantBush(grid: any, heights: any, S: number, x: number, z: number, rng: any, block: any, size: number) {
+export function plantBush(
+  grid: any,
+  heights: any,
+  S: number,
+  x: number,
+  z: number,
+  rng: any,
+  block: any,
+  size: number,
+) {
   const top = heights[z * S + x];
   const w = size;
   const h = size >= 2 ? rng.int(2, 3) : size === 1 ? rng.int(1, 2) : 1;
   for (let dz = -w; dz <= w; dz++)
     for (let dx = -w; dx <= w; dx++) {
-      const xx = x + dx, zz = z + dz;
+      const xx = x + dx,
+        zz = z + dz;
       if (xx < 1 || zz < 1 || xx >= S - 1 || zz >= S - 1) continue;
-      if (heights[zz * S + xx] !== top) continue;      // no cantilevering
+      if (heights[zz * S + xx] !== top) continue; // no cantilevering
       if (grid.isSolid(xx, top + 1, zz)) continue;
       const e = Math.abs(dx) + Math.abs(dz);
       if (e > w + (w >= 2 ? 1 : 0)) continue;
@@ -354,7 +467,7 @@ function buildWillow(grid: any, x: number, y: number, z: number, rng: any, leaf:
 
 /** Narrow, tall crown — placed on hilltops. Delegates to plantTree with 'spire' form. */
 function buildSpire(grid: any, x: number, y: number, z: number, rng: any, leaf: any) {
-  return plantTree(grid, x, y, z, rng, { scale: rng.range(0.30, 0.60), leaf, form: 'spire' });
+  return plantTree(grid, x, y, z, rng, { scale: rng.range(0.3, 0.6), leaf, form: 'spire' });
 }
 
 /* ================================================================== *
@@ -367,9 +480,9 @@ function buildSpire(grid: any, x: number, y: number, z: number, rng: any, leaf: 
  * upstream happened to draw a different number of randoms this week.
  */
 const N_GROVE = makeNoise2D(0x6c17);
-const N_HUE   = makeNoise2D(0x2f83);
-const N_MEAD  = makeNoise2D(0x91ab);
-const N_FLOW  = makeNoise2D(0x4d5e);
+const N_HUE = makeNoise2D(0x2f83);
+const N_MEAD = makeNoise2D(0x91ab);
+const N_FLOW = makeNoise2D(0x4d5e);
 
 export function scatterVegetation(world: any, rng: any) {
   const { grid, heights, wetness, size: S, plan } = world;
@@ -396,8 +509,7 @@ export function scatterVegetation(world: any, rng: any) {
    * felt, not seen. The palette does change at the border, but a stand thins
    * across it rather than stopping dead. */
   const FALLBACK = BIOME_FLORA[BIOME.MEADOW];
-  const floraAt = (x: any, z: any) =>
-    (plan ? BIOME_FLORA[plan.biomeAt(x, z)] : null) || FALLBACK;
+  const floraAt = (x: any, z: any) => (plan ? BIOME_FLORA[plan.biomeAt(x, z)] : null) || FALLBACK;
   const biomeTrees = (x: any, z: any) => floraAt(x, z).density;
   // Scene trees are already in the ground; they belong in the same list so
   // petals fall from them and the capture rig can frame them.
@@ -411,7 +523,8 @@ export function scatterVegetation(world: any, rng: any) {
   const claim = (x: any, z: any, r: any) => {
     for (let dz = -r; dz <= r; dz++)
       for (let dx = -r; dx <= r; dx++) {
-        const xx = x + dx, zz = z + dz;
+        const xx = x + dx,
+          zz = z + dz;
         if (xx < 0 || zz < 0 || xx >= S || zz >= S) continue;
         occupied[zz * S + xx] = 1;
       }
@@ -419,7 +532,8 @@ export function scatterVegetation(world: any, rng: any) {
   const free = (x: any, z: any, r: any) => {
     for (let dz = -r; dz <= r; dz++)
       for (let dx = -r; dx <= r; dx++) {
-        const xx = x + dx, zz = z + dz;
+        const xx = x + dx,
+          zz = z + dz;
         if (xx < 0 || zz < 0 || xx >= S || zz >= S) return false;
         if (occupied[zz * S + xx]) return false;
       }
@@ -441,8 +555,7 @@ export function scatterVegetation(world: any, rng: any) {
       const i = z * S + x;
       const top = heights[i];
       const id = grid.get(x, top, z);
-      if (id === BLOCKS.PATH.id || id === BLOCKS.PLANK.id || id === BLOCKS.BEAM.id ||
-          grid.columnTop(x, z) > top) {
+      if (id === BLOCKS.PATH.id || id === BLOCKS.PLANK.id || id === BLOCKS.BEAM.id || grid.columnTop(x, z) > top) {
         occupied[i] = 1;
       }
     }
@@ -450,8 +563,7 @@ export function scatterVegetation(world: any, rng: any) {
   for (let z = 2; z < S - 2; z++)
     for (let x = 2; x < S - 2; x++)
       if (reserved[z * S + x])
-        for (let dz = -2; dz <= 2; dz++)
-          for (let dx = -2; dx <= 2; dx++) occupied[(z + dz) * S + (x + dx)] = 1;
+        for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) occupied[(z + dz) * S + (x + dx)] = 1;
 
   /* ---- fields ---------------------------------------------------- */
   /** -1..1, feature size ~90 blocks: which parts of the map are woodland. */
@@ -475,8 +587,11 @@ export function scatterVegetation(world: any, rng: any) {
      * region could come out mint. */
     const band = flora.leaves;
     const leaf = band[clamp(Math.floor(hue(x, z) * band.length), 0, band.length - 1)];
-    const t = plantTree(grid, x, heights[i] + 1, z, rng,
-                        { scale, leaf, form: form || rng.pick(flora.forms) });
+    const t = plantTree(grid, x, heights[i] + 1, z, rng, {
+      scale,
+      leaf,
+      form: form || rng.pick(flora.forms),
+    });
     trees.push(t);
     claim(x, z, Math.max(2, Math.floor(t.w / 2)));
     return t;
@@ -487,18 +602,23 @@ export function scatterVegetation(world: any, rng: any) {
    * good diorama has a place the eye goes first; without this the map is a
    * texture of trees with no focal point.                                  */
   {
-    let best = null, bestScore = -1;
+    let best = null,
+      bestScore = -1;
     for (let z = 16; z < S - 16; z += 2)
       for (let x = 16; x < S - 16; x += 2) {
         const i = z * S + x;
         if (!siteOk(x, z, 5, 0)) continue;
-        const dx = (x - S / 2) / (S / 2), dz = (z - S / 2) / (S / 2);
+        const dx = (x - S / 2) / (S / 2),
+          dz = (z - S / 2) / (S / 2);
         const score = (heights[i] - sea) * (1 - Math.hypot(dx, dz) * 0.8);
-        if (score > bestScore) { bestScore = score; best = [x, z]; }
+        if (score > bestScore) {
+          bestScore = score;
+          best = [x, z];
+        }
       }
     if (best) {
       world.heroTree = plant(best[0], best[1], 1.0, 'stack');
-      claim(best[0], best[1], 12);   // a clearing so it stands alone
+      claim(best[0], best[1], 12); // a clearing so it stands alone
     }
   }
 
@@ -506,7 +626,8 @@ export function scatterVegetation(world: any, rng: any) {
    * Seed the densest points of the grove field with big trees first, so the
    * woodland has structure before the dart-throwing fills in around it.    */
   for (let attempt = 0, n = Math.round(900 * AREA); attempt < n; attempt++) {
-    const x = rng.int(10, S - 11), z = rng.int(10, S - 11);
+    const x = rng.int(10, S - 11),
+      z = rng.int(10, S - 11);
     if (grove(x, z) < 0.34) continue;
     if (!siteOk(x, z, 3, 1)) continue;
     if (!free(x, z, 7)) continue;
@@ -515,7 +636,8 @@ export function scatterVegetation(world: any, rng: any) {
 
   /* ---- the woodland ----------------------------------------------- */
   for (let attempt = 0, n = Math.round(9000 * AREA); attempt < n; attempt++) {
-    const x = rng.int(5, S - 6), z = rng.int(5, S - 6);
+    const x = rng.int(5, S - 6),
+      z = rng.int(5, S - 6);
     const i = z * S + x;
     if (!siteOk(x, z, 2, 1)) continue;
 
@@ -523,9 +645,9 @@ export function scatterVegetation(world: any, rng: any) {
     const elev01 = clamp((heights[i] - sea) / 26, 0, 1);
     // Sheltered valley floors get the richest blossom; the exposed tops get
     // almost nothing, which is what makes the plateaus read as plateaus.
-    let dens = smoothstep(-0.20, 0.30, g);
+    let dens = smoothstep(-0.2, 0.3, g);
     dens *= 1 - smoothstep(0.52, 0.95, elev01) * 0.82;
-    dens *= 1 - smoothstep(0.30, 0.50, wetness[i]) * 0.5;
+    dens *= 1 - smoothstep(0.3, 0.5, wetness[i]) * 0.5;
     /* Capped BEFORE the biome multiplier, which is the whole point.
      *
      * The grove field already exceeds 1 in its cores, and `chance` saturates
@@ -540,16 +662,17 @@ export function scatterVegetation(world: any, rng: any) {
     // Size range comes from the biome too — highland scrub-trees and sakura
     // giants are the same code path with different bounds.
     const [lo, hi] = floraAt(x, z).scale;
-    const scale = clamp(rng.range(lo, hi) + core * (hi - lo) * 0.55, 0.10, 1.0);
+    const scale = clamp(rng.range(lo, hi) + core * (hi - lo) * 0.55, 0.1, 1.0);
     const rad = scale > 0.72 ? 6 : scale > 0.46 ? 4 : scale > 0.26 ? 3 : 2;
     if (!free(x, z, rad)) continue;
     const isWillow = wetness[i] > 0.3 && heights[i] < sea + 8;
-    const isSpire  = heights[i] > sea + 14;
+    const isSpire = heights[i] > sea + 14;
     if (isWillow || isSpire) {
       const band = floraAt(x, z).leaves;
       const leaf = band[clamp(Math.floor(hue(x, z) * band.length), 0, band.length - 1)];
-      const t = isWillow ? buildWillow(grid, x, heights[i] + 1, z, rng, leaf)
-                         : buildSpire(grid, x, heights[i] + 1, z, rng, leaf);
+      const t = isWillow
+        ? buildWillow(grid, x, heights[i] + 1, z, rng, leaf)
+        : buildSpire(grid, x, heights[i] + 1, z, rng, leaf);
       trees.push(t);
       claim(x, z, Math.max(2, Math.floor(t.w / 2)));
     } else {
@@ -562,7 +685,8 @@ export function scatterVegetation(world: any, rng: any) {
    * thickets at the feet of the groves rather than dart-thrown over the whole
    * map. Sizes and tones vary within a clump so it reads as undergrowth.   */
   for (let attempt = 0, n = Math.round(300 * AREA); attempt < n; attempt++) {
-    const x = rng.int(4, S - 5), z = rng.int(4, S - 5);
+    const x = rng.int(4, S - 5),
+      z = rng.int(4, S - 5);
     const i = z * S + x;
     const sid = grid.get(x, heights[i], z);
     if (!GRASS_IDS.has(sid) && sid !== BLOSSOM_DRIFT.id) continue;
@@ -574,7 +698,8 @@ export function scatterVegetation(world: any, rng: any) {
     const base = rng.chance(0.78) ? rng.pick(palette) : rng.pick(BUSHES);
     const n = rng.int(1, 3);
     for (let k = 0; k < n; k++) {
-      const bx = x + rng.int(-2, 2), bz = z + rng.int(-2, 2);
+      const bx = x + rng.int(-2, 2),
+        bz = z + rng.int(-2, 2);
       if (bx < 2 || bz < 2 || bx >= S - 2 || bz >= S - 2) continue;
       if (occupied[bz * S + bx]) continue;
       const blk = rng.chance(0.75) ? base : rng.pick(palette);
@@ -586,18 +711,19 @@ export function scatterVegetation(world: any, rng: any) {
 
   /* ---- scrub on the rocky tops ------------------------------------ */
   for (let attempt = 0, n = Math.round(700 * AREA); attempt < n; attempt++) {
-    const x = rng.int(3, S - 4), z = rng.int(3, S - 4);
+    const x = rng.int(3, S - 4),
+      z = rng.int(3, S - 4);
     const i = z * S + x;
     if (!STONE_IDS.has(grid.get(x, heights[i], z))) continue;
     if (grid.isSolid(x, heights[i] + 1, z)) continue;
     if (!rng.chance(0.24)) continue;
-    plantBush(grid, heights, S, x, z, rng, rng.chance(0.8) ? SCRUB : BUSH_MAUVE,
-              rng.chance(0.25) ? 1 : 0);
+    plantBush(grid, heights, S, x, z, rng, rng.chance(0.8) ? SCRUB : BUSH_MAUVE, rng.chance(0.25) ? 1 : 0);
   }
 
   /* ---- ferns, thick moss, tall shrubs, tall grass ----------------- */
   for (let attempt = 0, n = Math.round(2000 * AREA); attempt < n; attempt++) {
-    const x = rng.int(3, S - 4), z = rng.int(3, S - 4);
+    const x = rng.int(3, S - 4),
+      z = rng.int(3, S - 4);
     const i = z * S + x;
     const top = heights[i];
     const sid = grid.get(x, top, z);
@@ -614,7 +740,7 @@ export function scatterVegetation(world: any, rng: any) {
 
     // Thick moss: flat rock / stone surfaces
     if (STONE_IDS.has(sid) && top > sea + 3) {
-      if (rng.chance(0.30)) grid.set(x, top + 1, z, MOSS_THICK.id);
+      if (rng.chance(0.3)) grid.set(x, top + 1, z, MOSS_THICK.id);
       continue;
     }
 
@@ -626,7 +752,7 @@ export function scatterVegetation(world: any, rng: any) {
 
     // Tall grass: low wetness, valley floors
     if (GRASS_IDS.has(sid) && wetness[i] < 0.1 && top >= sea + 1 && top <= sea + 5) {
-      if (rng.chance(0.20)) grid.set(x, top + 1, z, GRASS_TALL.id);
+      if (rng.chance(0.2)) grid.set(x, top + 1, z, GRASS_TALL.id);
     }
   }
 
@@ -639,9 +765,7 @@ export function scatterVegetation(world: any, rng: any) {
       const top = heights[i];
       const sid = grid.get(x, top, z);
       if (!GRASS_IDS.has(sid) && sid !== BLOSSOM_DRIFT.id) continue;
-      const drop = Math.max(
-        top - heights[i - 1], top - heights[i + 1],
-        top - heights[i - S], top - heights[i + S]);
+      const drop = Math.max(top - heights[i - 1], top - heights[i + 1], top - heights[i - S], top - heights[i + S]);
       if (drop < 3) continue;
       // Full green blocks down a cliff became vertical stripes. The material
       // fringe already draws the fine turf lip, so keep only a rare one-block
@@ -684,19 +808,22 @@ function buildGroundDetail(world: any, rng: any) {
   const tuftLite = new THREE.Color();
   const pebbleCols = [BLOCKS.STONE.top, BLOCKS.STONE_PALE.top, BLOCKS.STONE_WARM.top];
   const flowerTops = [
-    BLOCKS.LEAF_PINK.top, BLOCKS.LEAF_BLUSH.top, BLOCKS.LEAF_LILAC.top,
-    BLOCKS.LEAF_CREAM.top, BLOCKS.LEAF_ROSE.top,
+    BLOCKS.LEAF_PINK.top,
+    BLOCKS.LEAF_BLUSH.top,
+    BLOCKS.LEAF_LILAC.top,
+    BLOCKS.LEAF_CREAM.top,
+    BLOCKS.LEAF_ROSE.top,
   ];
   const petalCols = [BLOCKS.LEAF_BLUSH.top, BLOCKS.LEAF_PINK.top, BLOCKS.LEAF_ROSE.top];
-  const reedBase = BLOCKS.GRASS_DEEP.topTint, reedTip = BLOCKS.GRASS_LIGHT.top;
+  const reedBase = BLOCKS.GRASS_DEEP.topTint,
+    reedTip = BLOCKS.GRASS_LIGHT.top;
 
   /** 0..1 meadow field: some shelves are lush, some are close-cropped. */
   const meadow = (x: any, z: any) => (fbm2(N_MEAD, x * 0.026, z * 0.026, 2) + 1) * 0.5;
   const flowerField = (x: any, z: any) => (fbm2(N_FLOW, x * 0.055 + 7, z * 0.055 - 3, 2) + 1) * 0.5;
 
-  const blockFor = (id: any) => id === BLOSSOM_DRIFT.id
-    ? BLOSSOM_DRIFT
-    : BLOCK_BY_ID[id]?.grassCap ? BLOCK_BY_ID[id] : BLOCKS.GRASS;
+  const blockFor = (id: any) =>
+    id === BLOSSOM_DRIFT.id ? BLOSSOM_DRIFT : BLOCK_BY_ID[id]?.grassCap ? BLOCK_BY_ID[id] : BLOCKS.GRASS;
 
   const spawnX = world.spawn?.x ?? S / 2;
   const spawnZ = world.spawn?.z ?? S / 2;
@@ -706,10 +833,11 @@ function buildGroundDetail(world: any, rng: any) {
       const i = z * S + x;
       const top = heights[i];
       const id = grid.get(x, top, z);
-      if (grid.isSolid(x, top + 1, z)) continue;      // something already stands here
+      if (grid.isSolid(x, top + 1, z)) continue; // something already stands here
 
       const y = top + 1;
-      const fx = x + 0.5, fz = z + 0.5;
+      const fx = x + 0.5,
+        fz = z + 0.5;
       // ponytail: O(1) per cell; skip fine detail beyond LOD1 radius (~60u)
       const farFromSpawn = Math.hypot(x - spawnX, z - spawnZ) > 60;
 
@@ -718,18 +846,26 @@ function buildGroundDetail(world: any, rng: any) {
       // not merely below it. Without the lower bound the lake basin qualifies
       // all the way to its deepest point and the open water fills with reeds
       // standing ten blocks under.
-      if (wetness[i] > 0.30 && top <= sea + 2 && top >= sea - 2 &&
-          (id === BLOCKS.SAND.id || GRASS_IDS.has(id))) {
+      if (wetness[i] > 0.3 && top <= sea + 2 && top >= sea - 2 && (id === BLOCKS.SAND.id || GRASS_IDS.has(id))) {
         // Reeds used to stand 1-2 whole voxels tall at 34% density. Once the
         // camera came in close that read as a field of dead sticks rather than
         // as rushes, so they are now knee-high to the player and much sparser.
-        if (rng.chance(smoothstep(0.30, 0.75, wetness[i]) * 0.15)) {
+        if (rng.chance(smoothstep(0.3, 0.75, wetness[i]) * 0.15)) {
           const n = rng.int(2, 4);
           for (let k = 0; k < n; k++) {
-            F.tuft(fx + rng.range(-0.30, 0.30), y - 0.03, fz + rng.range(-0.30, 0.30),
-                   rng.range(0.10, 0.17), rng.range(0.38, 0.76),
-                   reedBase, reedTip, rng() * 6.28,
-                   rng.range(-0.18, 0.18), rng.range(-0.18, 0.18), 1.0);
+            F.tuft(
+              fx + rng.range(-0.3, 0.3),
+              y - 0.03,
+              fz + rng.range(-0.3, 0.3),
+              rng.range(0.1, 0.17),
+              rng.range(0.38, 0.76),
+              reedBase,
+              reedTip,
+              rng() * 6.28,
+              rng.range(-0.18, 0.18),
+              rng.range(-0.18, 0.18),
+              1.0,
+            );
           }
         }
         continue;
@@ -754,39 +890,60 @@ function buildGroundDetail(world: any, rng: any) {
         if (!farFromSpawn && rng.chance(0.018 + lush * 0.055)) {
           const n = rng.int(1, 3);
           for (let k = 0; k < n; k++) {
-            F.tuft(fx + rng.range(-0.32, 0.32), y - 0.03, fz + rng.range(-0.32, 0.32),
-                   rng.range(0.16, 0.30), rng.range(0.26, 0.52),
-                   tuftDark, tuftLite, rng() * 6.28,
-                   rng.range(-0.14, 0.14), rng.range(-0.14, 0.14));
+            F.tuft(
+              fx + rng.range(-0.32, 0.32),
+              y - 0.03,
+              fz + rng.range(-0.32, 0.32),
+              rng.range(0.16, 0.3),
+              rng.range(0.26, 0.52),
+              tuftDark,
+              tuftLite,
+              rng() * 6.28,
+              rng.range(-0.14, 0.14),
+              rng.range(-0.14, 0.14),
+            );
           }
         }
 
         // Flowers gather into drifts rather than dusting evenly.
         const ff = flowerField(x, z);
-        if (ff > 0.66 && rng.chance((ff - 0.66) * 0.30)) {
+        if (ff > 0.66 && rng.chance((ff - 0.66) * 0.3)) {
           const col = rng.pick(flowerTops);
           const n = rng.int(1, 3);
           for (let k = 0; k < n; k++) {
-            const ox = rng.range(-0.30, 0.30), oz = rng.range(-0.30, 0.30);
+            const ox = rng.range(-0.3, 0.3),
+              oz = rng.range(-0.3, 0.3);
             const h = rng.range(0.24, 0.42);
             F.tuft(fx + ox, y - 0.03, fz + oz, 0.07, h, tuftDark, tuftDark, 0, 0, 0, 0.6);
-            F.box(fx + ox, y + h - 0.04, fz + oz, 0.20, 0.16, 0.20, col, 0.9, rng() * 6.28);
+            F.box(fx + ox, y + h - 0.04, fz + oz, 0.2, 0.16, 0.2, col, 0.9, rng() * 6.28);
           }
         }
 
         // Pebbles and clods. Never animated — they are the still notes.
         if (rng.chance(0.0055)) {
-          F.box(fx + rng.range(-0.25, 0.25), y - 0.05, fz + rng.range(-0.25, 0.25),
-                rng.range(0.24, 0.46), rng.range(0.14, 0.28), rng.range(0.24, 0.46),
-                rng.pick(pebbleCols));
+          F.box(
+            fx + rng.range(-0.25, 0.25),
+            y - 0.05,
+            fz + rng.range(-0.25, 0.25),
+            rng.range(0.24, 0.46),
+            rng.range(0.14, 0.28),
+            rng.range(0.24, 0.46),
+            rng.pick(pebbleCols),
+          );
         }
 
         // Fallen petals lying on the drift under the big canopies.
-        if (id === BLOSSOM_DRIFT.id && rng.chance(0.30)) {
+        if (id === BLOSSOM_DRIFT.id && rng.chance(0.3)) {
           const n = rng.int(1, 2);
           for (let k = 0; k < n; k++) {
-            F.petal(fx + rng.range(-0.36, 0.36), y + 0.02, fz + rng.range(-0.36, 0.36),
-                    rng.range(0.24, 0.40), rng() * 1.57, rng.pick(petalCols));
+            F.petal(
+              fx + rng.range(-0.36, 0.36),
+              y + 0.02,
+              fz + rng.range(-0.36, 0.36),
+              rng.range(0.24, 0.4),
+              rng() * 1.57,
+              rng.pick(petalCols),
+            );
           }
         }
         continue;
@@ -794,9 +951,15 @@ function buildGroundDetail(world: any, rng: any) {
 
       /* --- lichen flecks on bare stone ----------------------------- */
       if (STONE_IDS.has(id) && rng.chance(0.007)) {
-        F.box(fx + rng.range(-0.25, 0.25), y - 0.06, fz + rng.range(-0.25, 0.25),
-              rng.range(0.22, 0.40), rng.range(0.10, 0.20), rng.range(0.22, 0.40),
-              SCRUB.top);
+        F.box(
+          fx + rng.range(-0.25, 0.25),
+          y - 0.06,
+          fz + rng.range(-0.25, 0.25),
+          rng.range(0.22, 0.4),
+          rng.range(0.1, 0.2),
+          rng.range(0.22, 0.4),
+          SCRUB.top,
+        );
       }
     }
   }
@@ -812,11 +975,12 @@ function buildGroundDetail(world: any, rng: any) {
       const rr = Math.sqrt(rng()) * radius;
       const px = t.x + Math.cos(a) * rr;
       const pz = t.z + Math.sin(a) * rr;
-      const x = Math.round(px), z = Math.round(pz);
+      const x = Math.round(px),
+        z = Math.round(pz);
       if (x < 1 || z < 1 || x >= S - 1 || z >= S - 1) continue;
       const top = heights[z * S + x];
       if (!GRASS_IDS.has(grid.get(x, top, z)) || grid.isSolid(x, top + 1, z)) continue;
-      F.petal(px, top + 1.025, pz, rng.range(0.20, 0.34), rng() * 1.57, rng.pick(petalCols));
+      F.petal(px, top + 1.025, pz, rng.range(0.2, 0.34), rng() * 1.57, rng.pick(petalCols));
     }
   }
 
@@ -827,7 +991,8 @@ function flatEnough(h: any, S: number, x: number, z: number, r: number, tol: num
   const c0 = h[z * S + x];
   for (let dz = -r; dz <= r; dz++)
     for (let dx = -r; dx <= r; dx++) {
-      const xx = clamp(x + dx, 0, S - 1), zz = clamp(z + dz, 0, S - 1);
+      const xx = clamp(x + dx, 0, S - 1),
+        zz = clamp(z + dz, 0, S - 1);
       if (Math.abs(h[zz * S + xx] - c0) > tol) return false;
     }
   return true;

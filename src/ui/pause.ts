@@ -60,34 +60,34 @@ const CSS = `
 `;
 
 const KEYBOARD_BINDINGS = [
-  ['WASD',     'Move'],
-  ['Mouse',    'Look'],
-  ['Space',    'Jump / Ascend'],
-  ['C',        'Descend'],
-  ['Shift',    'Sprint'],
-  ['F / G',    'Enter drone'],
-  ['L',        'Land'],
-  ['E',        'Edge toggle'],
-  ['M',        'Map'],
-  ['Esc',      'Pause'],
+  ['WASD', 'Move'],
+  ['Mouse', 'Look'],
+  ['Space', 'Jump / Ascend'],
+  ['C', 'Descend'],
+  ['Shift', 'Sprint'],
+  ['F', 'Toggle fly mode'],
+  ['G', 'Enter drone'],
+  ['L', 'Land (drone)'],
+  ['E', 'Edge toggle'],
+  ['M', 'Map'],
+  ['Esc', 'Pause'],
 ];
 
 const TOUCH_BINDINGS = [
   ['Left stick', 'Move'],
-  ['Swipe right','Look'],
-  ['↑',          'Jump / Ascend'],
-  ['↓',          'Descend'],
-  ['⚡',          'Sprint'],
-  ['✈',          'Enter drone'],
-  ['🛬',          'Land'],
-  ['⬡',          'Edges'],
-  ['Esc',        'Pause'],
+  ['Swipe right', 'Look'],
+  ['↑', 'Jump / Ascend'],
+  ['↓', 'Descend'],
+  ['⚡', 'Sprint'],
+  ['✈', 'Toggle fly mode'],
+  ['🚁', 'Enter drone'],
+  ['🛬', 'Land (drone)'],
+  ['⬡', 'Edges'],
+  ['Esc', 'Pause'],
 ];
 
 function buildBindings(rows: string[][]): string {
-  return rows.map(([key, label]) =>
-    `<div class="binding"><kbd>${key}</kbd><span>${label}</span></div>`
-  ).join('');
+  return rows.map(([key, label]) => `<div class="binding"><kbd>${key}</kbd><span>${label}</span></div>`).join('');
 }
 
 export function createPause({ input, map }: any) {
@@ -126,7 +126,7 @@ export function createPause({ input, map }: any) {
       wasPaused = input.paused;
       input.paused = true;
       input.keys.clear();
-      (resume as any).focus({ preventScroll:true });
+      (resume as any).focus({ preventScroll: true });
     } else {
       input.paused = wasPaused;
     }
@@ -137,7 +137,9 @@ export function createPause({ input, map }: any) {
     setOpen(false);
     map.toggle();
   });
-  root.addEventListener('click', (e) => { if (e.target === root) setOpen(false); });
+  root.addEventListener('click', (e) => {
+    if (e.target === root) setOpen(false);
+  });
 
   addEventListener('keydown', (e) => {
     if (e.code !== 'Escape' || e.repeat) return;
@@ -147,7 +149,9 @@ export function createPause({ input, map }: any) {
 
   return {
     el: root,
-    get open() { return open; },
+    get open() {
+      return open;
+    },
     toggle: () => setOpen(!open),
   };
 }

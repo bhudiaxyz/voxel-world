@@ -39,10 +39,10 @@ const S = 0.205;
  * Distances in blocks. `LEASH` is the one that matters: inside it the dog
  * potters, outside it the dog comes to you. */
 const LEASH = 9.0;
-const HEEL = 3.0;             // close enough to stop following
-const WANDER_R = 6.5;         // idle roaming radius, measured around the PLAYER
-const REPATH_DRIFT = 3.5;     // player left the goal by this much -> replan
-const WARP = 72;              // hopelessly far or unreachable -> reappear
+const HEEL = 3.0; // close enough to stop following
+const WANDER_R = 6.5; // idle roaming radius, measured around the PLAYER
+const REPATH_DRIFT = 3.5; // player left the goal by this much -> replan
+const WARP = 72; // hopelessly far or unreachable -> reappear
 /**
  * Hard minimum gap to the traveller, in blocks.
  *
@@ -57,21 +57,21 @@ const WARP = 72;              // hopelessly far or unreachable -> reappear
  */
 const PERSONAL_SPACE = 1.5;
 
-const TROT = 4.4;             // idle pottering
-const RUN = 7.6;              // catching up; must beat the player's ~6.4
-const TURN_RATE = 11;         // heading ease, per second
+const TROT = 4.4; // idle pottering
+const RUN = 7.6; // catching up; must beat the player's ~6.4
+const TURN_RATE = 11; // heading ease, per second
 /** After being told to stand, how long before it may idle-sit again. */
 const STAND_GRACE = 5.0;
-const Y_EASE = 14;            // terrace-height ease, per second
+const Y_EASE = 14; // terrace-height ease, per second
 
 /* ---- hopping --------------------------------------------------------
  * A terrace in this world is 3 blocks and the navigation surface permits a
  * 3.3-block step, so the dog has to be able to leave the ground properly. */
-const HOP_MIN = 0.55;         // height change that stops being a walk
-const MAX_HOP = 3.45;         // never exceed what the nav surface allowed
-const HOP_LOOK = 0.62;        // how far ahead the edge is spotted
-const HOP_OVER = 0.62;        // extra distance, so it lands past the lip
-const HOP_CLEAR = 0.26;       // arc height above the straight line
+const HOP_MIN = 0.55; // height change that stops being a walk
+const MAX_HOP = 3.45; // never exceed what the nav surface allowed
+const HOP_LOOK = 0.62; // how far ahead the edge is spotted
+const HOP_OVER = 0.62; // extra distance, so it lands past the lip
+const HOP_CLEAR = 0.26; // arc height above the straight line
 /**
  * Fraction of the hop spent changing height.
  *
@@ -85,12 +85,12 @@ const HOP_RISE = 0.45;
  * Named because the sit pose below is *derived* from them rather than hand
  * tuned. Guessed angles were how the old sit ended up pitching nose-down with
  * its hind legs driven through the floor. */
-const LEG_PIVOT_Y = 2.45;     // hip height, standing
-const LEG_REACH = 2.31;       // hip to underside of paw
+const LEG_PIVOT_Y = 2.45; // hip height, standing
+const LEG_REACH = 2.31; // hip to underside of paw
 const FRONT_Z = 1.62;
 const HIND_Z = -1.72;
 /** The neck is built tilted; the head cancels it. */
-const HEAD_BASE_X = 0.30;
+const HEAD_BASE_X = 0.3;
 const EAR_BASE_X = 0.22;
 
 /**
@@ -107,8 +107,9 @@ const EAR_BASE_X = 0.22;
  * block underground.
  */
 const SIT = (() => {
-  const pitch = 0.50;                     // radians, nose up
-  const c = Math.cos(pitch), sn = Math.sin(pitch);
+  const pitch = 0.5; // radians, nose up
+  const c = Math.cos(pitch),
+    sn = Math.sin(pitch);
   // With body.rotation.x = -pitch, a point (y, z) lands at y*cos + z*sin.
   const lift = (y: any, z: any) => y * c + z * sn;
 
@@ -123,8 +124,8 @@ const SIT = (() => {
     pitch,
     drop,
     // Local rotations: world target minus the body's own rotation (-pitch).
-    frontLeg: pitch,          // stay vertical
-    hindLeg: pitch - fold,    // fold forward, under the body
+    frontLeg: pitch, // stay vertical
+    hindLeg: pitch - fold, // fold forward, under the body
   };
 })();
 
@@ -133,20 +134,17 @@ const SIT = (() => {
  * counterpart and the pair reads as a pair. The collar is deliberately the
  * exact marigold of the traveller's scarf: one shared saturated note is the
  * cheapest way to say these two belong together. */
-const CREAM   = 0xd9ccb8;
+const CREAM = 0xd9ccb8;
 const CREAM_PALE = 0xe1d9cb;
-const TAN     = 0xc09870;
+const TAN = 0xc09870;
 const TAN_DIM = 0xab815e;
 const LEATHER = 0x7c5c56;
-const NOSE    = 0x544444;
-const COLLAR  = 0xefb173;
+const NOSE = 0x544444;
+const COLLAR = 0xefb173;
 
 function boxMesh(w: any, h: any, d: any, color: any, edgeMaterial: any, outlined = true) {
   const c = new THREE.Color(color);
-  const m = new THREE.Mesh(
-    new THREE.BoxGeometry(w * S, h * S, d * S),
-    new THREE.MeshLambertMaterial({ color: c }),
-  );
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w * S, h * S, d * S), new THREE.MeshLambertMaterial({ color: c }));
   m.castShadow = true;
   m.receiveShadow = false;
   // A child, so every bit of the animation carries its own outline without
@@ -201,9 +199,9 @@ function buildModel(edgeMaterial: any) {
    * floating in the middle of the flank. Sharing a face instead gives exactly
    * one edge at each join — which is the line you actually wanted, because it
    * is where the animal changes shape. */
-  put(body, 1.95, 2.00, 2.7, CREAM, 0, 3.30, -0.35);    // waist   z -1.70..1.00
-  put(body, 2.40, 2.45, 1.7, CREAM, 0, 3.42,  1.85);    // chest   z  1.00..2.70
-  put(body, 2.20, 2.15, 1.5, CREAM, 0, 3.34, -2.45);    // rump    z -3.20..-1.70
+  put(body, 1.95, 2.0, 2.7, CREAM, 0, 3.3, -0.35); // waist   z -1.70..1.00
+  put(body, 2.4, 2.45, 1.7, CREAM, 0, 3.42, 1.85); // chest   z  1.00..2.70
+  put(body, 2.2, 2.15, 1.5, CREAM, 0, 3.34, -2.45); // rump    z -3.20..-1.70
   // Tan saddle and a paler underside. Two tones along the length are what
   // stop the flank being one flat acre of cream at this camera distance.
   put(body, 2.02, 0.85, 3.0, TAN, 0, 4.02, -0.9, false);
@@ -213,7 +211,7 @@ function buildModel(edgeMaterial: any) {
   /* ---- neck and head ------------------------------------------------ */
   const neck = new THREE.Group();
   neck.position.set(0, 4.15 * S, 2.55 * S);
-  neck.rotation.x = -0.30;                 // carried up and forward
+  neck.rotation.x = -0.3; // carried up and forward
   body.add(neck);
   // Buried between chest and skull, so it carries no ink of its own.
   put(neck, 1.5, 1.6, 1.45, CREAM, 0, 0.35, 0.05, false);
@@ -223,10 +221,10 @@ function buildModel(edgeMaterial: any) {
 
   const head = new THREE.Group();
   head.position.set(0, 1.42 * S, 0.62 * S);
-  head.rotation.x = HEAD_BASE_X;           // cancel the neck's tilt
+  head.rotation.x = HEAD_BASE_X; // cancel the neck's tilt
   neck.add(head);
-  put(head, 1.9, 1.7, 1.9, CREAM, 0, 0, 0);              // skull
-  put(head, 1.66, 0.75, 1.94, TAN, 0, 0.62, 0, false);   // brow patch
+  put(head, 1.9, 1.7, 1.9, CREAM, 0, 0, 0); // skull
+  put(head, 1.66, 0.75, 1.94, TAN, 0, 0.62, 0, false); // brow patch
   // A blaze straight up the face. One asymmetric-free marking is the cheapest
   // thing that turns a head into a face.
   put(head, 0.52, 0.8, 0.36, CREAM, 0, 0.55, 0.92, false);
@@ -235,7 +233,7 @@ function buildModel(edgeMaterial: any) {
   muzzle.position.set(0, -0.35 * S, 0.95 * S);
   head.add(muzzle);
   put(muzzle, 1.0, 0.8, 1.2, CREAM, 0, 0, 0.5);
-  put(muzzle, 0.86, 0.34, 1.05, TAN_DIM, 0, -0.52, 0.48, false);  // jaw
+  put(muzzle, 0.86, 0.34, 1.05, TAN_DIM, 0, -0.52, 0.48, false); // jaw
   put(muzzle, 0.5, 0.42, 0.42, NOSE, 0, 0.28, 1.18, false);
   // Eyes: tiny, unoutlined and wide-set. Outlined they became goggles.
   put(head, 0.32, 0.32, 0.26, NOSE, 0.55, 0.22, 0.92, false);
@@ -246,7 +244,7 @@ function buildModel(edgeMaterial: any) {
   const ears = [-1, 1].map((side) => {
     const e = new THREE.Group();
     e.position.set(side * 0.82 * S, 0.75 * S, -0.15 * S);
-    e.rotation.z = side * 0.30;
+    e.rotation.z = side * 0.3;
     e.rotation.x = EAR_BASE_X;
     head.add(e);
     put(e, 0.5, 1.35, 0.85, TAN_DIM, side * 0.16, -0.5, 0);
@@ -264,25 +262,27 @@ function buildModel(edgeMaterial: any) {
   tailTip.position.set(0, 0.16 * S, -1.35 * S);
   tail.add(tailTip);
   put(tailTip, 0.5, 0.5, 1.0, TAN, 0, 0, -0.45);
-  put(tailTip, 0.56, 0.56, 0.5, CREAM, 0, 0.06, -1.05, false);   // pale tip
+  put(tailTip, 0.56, 0.56, 0.5, CREAM, 0, 0.06, -1.05, false); // pale tip
 
   /* ---- legs ----------------------------------------------------------
    * Upper and lower segments of different thickness, plus a haunch on the
    * hind pair. Four identical sticks is the single most doll-like thing a
    * voxel animal can do. */
   const legs = [
-    [ 0.66, FRONT_Z, 0], [-0.66, FRONT_Z, 0],
-    [ 0.68, HIND_Z,  1], [-0.68, HIND_Z,  1],
+    [0.66, FRONT_Z, 0],
+    [-0.66, FRONT_Z, 0],
+    [0.68, HIND_Z, 1],
+    [-0.68, HIND_Z, 1],
   ].map(([x, z, hind]) => {
     const g = new THREE.Group();
     g.position.set(x * S, LEG_PIVOT_Y * S, z * S);
     body.add(g);
     if (hind) {
-      put(g, 1.12, 1.4, 1.5, CREAM, 0, -0.3, -0.1, false);   // haunch
-      put(g, 0.66, 1.05, 0.72, CREAM, 0, -1.45, 0.12);   // shank
+      put(g, 1.12, 1.4, 1.5, CREAM, 0, -0.3, -0.1, false); // haunch
+      put(g, 0.66, 1.05, 0.72, CREAM, 0, -1.45, 0.12); // shank
       put(g, 0.76, 0.42, 0.95, LEATHER, 0, -2.1, 0.24);
     } else {
-      put(g, 0.92, 1.2, 1.0, CREAM, 0, -0.38, 0, false);     // shoulder
+      put(g, 0.92, 1.2, 1.0, CREAM, 0, -0.38, 0, false); // shoulder
       put(g, 0.66, 1.05, 0.72, CREAM, 0, -1.45, 0.02);
       put(g, 0.76, 0.42, 0.95, LEATHER, 0, -2.1, 0.12);
     }
@@ -298,7 +298,12 @@ function buildModel(edgeMaterial: any) {
  * @param player    the Controller; only `pos` is read
  */
 export function createDog({
-  world, surface, player, edgeMaterial, input = null, rng = Math.random,
+  world,
+  surface,
+  player,
+  edgeMaterial,
+  input = null,
+  rng = Math.random,
   /**
    * Called with the name of a command whenever one is issued — 'Sit',
    * 'Stand', and whatever else gets added later.
@@ -326,10 +331,11 @@ export function createDog({
   let heading = 0;
   let route: any = null;
   let waypoint = 0;
-  let goalX = 0, goalZ = 0;
+  let goalX = 0,
+    goalZ = 0;
   let layer = 0;
 
-  let mode = 'rest';          // 'rest' | 'wander' | 'follow'
+  let mode = 'rest'; // 'rest' | 'wander' | 'follow'
   /**
    * The standing order from the Y key.
    *
@@ -341,7 +347,7 @@ export function createDog({
    */
   let commanded = false;
   let restFor = 0;
-  let sit = 0;                // 0..1 eased sit pose
+  let sit = 0; // 0..1 eased sit pose
   /* The dog's OWN decision to sit while pottering — distinct from the standing
    * order above, and that distinction is the bug fix.
    *
@@ -352,21 +358,23 @@ export function createDog({
   let idleSit = false;
   /** Seconds during which the dog will not sit down of its own accord. */
   let sitBlock = 0;
-  let phase = 0;              // stride accumulator
+  let phase = 0; // stride accumulator
   let speed01 = 0;
   let swim = 0;
-  let bark = 0;               // little excitement pulse on arrival
-  let hop: any = null;             // active jump arc, or null
-  let air = 0;                // 0..1 eased airborne pose
+  let bark = 0; // little excitement pulse on arrival
+  let hop: any = null; // active jump arc, or null
+  let air = 0; // 0..1 eased airborne pose
   let stuckFor = 0;
-  let lastX = 0, lastZ = 0;
+  let lastX = 0,
+    lastZ = 0;
   let failedPaths = 0;
 
   const clampCell = (v: any) => THREE.MathUtils.clamp(Math.floor(v), 1, world.size - 2);
 
   /** Ground height at a position, preferring the layer we are already on. */
   const groundAt = (x: any, z: any, preferred: any) => {
-    const cx = clampCell(x), cz = clampCell(z);
+    const cx = clampCell(x),
+      cz = clampCell(z);
     for (const l of preferred === 1 ? [1, 0] : [0, 1]) {
       const info = surface.info(surface.encode(cx, cz, l));
       if (info) return info;
@@ -381,15 +389,23 @@ export function createDog({
     if (g) layer = g.layer;
   };
 
-  const clearRoute = () => { route = null; waypoint = 0; search.cancel(); };
+  const clearRoute = () => {
+    route = null;
+    waypoint = 0;
+    search.cancel();
+  };
 
   /** Begin a search from where the dog actually is to a world position. */
   const pathTo = (x: any, z: any, expectedY: any) => {
     const start = surface.nearestNode(pos.x, pos.z, pos.y, 4);
     const goal = surface.nearestNode(x, z, expectedY, 6);
-    if (start < 0 || goal < 0) { clearRoute(); return false; }
+    if (start < 0 || goal < 0) {
+      clearRoute();
+      return false;
+    }
     clearRoute();
-    goalX = x; goalZ = z;
+    goalX = x;
+    goalZ = z;
     search.begin(start, goal);
     return true;
   };
@@ -407,7 +423,10 @@ export function createDog({
       const x = player.pos.x + Math.cos(a) * r;
       const z = player.pos.z + Math.sin(a) * r;
       if (x < 2 || z < 2 || x > world.size - 3 || z > world.size - 3) continue;
-      if (pathTo(x, z, player.pos.y)) { mode = 'wander'; return true; }
+      if (pathTo(x, z, player.pos.y)) {
+        mode = 'wander';
+        return true;
+      }
     }
     mode = 'rest';
     restFor = 0.8 + rng() * 1.4;
@@ -445,7 +464,8 @@ export function createDog({
 
   // Start beside the traveller.
   placeAt(player.pos.x + 1.4, player.pos.z + 1.4);
-  lastX = pos.x; lastZ = pos.z;
+  lastX = pos.x;
+  lastZ = pos.z;
 
   /**
    * Choose a direction for this frame. Deliberately does not move anything:
@@ -455,13 +475,15 @@ export function createDog({
   function steer(speed: any) {
     if (!route?.length) return null;
     let target = route[waypoint];
-    let dx = target.x - pos.x, dz = target.z - pos.z;
+    let dx = target.x - pos.x,
+      dz = target.z - pos.z;
     let dist = Math.hypot(dx, dz);
     const arrive = waypoint === route.length - 1 ? 0.34 : 0.62;
 
     while (dist <= arrive && waypoint < route.length - 1) {
       target = route[++waypoint];
-      dx = target.x - pos.x; dz = target.z - pos.z;
+      dx = target.x - pos.x;
+      dz = target.z - pos.z;
       dist = Math.hypot(dx, dz);
     }
     if (waypoint === route.length - 1 && dist <= arrive) {
@@ -488,7 +510,8 @@ export function createDog({
    * navigation surface has already agreed is standable.
    */
   function beginHop(st: any, speed: any) {
-    const ax = pos.x + st.nx * HOP_LOOK, az = pos.z + st.nz * HOP_LOOK;
+    const ax = pos.x + st.nx * HOP_LOOK,
+      az = pos.z + st.nz * HOP_LOOK;
     const ahead = groundAt(ax, az, st.layer ?? layer);
     if (!ahead) return false;
     const dy = ahead.y - pos.y;
@@ -504,13 +527,17 @@ export function createDog({
     if (Math.abs(land.y - pos.y) > MAX_HOP) return false;
 
     hop = {
-      x0: pos.x, z0: pos.z, y0: pos.y,
-      x1: lx, z1: lz, y1: land.y,
-      layer: land.layer, water: land.water,
+      x0: pos.x,
+      z0: pos.z,
+      y0: pos.y,
+      x1: lx,
+      z1: lz,
+      y1: land.y,
+      layer: land.layer,
+      water: land.water,
       up: land.y > pos.y,
       t: 0,
-      dur: Math.max((HOP_LOOK + HOP_OVER) / Math.max(speed, 0.1),
-                    0.24 + Math.abs(land.y - pos.y) * 0.055),
+      dur: Math.max((HOP_LOOK + HOP_OVER) / Math.max(speed, 0.1), 0.24 + Math.abs(land.y - pos.y) * 0.055),
       speed,
     };
     return true;
@@ -535,11 +562,8 @@ export function createDog({
      * Coming down is the mirror image: hold the departure height until past
      * the edge, then fall. Otherwise the dog sinks into the ledge it is
      * stepping off. */
-    const k = hop.up
-      ? THREE.MathUtils.smoothstep(t, 0, HOP_RISE)
-      : THREE.MathUtils.smoothstep(t, 1 - HOP_RISE, 1);
-    pos.y = hop.y0 + (hop.y1 - hop.y0) * k
-          + Math.sin(Math.PI * t) * (hop.up ? HOP_CLEAR : HOP_CLEAR * 1.3);
+    const k = hop.up ? THREE.MathUtils.smoothstep(t, 0, HOP_RISE) : THREE.MathUtils.smoothstep(t, 1 - HOP_RISE, 1);
+    pos.y = hop.y0 + (hop.y1 - hop.y0) * k + Math.sin(Math.PI * t) * (hop.up ? HOP_CLEAR : HOP_CLEAR * 1.3);
     // The arc *is* the visual. Easing it as well would flatten the thing the
     // arc exists to produce.
     drawY.v = pos.y;
@@ -582,23 +606,34 @@ export function createDog({
 
   return {
     root,
-    get mode() { return mode; },
-    get position() { return pos; },
+    get mode() {
+      return mode;
+    },
+    get position() {
+      return pos;
+    },
     /** True when the standing order is "sit", whether or not it is sitting yet. */
-    get commandedSit() { return commanded; },
+    get commandedSit() {
+      return commanded;
+    },
     /** True only once the pose has actually settled. */
-    get sitting() { return sit > 0.5; },
+    get sitting() {
+      return sit > 0.5;
+    },
     /** Named `setSit`, not `sit` — the internal `sit` is the eased pose
      *  value, and two things called sit in one file is a trap. */
     setSit,
     toggleSit: () => setSit(!commanded),
 
     update(dt: any) {
-      const px = player.pos.x, pz = player.pos.z;
+      const px = player.pos.x,
+        pz = player.pos.z;
       const toPlayer = Math.hypot(px - pos.x, pz - pos.z);
       if (sitBlock > 0) sitBlock -= dt;
 
-      if (toPlayer > WARP && warpNear()) { /* recovered */ }
+      if (toPlayer > WARP && warpNear()) {
+        /* recovered */
+      }
 
       /* ---- advance any search in flight ---------------------------
        * Budgeted and incremental, exactly like the player's. A wander is a
@@ -616,7 +651,10 @@ export function createDog({
           // cut off rather than merely inconvenienced.
           clearRoute();
           if (++failedPaths >= 2 && toPlayer > LEASH * 1.5) warpNear();
-          else { mode = 'rest'; restFor = 0.6; }
+          else {
+            mode = 'rest';
+            restFor = 0.6;
+          }
         }
       }
 
@@ -682,26 +720,35 @@ export function createDog({
           }
         }
       }
-      if (hop) { v = Math.max(v, hop.speed); stepHop(dt); }
+      if (hop) {
+        v = Math.max(v, hop.speed);
+        stepHop(dt);
+      }
 
       /* Never share space with the traveller.
        *
        * Recomputed after the move, not before: `toPlayer` above is a frame
        * stale, and a stale radius is exactly what lets the two models overlap
        * for a frame at closing speed. */
-      let gapX = pos.x - px, gapZ = pos.z - pz;
+      let gapX = pos.x - px,
+        gapZ = pos.z - pz;
       let gap = Math.hypot(gapX, gapZ);
       if (gap < 1e-4) {
         // Exactly coincident: pick a direction rather than divide by zero.
-        gapX = Math.sin(heading + Math.PI); gapZ = Math.cos(heading + Math.PI);
+        gapX = Math.sin(heading + Math.PI);
+        gapZ = Math.cos(heading + Math.PI);
         gap = 1;
       }
       if (gap < PERSONAL_SPACE) {
-        pos.x = px + gapX / gap * PERSONAL_SPACE;
-        pos.z = pz + gapZ / gap * PERSONAL_SPACE;
+        pos.x = px + (gapX / gap) * PERSONAL_SPACE;
+        pos.z = pz + (gapZ / gap) * PERSONAL_SPACE;
         // Standing on the boundary with a route that wants to go through the
         // traveller is a wedge. Drop the route and potter instead.
-        if (route && mode !== 'follow') { clearRoute(); mode = 'rest'; restFor = 0.4; }
+        if (route && mode !== 'follow') {
+          clearRoute();
+          mode = 'rest';
+          restFor = 0.4;
+        }
       }
 
       /* ---- settle onto the ground -----------------------------------
@@ -725,8 +772,10 @@ export function createDog({
        * is authoritative about what is walkable, but the dog can still be
        * wedged by the personal-space push or by arriving mid-terrace. */
       const moved = Math.hypot(pos.x - lastX, pos.z - lastZ);
-      if (route && moved < 0.004) stuckFor += dt; else stuckFor = 0;
-      lastX = pos.x; lastZ = pos.z;
+      if (route && moved < 0.004) stuckFor += dt;
+      else stuckFor = 0;
+      lastX = pos.x;
+      lastZ = pos.z;
       if (stuckFor > 0.9) {
         clearRoute();
         stuckFor = 0;
@@ -788,13 +837,14 @@ export function createDog({
       /* Pitch along the arc: nose up on the climb, nose down on the fall.
        * Taken from the parabola's own slope rather than a hand-picked angle,
        * so it tips over automatically at the apex. */
-      const climb = !hop ? 0
-        : hop.up ? 1 - THREE.MathUtils.smoothstep(hop.t, 0, HOP_RISE)
-        : -THREE.MathUtils.smoothstep(hop.t, 1 - HOP_RISE, 1);
+      const climb = !hop
+        ? 0
+        : hop.up
+          ? 1 - THREE.MathUtils.smoothstep(hop.t, 0, HOP_RISE)
+          : -THREE.MathUtils.smoothstep(hop.t, 1 - HOP_RISE, 1);
       // Negative is nose-up. The old `+ s * 0.30` tipped the dog forward onto
       // its face, which is the opposite of sitting.
-      model.body.rotation.x = (-speed01 * 0.07 - SIT.pitch * s + w * 0.10) * (1 - a)
-                            - climb * 0.34 * a;
+      model.body.rotation.x = (-speed01 * 0.07 - SIT.pitch * s + w * 0.1) * (1 - a) - climb * 0.34 * a;
       model.body.rotation.z = Math.sin(phase) * 0.05 * gait;
 
       /* The tail is the whole emotional readout, so it gets the most
@@ -810,9 +860,7 @@ export function createDog({
       // The tip lags a quarter cycle, so the wag travels outward instead of
       // the tail swinging as one rigid stick.
       model.tailTip.rotation.y = Math.sin(phase * 2.6 + 0.3) * wag * 0.9;
-      model.tail.rotation.x = (-0.55 - near * 0.35 - bark * 0.4 + w * 0.5
-                               + SIT.pitch * s * 1.1) * (1 - a)
-                            - a * 0.15;   // streams out straight in the air
+      model.tail.rotation.x = (-0.55 - near * 0.35 - bark * 0.4 + w * 0.5 + SIT.pitch * s * 1.1) * (1 - a) - a * 0.15; // streams out straight in the air
 
       // Head: bobs with the gait, lifts to look at you when sitting or idle.
       const look = (1 - speed01) * (0.4 + s * 0.6);
@@ -822,16 +870,15 @@ export function createDog({
        * tilt, and this line *assigned* over it every frame — so the head hung
        * 17 degrees low permanently and nothing in the pose ever looked level.
        * Sitting adds most of the body's pitch back so the head stays up. */
-      model.head.rotation.x = HEAD_BASE_X
-                            + Math.sin(phase * 2 + 0.6) * 0.06 * gait
-                            - look * 0.12 + w * 0.34 + SIT.pitch * s * 0.75;
+      model.head.rotation.x =
+        HEAD_BASE_X + Math.sin(phase * 2 + 0.6) * 0.06 * gait - look * 0.12 + w * 0.34 + SIT.pitch * s * 0.75;
       if (look > 0.01) {
         // Turn the head toward the traveller rather than the body: a dog that
         // swivels its whole body to watch you reads as a turret.
         let dy = Math.atan2(px - pos.x, pz - pos.z) - heading;
         dy = Math.atan2(Math.sin(dy), Math.cos(dy));
-        model.head.rotation.y += (THREE.MathUtils.clamp(dy, -0.9, 0.9) * look
-                                  - model.head.rotation.y) * (1 - Math.exp(-7 * dt));
+        model.head.rotation.y +=
+          (THREE.MathUtils.clamp(dy, -0.9, 0.9) * look - model.head.rotation.y) * (1 - Math.exp(-7 * dt));
       } else {
         model.head.rotation.y *= Math.exp(-6 * dt);
       }
@@ -839,9 +886,11 @@ export function createDog({
       // Ears flop against the bob, a beat behind it.
       model.ears.forEach((ear, i) => {
         const side = i === 0 ? 1 : -1;
-        ear.rotation.x = EAR_BASE_X                    // built-in hang, kept
-                       + Math.sin(phase * 2 - 0.9) * 0.30 * gait - look * 0.15
-                       - a * 0.55;   // blown back by the jump
+        ear.rotation.x =
+          EAR_BASE_X + // built-in hang, kept
+          Math.sin(phase * 2 - 0.9) * 0.3 * gait -
+          look * 0.15 -
+          a * 0.55; // blown back by the jump
         ear.rotation.z = side * (0.22 + Math.sin(phase * 2 - 0.5) * 0.12 * gait);
       });
 

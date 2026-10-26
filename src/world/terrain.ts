@@ -45,8 +45,8 @@ export const WORLD = {
    */
   size: 768,
   height: 76,
-  seaLevel: Math.floor(WATER.level),   // 9
-  step: 3,                              // terrace height — one contour disc
+  seaLevel: Math.floor(WATER.level), // 9
+  step: 3, // terrace height — one contour disc
   /**
    * Terrace edges snap to this lattice. The reference's shelves turn in long
    * straight runs and right angles, never in curves — a warped contour is a
@@ -63,25 +63,30 @@ export const WORLD = {
  */
 const lin = (hex: number) => new THREE.Color(hex);
 export const CASCADE = registerBlock('CASCADE', {
-  top: lin(0xeaf1ff), side: lin(0xdde8fb), bottom: lin(0xccdaf2),
-  tint: lin(0xf7fbff), pattern: PATTERN.STONE, rough: 0.15, emissive: 0.14,
+  top: lin(0xeaf1ff),
+  side: lin(0xdde8fb),
+  bottom: lin(0xccdaf2),
+  tint: lin(0xf7fbff),
+  pattern: PATTERN.STONE,
+  rough: 0.15,
+  emissive: 0.14,
 });
 
 export function generateTerrain(seed = 20260820, plan: any = null) {
   const S = WORLD.size;
   const L = WORLD.step;
   const SEA = WORLD.seaLevel;
-  const BASE = SEA + 3;                 // the valley floor
+  const BASE = SEA + 3; // the valley floor
   const grid = new VoxelGrid(S, WORLD.height, S);
   const rng = makeRng(seed);
 
-  const nWarp  = makeNoise2D(seed + 5);
+  const nWarp = makeNoise2D(seed + 5);
   const nRiver = makeNoise2D(seed + 3);
-  const nRock  = makeNoise2D(seed + 4);
-  const nTone  = makeNoise2D(seed + 6);
-  const nEdge  = makeNoise2D(seed + 7);
+  const nRock = makeNoise2D(seed + 4);
+  const nTone = makeNoise2D(seed + 6);
+  const nEdge = makeNoise2D(seed + 7);
   const nLedge = makeNoise2D(seed + 8);
-  const nFine  = makeNoise2D(seed + 9);
+  const nFine = makeNoise2D(seed + 9);
 
   const half = S / 2;
   /** Terrace steps between the lowest and highest planned region. */
@@ -115,21 +120,29 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
    * edges coincide, which is a decision rather than an accident.
    */
   const discs: any[] = [];
-  const push = (cx: any, cz: any, r: any, o: any, opt: any = {}) => discs.push({
-    cx, cz, r, o,
-    ax: opt.ax ?? 1, az: opt.az ?? 1,
-    wAmp: opt.wAmp ?? 11, wFreq: opt.wFreq ?? 0.016,
-    sign: opt.sign ?? 1,
-  });
+  const push = (cx: any, cz: any, r: any, o: any, opt: any = {}) =>
+    discs.push({
+      cx,
+      cz,
+      r,
+      o,
+      ax: opt.ax ?? 1,
+      az: opt.az ?? 1,
+      wAmp: opt.wAmp ?? 11,
+      wFreq: opt.wFreq ?? 0.016,
+      sign: opt.sign ?? 1,
+    });
 
   /** A stepped massif: shrinking discs with a drifting centre. */
   const massif = (fx: any, fz: any, radii: any, opt: any = {}) => {
-    let cx = fx * S, cz = fz * S;
+    let cx = fx * S,
+      cz = fz * S;
     radii.forEach((r: any, k: any) => {
       cx += rng.bell() * (opt.drift ?? 6);
       cz += rng.bell() * (opt.drift ?? 6);
       push(cx, cz, r, 137 * (discs.length + 1), {
-        ax: opt.ax, az: opt.az,
+        ax: opt.ax,
+        az: opt.az,
         wAmp: (opt.wAmp ?? 12) * (1 - k * 0.09),
         wFreq: opt.wFreq,
       });
@@ -151,16 +164,13 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
     // One crown per ~65k blocks of map, so a large world gets a whole range
     // rather than the same two summits with more flat ground between them.
     const crowns = Math.max(2, Math.round(2 * AREA));
-    const peaks = [...plan.regions]
-      .sort((a, b) => b.elevation - a.elevation)
-      .slice(0, crowns);
+    const peaks = [...plan.regions].sort((a, b) => b.elevation - a.elevation).slice(0, crowns);
     peaks.forEach((r, k) => {
       // Alternating profiles so a range is not a row of identical cones.
-      const radii = (k % 3 === 0 ? [30, 24, 18, 13, 8]
-                   : k % 3 === 1 ? [26, 19, 13]
-                   : [22, 16, 11, 7]).map((v) => v * K);
-      massif(r.center[0] / S, r.center[1] / S, radii,
-             { drift: 5 * K, wAmp: 12 * K });
+      const radii = (k % 3 === 0 ? [30, 24, 18, 13, 8] : k % 3 === 1 ? [26, 19, 13] : [22, 16, 11, 7]).map(
+        (v) => v * K,
+      );
+      massif(r.center[0] / S, r.center[1] / S, radii, { drift: 5 * K, wAmp: 12 * K });
     });
   }
 
@@ -180,11 +190,13 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
     for (let gx = 0; gx < GX; gx++) {
       const fx = (gx + 0.5) / GX + rng.bell() * 0.075;
       const fz = (gz + 0.5) / GX + rng.bell() * 0.075;
-      if (fx < 0.10 || fx > 0.90 || fz < 0.10 || fz > 0.90) continue;
+      if (fx < 0.1 || fx > 0.9 || fz < 0.1 || fz > 0.9) continue;
       const sign = rng.chance(0.34) ? -1 : 1;
       push(fx * S, fz * S, rng.range(8.5, 17) * K, 971 * (gx * 7 + gz + 3), {
-        sign, wAmp: rng.range(4.5, 8.5) * K,
-        ax: rng.range(0.7, 1.35), az: rng.range(0.7, 1.35),
+        sign,
+        wAmp: rng.range(4.5, 8.5) * K,
+        ax: rng.range(0.7, 1.35),
+        az: rng.range(0.7, 1.35),
       });
     }
   }
@@ -196,8 +208,10 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
    * authored island and vanishes to nothing across a large one. Scattered by
    * count now, on the same jittered basis as everything else. */
   for (let k = 0, n = Math.round(3 * AREA); k < n; k++) {
-    push(rng.range(0.08, 0.92) * S, rng.range(0.08, 0.92) * S,
-         rng.range(9, 13) * K, 4441 + k, { sign: -1, wAmp: rng.range(4, 6) * K });
+    push(rng.range(0.08, 0.92) * S, rng.range(0.08, 0.92) * S, rng.range(9, 13) * K, 4441 + k, {
+      sign: -1,
+      wAmp: rng.range(4, 6) * K,
+    });
   }
 
   /* Evaluated on a coarse lattice rather than per column.
@@ -219,7 +233,8 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
    * runs; a per-cell draw makes the step itself the unit of variation.
    */
   const cellHash = (x: any, z: any, salt: any, g = Q) => {
-    const cx = Math.floor(x / g), cz = Math.floor(z / g);
+    const cx = Math.floor(x / g),
+      cz = Math.floor(z / g);
     let h = (cx * 374761393 + cz * 668265263 + salt * 1442695040) | 0;
     h = Math.imul(h ^ (h >>> 13), 1274126177);
     return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
@@ -234,7 +249,7 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
    * was. Perturbing about one cell in six leaves long clean runs with the
    * occasional break, which is what the reference actually shows.
    */
-  const cellStep = (x: any, z: any, salt: any, up = 0.10, down = 0.09, g = JQ) => {
+  const cellStep = (x: any, z: any, salt: any, up = 0.1, down = 0.09, g = JQ) => {
     const a = cellHash(x, z, salt, g);
     if (a < up) return 1;
     if (a > 1 - down) return -1;
@@ -245,7 +260,8 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
     const x = Math.floor(x0 / Q) * Q + Q * 0.5;
     const z = Math.floor(z0 / Q) * Q + Q * 0.5;
     const w = fbm2(nWarp, (x + d.o) * d.wFreq, (z + d.o) * d.wFreq, 3) * d.wAmp;
-    const dx = (x - d.cx) / d.ax, dz = (z - d.cz) / d.az;
+    const dx = (x - d.cx) / d.ax,
+      dz = (z - d.cz) / d.az;
     const dist = Math.sqrt(dx * dx + dz * dz) + w;
     return (1 - smoothstep(d.r - 1.0, d.r + 1.0, dist)) * d.sign;
   };
@@ -277,8 +293,7 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
       if (p.length < 3) break;
       const q = [p[0]];
       for (let i = 1; i < p.length - 1; i++) {
-        q.push([(p[i - 1][0] + 2 * p[i][0] + p[i + 1][0]) / 4,
-                (p[i - 1][1] + 2 * p[i][1] + p[i + 1][1]) / 4]);
+        q.push([(p[i - 1][0] + 2 * p[i][0] + p[i + 1][0]) / 4, (p[i - 1][1] + 2 * p[i][1] + p[i + 1][1]) / 4]);
       }
       q.push(p[p.length - 1]);
       p = q;
@@ -291,7 +306,8 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
   const resamplePath = (pts: any, spacing = 1) => {
     const out = [];
     for (let i = 0; i < pts.length - 1; i++) {
-      const [ax, az] = pts[i], [bx, bz] = pts[i + 1];
+      const [ax, az] = pts[i],
+        [bx, bz] = pts[i + 1];
       const len = Math.hypot(bx - ax, bz - az);
       const n = Math.max(1, Math.round(len / spacing));
       for (let k = 0; k < n; k++) {
@@ -315,10 +331,12 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
   /** Ordered nodes of every channel, for cascades, bridges and stamps. */
   const riverPath = [];
 
-  const REACH = 30;          // covers every downstream `riverDist` threshold
+  const REACH = 30; // covers every downstream `riverDist` threshold
   const stampNode = (px: any, pz: any, w: any, ford: any, nx: any, nz: any) => {
-    const x0 = Math.max(0, Math.floor(px - REACH)), x1 = Math.min(S - 1, Math.ceil(px + REACH));
-    const z0 = Math.max(0, Math.floor(pz - REACH)), z1 = Math.min(S - 1, Math.ceil(pz + REACH));
+    const x0 = Math.max(0, Math.floor(px - REACH)),
+      x1 = Math.min(S - 1, Math.ceil(px + REACH));
+    const z0 = Math.max(0, Math.floor(pz - REACH)),
+      z1 = Math.min(S - 1, Math.ceil(pz + REACH));
     for (let z = z0; z <= z1; z++) {
       const dz = z - pz;
       for (let x = x0; x <= x1; x++) {
@@ -326,7 +344,9 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
         const d = Math.sqrt(dx * dx + dz * dz);
         const i = z * S + x;
         if (d < rivD[i]) {
-          rivD[i] = d; rivHalf[i] = w; rivFord[i] = ford ? 1 : 0;
+          rivD[i] = d;
+          rivHalf[i] = w;
+          rivFord[i] = ford ? 1 : 0;
           rivSide[i] = dx * nx + dz * nz < 0 ? -1 : 1;
         }
       }
@@ -335,9 +355,18 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
 
   // Without a plan (tests, tooling) fall back to a single diagonal so every
   // downstream pass still has a channel to work against.
-  const channels = plan ? plan.rivers : [{
-    order: 0, points: [[S * 0.42, S * 0.06], [S * 0.52, S * 0.5], [S * 0.62, S * 0.96]],
-  }];
+  const channels = plan
+    ? plan.rivers
+    : [
+        {
+          order: 0,
+          points: [
+            [S * 0.42, S * 0.06],
+            [S * 0.52, S * 0.5],
+            [S * 0.62, S * 0.96],
+          ],
+        },
+      ];
 
   for (const ch of channels) {
     const pts = resamplePath(smoothPath(ch.points), 1);
@@ -356,16 +385,20 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
        * canal however it meanders — the taper is most of what says "this
        * water is going somewhere". */
       let w = (ch.order === 0 ? 3.2 + t * 5.4 : 2.2 + t * 2.6) * K;
-      w += fbm2(nRiver, px * 0.020, pz * 0.020, 2) * 1.6 * K;
+      w += fbm2(nRiver, px * 0.02, pz * 0.02, 2) * 1.6 * K;
 
       /* Pools on the outside of the hardest bends, measured from the path
        * itself rather than placed at hand-picked fractions. Meander pools
        * exist because a turning current scours the outer bank, so deriving
        * them from curvature puts them where the eye expects them. */
-      const a = pts[Math.max(0, i - 9)], b = pts[Math.min(n - 1, i + 9)];
-      const t1x = px - a[0], t1z = pz - a[1];
-      const t2x = b[0] - px, t2z = b[1] - pz;
-      const l1 = Math.hypot(t1x, t1z) || 1, l2 = Math.hypot(t2x, t2z) || 1;
+      const a = pts[Math.max(0, i - 9)],
+        b = pts[Math.min(n - 1, i + 9)];
+      const t1x = px - a[0],
+        t1z = pz - a[1];
+      const t2x = b[0] - px,
+        t2z = b[1] - pz;
+      const l1 = Math.hypot(t1x, t1z) || 1,
+        l2 = Math.hypot(t2x, t2z) || 1;
       const turn = Math.abs((t1x / l1) * (t2z / l2) - (t1z / l1) * (t2x / l2));
       w += smoothstep(0.25, 0.75, turn) * 6.0 * K;
 
@@ -374,7 +407,8 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
 
       // Unit normal, so anything crossing the channel (a bridge, a line of
       // stepping stones) knows which way "across" is.
-      const nx = -t2z / l2, nz = t2x / l2;
+      const nx = -t2z / l2,
+        nz = t2x / l2;
       stampNode(px, pz, w, ford, nx, nz);
       if (i % 3 === 0) {
         riverPath.push({ x: px, z: pz, w, ford, order: ch.order, t, nx, nz });
@@ -382,8 +416,7 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
     }
   }
 
-  const rivIndex = (x: any, z: any) =>
-    clamp(Math.round(z), 0, S - 1) * S + clamp(Math.round(x), 0, S - 1);
+  const rivIndex = (x: any, z: any) => clamp(Math.round(z), 0, S - 1) * S + clamp(Math.round(x), 0, S - 1);
   const riverDist = (x: any, z: any) => {
     const i = rivIndex(x, z);
     return rivD[i] - rivHalf[i];
@@ -407,17 +440,19 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
    * ratio and the noise offset vary per basin so they do not read as copies of
    * the same ellipse — from the air, repeated silhouettes are the fastest way
    * to give a generator away. */
-  const LAKES = (plan ? plan.lakes : [{ center: [S * 0.335, S * 0.605], radius: S * 0.128 }])
-    .map((l: any, k: any) => ({
-      cx: l.center[0], cz: l.center[1], r: l.radius,
-      ax: 0.86 + ((k * 0.37) % 0.6), az: 0.80 + ((k * 0.53) % 0.7),
-      o: k * 311,
-    }));
+  const LAKES = (plan ? plan.lakes : [{ center: [S * 0.335, S * 0.605], radius: S * 0.128 }]).map((l: any, k: any) => ({
+    cx: l.center[0],
+    cz: l.center[1],
+    r: l.radius,
+    ax: 0.86 + ((k * 0.37) % 0.6),
+    az: 0.8 + ((k * 0.53) % 0.7),
+    o: k * 311,
+  }));
   const LAKE = LAKES[0];
   const lakeDistOf = (l: any, x: any, z: any) => {
-    const dx = (x - l.cx) / l.ax, dz = (z - l.cz) / l.az;
-    return Math.hypot(dx, dz) - l.r
-         - fbm2(nLake, x * 0.017 + l.o, z * 0.017, 3) * 10 * K;
+    const dx = (x - l.cx) / l.ax,
+      dz = (z - l.cz) / l.az;
+    return Math.hypot(dx, dz) - l.r - fbm2(nLake, x * 0.017 + l.o, z * 0.017, 3) * 10 * K;
   };
 
   /* ================================================================
@@ -447,25 +482,26 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
    * against all of them made cost grow with area *squared*.
    */
   const CW = Math.ceil(S / Q) + 1;
-  const DB = 32;                                    // disc bucket size, blocks
+  const DB = 32; // disc bucket size, blocks
   const dbw = Math.max(1, Math.ceil(S / DB));
   const discBuckets: any[][] = [];
   for (let i = 0; i < dbw * dbw; i++) discBuckets.push([]);
   for (const d of discs) {
     // Beyond r + 1 + wAmp the smoothstep is saturated and the disc adds zero.
-    const ex = (d.r + 1 + d.wAmp) * d.ax, ez = (d.r + 1 + d.wAmp) * d.az;
+    const ex = (d.r + 1 + d.wAmp) * d.ax,
+      ez = (d.r + 1 + d.wAmp) * d.az;
     const x0 = Math.max(0, Math.floor((d.cx - ex) / DB));
     const x1 = Math.min(dbw - 1, Math.floor((d.cx + ex) / DB));
     const z0 = Math.max(0, Math.floor((d.cz - ez) / DB));
     const z1 = Math.min(dbw - 1, Math.floor((d.cz + ez) / DB));
-    for (let bz = z0; bz <= z1; bz++)
-      for (let bx = x0; bx <= x1; bx++) discBuckets[bz * dbw + bx].push(d);
+    for (let bz = z0; bz <= z1; bz++) for (let bx = x0; bx <= x1; bx++) discBuckets[bz * dbw + bx].push(d);
   }
 
   const cellLevel = new Int16Array(CW * CW);
   for (let cz = 0; cz < CW; cz++) {
     for (let cx = 0; cx < CW; cx++) {
-      const wx = cx * Q + Q * 0.5, wz = cz * Q + Q * 0.5;
+      const wx = cx * Q + Q * 0.5,
+        wz = cz * Q + Q * 0.5;
       /* The plan's elevation supplies the broad shape; the discs supply
        * rooms and punctuation on top of it. Centred on 0.34 so the median
        * region sits near the valley floor and only genuine highlands climb. */
@@ -485,15 +521,21 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
 
       // Keep the outer band low so the plinth is a readable 9–12 block wall
       // and no massif ever runs off the edge of the world.
-      const dx = x - half, dz = z - half;
+      const dx = x - half,
+        dz = z - half;
       const r = Math.sqrt(dx * dx + dz * dz);
       const R = rimR(x, z);
       if (r > R - 20 * K) h = Math.min(h, BASE + L);
-      if (r > R - 9 * K)  h = Math.min(h, BASE);
+      if (r > R - 9 * K) h = Math.min(h, BASE);
 
       seabed[i] = Math.max(1, Math.round(SEA - 5 - smoothstep(R, R + 26 * K, r) * 3));
-      if (r > R) { lev[i] = seabed[i]; land[i] = 0; }
-      else { lev[i] = h; land[i] = 1; }
+      if (r > R) {
+        lev[i] = seabed[i];
+        land[i] = 0;
+      } else {
+        lev[i] = h;
+        land[i] = 1;
+      }
     }
   }
 
@@ -519,7 +561,7 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
         // threshold — the ledges are meant to be masonry, so they have to
         // start and stop on the same grid as everything else.
         const n = fbm2(nLedge, qc(x) * 0.035, qc(z) * 0.035, 2);
-        if (n < 0.10) continue;
+        if (n < 0.1) continue;
         ledged[i] = ledged[i] + L;
       }
     }
@@ -584,7 +626,7 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
        * meander swings wide, so the water above has somewhere to go dark.
        * Depth also tracks the channel's own width — a pool that is broad on
        * the surface but three blocks deep reads as a puddle. */
-      const pool = Math.max(fbm2(nRiver, qc(x) * 0.030 + 60, qc(z) * 0.030, 3), 0);
+      const pool = Math.max(fbm2(nRiver, qc(x) * 0.03 + 60, qc(z) * 0.03, 3), 0);
       const wide = clamp((rivHalf[i] / K - 3.5) / 6, 0, 1);
       // Capped. Unbounded, the two terms stacked to 25 blocks and the deepest
       // pools punched through to the floor of the grid, which is a hole rather
@@ -614,8 +656,7 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
       // The side term is read from the channel's own frame rather than from a
       // world axis, which is what keeps the asymmetry meaningful once the river
       // is free to run in any direction.
-      const beach = fbm2(nRiver, x * 0.016 + 40, z * 0.016, 2)
-                  + rivSide[i] * 0.10;
+      const beach = fbm2(nRiver, x * 0.016 + 40, z * 0.016, 2) + rivSide[i] * 0.1;
       /* Most of the bank is a CLIFF, not a ramp.
        *
        * This is where the small steps were coming from: a continuous slope,
@@ -627,7 +668,7 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
        *
        * Only a minority of the shoreline shelves down, and where it does it
        * shelves by whole terraces with treads wide enough to stand on. */
-      if (beach > 0.20) {
+      if (beach > 0.2) {
         H[i] = Math.min(H[i], SEA + 1 + Math.floor(Math.max(dCell, 0) / 7) * L);
       }
     }
@@ -641,73 +682,75 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
    * column at twelve — tens of millions of them on a large map, for a feature
    * that covers a few percent of it. */
   for (const LAKE of LAKES) {
-  const reach = LAKE.r + 24 * K;
-  const zLo = Math.max(0, Math.floor(LAKE.cz - reach * LAKE.az));
-  const zHi = Math.min(S - 1, Math.ceil(LAKE.cz + reach * LAKE.az));
-  const xLo = Math.max(0, Math.floor(LAKE.cx - reach * LAKE.ax));
-  const xHi = Math.min(S - 1, Math.ceil(LAKE.cx + reach * LAKE.ax));
-  for (let z = zLo; z <= zHi; z++) {
-    for (let x = xLo; x <= xHi; x++) {
-      const i = z * S + x;
-      const d = lakeDistOf(LAKE, x, z);
-      // Cell-resolution boundary, as above: the lake rim is a ring of large
-      // rectangles rather than a rasterised circle.
-      const dCell = lakeDistOf(LAKE, qc(x), qc(z));
-      if (dCell > 15 * K) continue;
-      wetness[i] = Math.max(wetness[i], 1 - smoothstep(0.0, 9.0 * K, d));
-      if (!land[i] && dCell > 0) continue;
+    const reach = LAKE.r + 24 * K;
+    const zLo = Math.max(0, Math.floor(LAKE.cz - reach * LAKE.az));
+    const zHi = Math.min(S - 1, Math.ceil(LAKE.cz + reach * LAKE.az));
+    const xLo = Math.max(0, Math.floor(LAKE.cx - reach * LAKE.ax));
+    const xHi = Math.min(S - 1, Math.ceil(LAKE.cx + reach * LAKE.ax));
+    for (let z = zLo; z <= zHi; z++) {
+      for (let x = xLo; x <= xHi; x++) {
+        const i = z * S + x;
+        const d = lakeDistOf(LAKE, x, z);
+        // Cell-resolution boundary, as above: the lake rim is a ring of large
+        // rectangles rather than a rasterised circle.
+        const dCell = lakeDistOf(LAKE, qc(x), qc(z));
+        if (dCell > 15 * K) continue;
+        wetness[i] = Math.max(wetness[i], 1 - smoothstep(0.0, 9.0 * K, d));
+        if (!land[i] && dCell > 0) continue;
 
-      if (dCell <= 0) {
-        // A dished floor: shelving at the rim, deepest in the middle. The
-        // shelf is what lets the depth ramp in the water shader read at all —
-        // a flat-bottomed basin is one tone everywhere.
-        // From the CELL distance, like the boundary above. Using the smooth
-        // one here was the reason the bed staircased while the shore did not:
-        // the same masonry has to continue under the water, not stop at it.
-        // Reaches full depth well inside the rim rather than three quarters of
-        // the way across. A disc has most of its area near the edge, so a lazy
-        // falloff leaves the majority of the lake sitting on the shelf — the
-        // median depth barely moved however far the floor was pushed down.
-        const deep = 1 - smoothstep(-LAKE.r * 0.34, 0, dCell);
-        // Deep enough for the absorption ramp to actually travel. At five
-        // blocks the whole basin sat in the shallow end of the curve and read
-        // as one pale sheet however the water was tuned.
-        // The bed is a voxel floor, not a dish. Per-cell steps give the
-        // submerged blocks the varied depths the reference shows through its
-        // water; a smooth bowl reads as one flat tone however the water above
-        // it is tuned.
-        // Quantised to whole terraces, so the floor descends in the same
-        // shelves the land does — four clean steps rather than a smooth dish
-        // rounded into a fine staircase.
-        // Big water wants somewhere genuinely deep. The radial falloff alone
-        // gives one smooth bowl and therefore one depth reading across the
-        // whole middle; a low-frequency field on the same lattice sinks
-        // basins within the basin, so the colour ramp has real range to
-        // travel and parts of the lake go properly dark.
-        const trench = Math.max(fbm2(nLake, qc(x) * 0.024 + 300,
-                                     qc(z) * 0.024, 3), 0);
-        H[i] = SEA - 1 - Math.round((deep * 14 + deep * trench * 22) / L) * L
-             + cellStep(x, z, 21, 0.16, 0.16) * L
-             + (cellHash(x, z, 22, JQ * 2) < 0.10 ? L : 0);
-        H[i] = Math.max(1, H[i]);
-        land[i] = 0;
-        continue;
-      }
-      /* The bank has to vary around the rim.
-       *
-       * A single slope all the way round quantises into perfectly concentric
-       * rings and the lake reads as a machined amphitheatre. Alternating long
-       * stretches of shallow beach and steep bank — chosen by a low-frequency
-       * field, the same way the river's banks are — breaks the rings up into
-       * headlands and shallows, which is what makes a shoreline. */
-      // Same rule as the river: the lake is mostly rimmed by clean faces,
-      // with occasional beaches shelving in whole terraces.
-      const bank = fbm2(nLake, x * 0.021 + 90, z * 0.021, 2);
-      if (bank > 0.10) {
-        H[i] = Math.min(H[i], SEA + 1 + Math.floor(Math.max(dCell, 0) / 8) * L);
+        if (dCell <= 0) {
+          // A dished floor: shelving at the rim, deepest in the middle. The
+          // shelf is what lets the depth ramp in the water shader read at all —
+          // a flat-bottomed basin is one tone everywhere.
+          // From the CELL distance, like the boundary above. Using the smooth
+          // one here was the reason the bed staircased while the shore did not:
+          // the same masonry has to continue under the water, not stop at it.
+          // Reaches full depth well inside the rim rather than three quarters of
+          // the way across. A disc has most of its area near the edge, so a lazy
+          // falloff leaves the majority of the lake sitting on the shelf — the
+          // median depth barely moved however far the floor was pushed down.
+          const deep = 1 - smoothstep(-LAKE.r * 0.34, 0, dCell);
+          // Deep enough for the absorption ramp to actually travel. At five
+          // blocks the whole basin sat in the shallow end of the curve and read
+          // as one pale sheet however the water was tuned.
+          // The bed is a voxel floor, not a dish. Per-cell steps give the
+          // submerged blocks the varied depths the reference shows through its
+          // water; a smooth bowl reads as one flat tone however the water above
+          // it is tuned.
+          // Quantised to whole terraces, so the floor descends in the same
+          // shelves the land does — four clean steps rather than a smooth dish
+          // rounded into a fine staircase.
+          // Big water wants somewhere genuinely deep. The radial falloff alone
+          // gives one smooth bowl and therefore one depth reading across the
+          // whole middle; a low-frequency field on the same lattice sinks
+          // basins within the basin, so the colour ramp has real range to
+          // travel and parts of the lake go properly dark.
+          const trench = Math.max(fbm2(nLake, qc(x) * 0.024 + 300, qc(z) * 0.024, 3), 0);
+          H[i] =
+            SEA -
+            1 -
+            Math.round((deep * 14 + deep * trench * 22) / L) * L +
+            cellStep(x, z, 21, 0.16, 0.16) * L +
+            (cellHash(x, z, 22, JQ * 2) < 0.1 ? L : 0);
+          H[i] = Math.max(1, H[i]);
+          land[i] = 0;
+          continue;
+        }
+        /* The bank has to vary around the rim.
+         *
+         * A single slope all the way round quantises into perfectly concentric
+         * rings and the lake reads as a machined amphitheatre. Alternating long
+         * stretches of shallow beach and steep bank — chosen by a low-frequency
+         * field, the same way the river's banks are — breaks the rings up into
+         * headlands and shallows, which is what makes a shoreline. */
+        // Same rule as the river: the lake is mostly rimmed by clean faces,
+        // with occasional beaches shelving in whole terraces.
+        const bank = fbm2(nLake, x * 0.021 + 90, z * 0.021, 2);
+        if (bank > 0.1) {
+          H[i] = Math.min(H[i], SEA + 1 + Math.floor(Math.max(dCell, 0) / 8) * L);
+        }
       }
     }
-  }
   }
 
   /* ---- coastal beaches on part of the rim -------------------------- */
@@ -715,15 +758,15 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
     for (let x = 0; x < S; x++) {
       const i = z * S + x;
       if (!land[i]) continue;
-      const dx = x - half, dz = z - half;
+      const dx = x - half,
+        dz = z - half;
       const r = Math.sqrt(dx * dx + dz * dz);
       const R = rimR(x, z);
       const gap = R - r;
       if (gap > 14) continue;
       const coastal = fbm2(nEdge, x * 0.014 + 200, z * 0.014, 2);
-      if (coastal < 0.14) continue;         // most of the rim stays a plinth
-      const gapQ = Math.max(rimR(qc(x), qc(z))
-                            - Math.hypot(qc(x) - half, qc(z) - half), 0);
+      if (coastal < 0.14) continue; // most of the rim stays a plinth
+      const gapQ = Math.max(rimR(qc(x), qc(z)) - Math.hypot(qc(x) - half, qc(z) - half), 0);
       H[i] = Math.min(H[i], SEA + Math.floor(gapQ / 6) * L);
       wetness[i] = Math.max(wetness[i], 1 - smoothstep(0, 9, gap));
       if (H[i] <= SEA) land[i] = 0;
@@ -763,7 +806,7 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
       const i = z * S + x;
       if (land[i]) continue;
       const bed = H[i];
-      if (bed < SEA - 5 || bed > SEA - 1) continue;   // shallows only
+      if (bed < SEA - 5 || bed > SEA - 1) continue; // shallows only
       // On the terrace lattice, so a stone is a proper block of masonry
       // rather than a lone column — the reference's water holds a few big
       // square islands, not a scatter of pixels.
@@ -780,15 +823,19 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
    * Added after the filters so nothing rounds it away. It is deliberately not
    * connected to anything — a thing to look at, not to stand on.             */
   const noStair = new Uint8Array(S * S);
-  const butteX = Math.round(0.585 * S), butteZ = Math.round(0.845 * S);
+  const butteX = Math.round(0.585 * S),
+    butteZ = Math.round(0.845 * S);
   for (let z = butteZ - 8; z <= butteZ + 8; z++) {
     for (let x = butteX - 8; x <= butteX + 8; x++) {
       if (x < 1 || z < 1 || x >= S - 1 || z >= S - 1) continue;
       const i = z * S + x;
-      const dx = x - butteX, dz = z - butteZ;
+      const dx = x - butteX,
+        dz = z - butteZ;
       const d = Math.sqrt(dx * dx + dz * dz) + fbm2(nWarp, x * 0.09, z * 0.09, 2) * 2.0;
       if (d > 6.2) continue;
-      if (!land[i] && H[i] < SEA - 2) { land[i] = 1; }
+      if (!land[i] && H[i] < SEA - 2) {
+        land[i] = 1;
+      }
       H[i] = BASE + L * (d > 3.6 ? 5 : 6);
       noStair[i] = 1;
     }
@@ -797,7 +844,7 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
   /* ================================================================
    * 4. Walkability
    * ================================================================ */
-  for (let i = 0; i < S * S; i++) land[i] = (H[i] > SEA || fordMask[i]) ? 1 : 0;
+  for (let i = 0; i < S * S; i++) land[i] = H[i] > SEA || fordMask[i] ? 1 : 0;
   const { stairMask } = carveStairs(H, S, land, { minArea: 34, tread: 2, width: 3, skip: noStair });
 
   /* ---- boulders ---------------------------------------------------
@@ -817,9 +864,17 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
    * 5. Surface materials — big soft regions, never per-column
    * ================================================================ */
   const {
-    GRASS, GRASS_LIGHT, GRASS_DEEP,
-    GRASS_STONE, GRASS_LIGHT_STONE, GRASS_DEEP_STONE,
-    SOIL, SAND, STONE, STONE_PALE, STONE_WARM,
+    GRASS,
+    GRASS_LIGHT,
+    GRASS_DEEP,
+    GRASS_STONE,
+    GRASS_LIGHT_STONE,
+    GRASS_DEEP_STONE,
+    SOIL,
+    SAND,
+    STONE,
+    STONE_PALE,
+    STONE_WARM,
   } = BLOCKS;
   const surface = new Uint8Array(S * S);
   const subsoil = new Uint8Array(S * S);
@@ -831,10 +886,12 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
       // A little high-frequency wobble is added to the *field*, not to the
       // decision, so region borders interlock by a block or two instead of
       // following a clean contour — soft edges, big shapes.
-      const jitter = fbm2(nFine, x * 0.13, z * 0.13, 2) * 0.055;
-      const rockField = fbm2(nRock, x * 0.0082, z * 0.0082, 3) + jitter
-                      + smoothstep(BASE + L * 4, BASE + L * 7, top) * 0.34
-                      + smoothstep(3, 9, dropBelow(heights, S, x, z)) * 0.10;
+      const jitter = fbm2(nFine, x * 0.13, z * 0.13, 2) * 0.1;
+      const rockField =
+        fbm2(nRock, x * 0.0082, z * 0.0082, 3) +
+        jitter +
+        smoothstep(BASE + L * 4, BASE + L * 7, top) * 0.34 +
+        smoothstep(3, 9, dropBelow(heights, S, x, z)) * 0.1;
       const sandField = 1 - smoothstep(0.0, 6.0, riverDist(x, z));
 
       let s;
@@ -845,9 +902,7 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
         const g = fbm2(nTone, x * 0.0115 + 90, z * 0.0115 + 12, 2) + jitter;
         s = g > 0.13 ? GRASS_LIGHT.id : g < -0.14 ? GRASS_DEEP.id : GRASS.id;
         if (rockField > 0.28) {
-          s = s === GRASS_LIGHT.id ? GRASS_LIGHT_STONE.id
-            : s === GRASS_DEEP.id ? GRASS_DEEP_STONE.id
-            : GRASS_STONE.id;
+          s = s === GRASS_LIGHT.id ? GRASS_LIGHT_STONE.id : s === GRASS_DEEP.id ? GRASS_DEEP_STONE.id : GRASS_STONE.id;
         }
       }
       // Stairs get a paler, harder tread so the route reads from a distance.
@@ -855,9 +910,7 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
       if (rockMask[i]) s = rockMask[i] === 2 ? STONE_PALE.id : STONE.id;
       surface[i] = s;
       const material = BLOCK_BY_ID[s];
-      subsoil[i] = material?.grassCap
-        ? (material.stoneSubstrate ? STONE.id : SOIL.id)
-        : s;
+      subsoil[i] = material?.grassCap ? (material.stoneSubstrate ? STONE.id : SOIL.id) : s;
     }
   }
 
@@ -879,7 +932,8 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
         else if (y === top - 1) id = substrate;
         else {
           const n = fbm2(nRock, x * 0.035, (z + y * 5.3) * 0.035, 2);
-          id = n > 0.24 ? STONE_WARM.id : n < -0.28 ? STONE_PALE.id : STONE.id;
+          const n2 = fbm2(nFine, x * 0.09 + 4.1, (y + z * 1.7) * 0.06, 1) * 0.14;
+          id = n + n2 > 0.21 ? STONE_WARM.id : n + n2 < -0.24 ? STONE_PALE.id : STONE.id;
         }
         grid.set(x, y, z, id);
       }
@@ -896,8 +950,16 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
   addCascades(grid, heights, land, S, riverPath, rng, CASCADE.id, AREA);
 
   return {
-    grid, heights, wetness, land, riverPath, rng, size: S, stairMask,
-    lake: LAKE, riverDist,
+    grid,
+    heights,
+    wetness,
+    land,
+    riverPath,
+    rng,
+    size: S,
+    stairMask,
+    lake: LAKE,
+    riverDist,
   };
 }
 
@@ -925,13 +987,15 @@ function scatterBoulders(H: any, S: any, land: any, stairMask: any, noStair: any
 
   for (let gz = SPACING; gz < S - SPACING; gz += SPACING) {
     for (let gx = SPACING; gx < S - SPACING; gx += SPACING) {
-      if (rng.chance(0.30)) continue;                 // leave clearings
-      const cx = gx + rng.int(-5, 5), cz = gz + rng.int(-5, 5);
+      if (rng.chance(0.3)) continue; // leave clearings
+      const cx = gx + rng.int(-5, 5),
+        cz = gz + rng.int(-5, 5);
       if (!flatAround(cx, cz, 4)) continue;
       const kind = rng();
       if (kind < 0.34) {
         // low slab — a flat rock shelf, reads as a place to sit
-        const w = rng.int(1, 2), d = rng.int(1, 3);
+        const w = rng.int(1, 2),
+          d = rng.int(1, 3);
         blob(H, S, rockMask, cx, cz, w, d, 1, 1, rng);
       } else if (kind < 0.78) {
         // rounded boulder, two tiers so the silhouette is not a box
@@ -951,7 +1015,8 @@ function blob(H: any, S: any, mask: any, cx: any, cz: any, wx: any, wz: any, ris
   const base = H[cz * S + cx];
   for (let dz = -wz; dz <= wz; dz++) {
     for (let dx = -wx; dx <= wx; dx++) {
-      const x = cx + dx, z = cz + dz;
+      const x = cx + dx,
+        z = cz + dz;
       if (x < 1 || z < 1 || x >= S - 1 || z >= S - 1) continue;
       const i = z * S + x;
       H[i] = Math.max(H[i], base + rise);
@@ -966,7 +1031,8 @@ function round(H: any, S: any, mask: any, cx: any, cz: any, r: any, rise: any, t
   for (let dz = -ri; dz <= ri; dz++) {
     for (let dx = -ri; dx <= ri; dx++) {
       if (dx * dx + dz * dz > r * r) continue;
-      const x = cx + dx, z = cz + dz;
+      const x = cx + dx,
+        z = cz + dz;
       if (x < 1 || z < 1 || x >= S - 1 || z >= S - 1) continue;
       const i = z * S + x;
       H[i] = Math.max(H[i], base + rise);
@@ -1010,7 +1076,8 @@ function decorateCliffs(grid: any, heights: any, land: any, S: any, rng: any, nR
     const y0 = f.base + 1 + rng.int(0, Math.max(0, f.wall - f.base - 3));
     const th = rng.int(1, 2);
     const w = rng.int(1, 3);
-    const px = f.uz, pz = f.ux;
+    const px = f.uz,
+      pz = f.ux;
     const id = rng.chance(0.5) ? STONE.id : rng.chance(0.5) ? STONE_WARM.id : STONE_PALE.id;
     for (let a = -w; a <= w; a++) {
       const dep = 1 + Math.round((1 - Math.abs(a) / (w + 0.6)) * rng.range(0.6, 1.9));
@@ -1030,12 +1097,16 @@ function decorateCliffs(grid: any, heights: any, land: any, S: any, rng: any, nR
   for (let k = 0, n = Math.round(400 * area); k < n && cut < caves; k++) {
     const f = feet[rng.int(0, feet.length - 1)];
     if (f.wall - f.base < 8) continue;
-    const w = rng.int(1, 2), hgt = rng.int(3, 4), depth = rng.int(3, 6);
-    const px = f.uz, pz = f.ux;
+    const w = rng.int(1, 2),
+      hgt = rng.int(3, 4),
+      depth = rng.int(3, 6);
+    const px = f.uz,
+      pz = f.ux;
     let ok = true;
     for (let a = -w; a <= w && ok; a++) {
       for (let e = 1; e <= depth && ok; e++) {
-        const x = f.x + f.ux * e + px * a, z = f.z + f.uz * e + pz * a;
+        const x = f.x + f.ux * e + px * a,
+          z = f.z + f.uz * e + pz * a;
         if (at(x, z) < f.base + hgt + 2) ok = false;
       }
     }
@@ -1044,7 +1115,8 @@ function decorateCliffs(grid: any, heights: any, land: any, S: any, rng: any, nR
     for (let a = -w; a <= w; a++) {
       const taper = Math.abs(a) === w ? 1 : 0;
       for (let e = 1; e <= depth - Math.abs(a); e++) {
-        const x = f.x + f.ux * e + px * a, z = f.z + f.uz * e + pz * a;
+        const x = f.x + f.ux * e + px * a,
+          z = f.z + f.uz * e + pz * a;
         for (let y = f.base + 1; y <= f.base + hgt - taper; y++) grid.set(x, y, z, 0);
       }
     }
@@ -1055,13 +1127,15 @@ function decorateCliffs(grid: any, heights: any, land: any, S: any, rng: any, nR
     const f = feet[rng.int(0, feet.length - 1)];
     if (f.wall - f.base < 5) continue;
     const lw = rng.int(1, 3);
-    const px = f.uz, pz = f.ux;
+    const px = f.uz,
+      pz = f.ux;
     const yStart = f.base + 1;
-    const yEnd   = f.base + Math.floor((f.wall - f.base) * 0.55);
+    const yEnd = f.base + Math.floor((f.wall - f.base) * 0.55);
     for (let a = -lw; a <= lw; a++) {
       if (!rng.chance(0.55)) continue;
       for (let y = yStart; y <= yEnd; y++) {
-        const lx = f.x + px * a, lz = f.z + pz * a;
+        const lx = f.x + px * a,
+          lz = f.z + pz * a;
         if (grid.get(lx, y, lz) !== 0) grid.set(lx, y, lz, LICHEN_PALE.id);
       }
     }
@@ -1092,7 +1166,8 @@ function addCascades(grid: any, heights: any, land: any, S: any, riverPath: any,
     }
   }
   if (!candidates.length) return;
-  let made = 0, guard = 0;
+  let made = 0,
+    guard = 0;
   const used: any[] = [];
   const want = Math.round(3 * area);
   while (made < want && guard++ < 100 * want + 200) {
@@ -1101,15 +1176,18 @@ function addCascades(grid: any, heights: any, land: any, S: any, riverPath: any,
     used.push(c);
     made++;
     // Spread along the lip, i.e. perpendicular to the fall direction.
-    const px = -c.uz, pz = c.ux;
+    const px = -c.uz,
+      pz = c.ux;
     const w = rng.int(1, 2);
     for (let a = -w; a <= w; a++) {
-      const x = Math.round(c.x + px * a), z = Math.round(c.z + pz * a);
+      const x = Math.round(c.x + px * a),
+        z = Math.round(c.z + pz * a);
       // carve a notch in the lip so the water has somewhere to leave from
       for (let y = c.h; y > c.h - 2; y--) grid.set(x, y, z, 0);
       for (let y = SEA; y <= c.h - 1; y++) grid.set(x, y, z, cascadeId);
       // a thin sheet standing just off the face, so it reads as falling water
-      const fx = Math.round(x + c.ux), fz = Math.round(z + c.uz);
+      const fx = Math.round(x + c.ux),
+        fz = Math.round(z + c.uz);
       for (let y = SEA; y <= c.h - 2; y++) grid.set(fx, y, fz, cascadeId);
     }
   }

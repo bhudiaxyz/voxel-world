@@ -85,9 +85,11 @@ const FOG_NEAR = 96;
   const chunk = THREE.ShaderChunk.fog_fragment;
   const target = 'float fogFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );';
   if (chunk.includes(target)) {
-    THREE.ShaderChunk.fog_fragment = chunk.replace(target,
+    THREE.ShaderChunk.fog_fragment = chunk.replace(
+      target,
       `float fogDepthFar = max( vFogDepth - ${FOG_NEAR.toFixed(1)}, 0.0 );\n` +
-      '\tfloat fogFactor = 1.0 - exp( - fogDensity * fogDensity * fogDepthFar * fogDepthFar );');
+        '\tfloat fogFactor = 1.0 - exp( - fogDensity * fogDensity * fogDepthFar * fogDepthFar );',
+    );
   } else if (typeof console !== 'undefined') {
     // Fail loudly rather than silently reverting to the washed look.
     console.warn('fog_fragment chunk changed shape; near-plane patch not applied');
@@ -100,16 +102,25 @@ const FOG_NEAR = 96;
  * changed what every number means. Hues still come from the palette.
  */
 const RIG = {
-  sun:   1.85,   // warm key gives top faces the reference's peach highlight
-  hemi:  1.08,   // broad lilac sky lifts the reference's coloured side faces
-  fill:  0.22,   // camera-side lavender keeps shadow hue without bleaching it
-  amb:   0.12,   // a soft floor; trunks and occlusion can still carry depth
+  sun: 1.85, // warm key gives top faces the reference's peach highlight
+  hemi: 1.08, // broad lilac sky lifts the reference's coloured side faces
+  fill: 0.22, // camera-side lavender keeps shadow hue without bleaching it
+  amb: 0.12, // a soft floor; trunks and occlusion can still carry depth
 };
 
 export class Atmosphere {
-  declare scene: any; declare worldSize: any; declare time: any; declare aerialD: any;
-  declare fogEnabled: any; declare hazeColor: any; declare sky: any; declare shadowExtent: any;
-  declare sun: any; declare shadowResolution: any; declare hemi: any; declare fill: any;
+  declare scene: any;
+  declare worldSize: any;
+  declare time: any;
+  declare aerialD: any;
+  declare fogEnabled: any;
+  declare hazeColor: any;
+  declare sky: any;
+  declare shadowExtent: any;
+  declare sun: any;
+  declare shadowResolution: any;
+  declare hemi: any;
+  declare fill: any;
   constructor(scene: any, worldSize: any, tier: GpuTier = 'high') {
     this.scene = scene;
     this.worldSize = worldSize;
@@ -124,7 +135,7 @@ export class Atmosphere {
     // directional sky value to finish the job.
     this.hazeColor = SKY.haze.clone().lerp(SKY.horizon, 0.35);
     scene.fog = new THREE.FogExp2(this.hazeColor, 1 / AERIAL_D);
-    scene.fog.aerialD = AERIAL_D;      // postfx reads this back
+    scene.fog.aerialD = AERIAL_D; // postfx reads this back
 
     /* ---- sky dome ------------------------------------------------ */
     this.sky = makeSkyDome(worldSize * 2.6, LIGHT.sunDir);
@@ -151,7 +162,7 @@ export class Atmosphere {
     // slid every shadow half a block off its caster (peter-panning at every
     // terrace lip). A tenth of a block kills acne without visible detachment.
     sun.shadow.bias = -0.00018;
-    sun.shadow.normalBias = 0.10;
+    sun.shadow.normalBias = 0.1;
     // VSM's separable blur: enough softness to match the painted reference,
     // with enough samples that the penumbra is smooth rather than speckled.
     sun.shadow.radius = 2.25;
@@ -167,8 +178,7 @@ export class Atmosphere {
     this.shadowResolution = shadowRes;
 
     /* ---- hemisphere fill ----------------------------------------- */
-    const hemi = new THREE.HemisphereLight(
-      LIGHT.skyColor.clone(), LIGHT.groundColor.clone(), RIG.hemi);
+    const hemi = new THREE.HemisphereLight(LIGHT.skyColor.clone(), LIGHT.groundColor.clone(), RIG.hemi);
     scene.add(hemi);
     this.hemi = hemi;
 
@@ -202,9 +212,7 @@ export class Atmosphere {
   /** Reallocate the VSM targets at a developer-selected resolution. */
   setShadowResolution(resolution: any) {
     const requested = Number(resolution);
-    const next = requested <= 0
-      ? 0
-      : THREE.MathUtils.clamp(Math.round(requested / 1024) * 1024, 1024, 4096);
+    const next = requested <= 0 ? 0 : THREE.MathUtils.clamp(Math.round(requested / 1024) * 1024, 1024, 4096);
     if (next === this.shadowResolution) return;
 
     const shadow = this.sun.shadow;
@@ -258,14 +266,14 @@ function makeSkyDome(radius: any, sunDir: any) {
       ...skyUniformValues(SKY, sunDir, THREE),
       uTime: { value: 0 },
     },
-    vertexShader: /* glsl */`
+    vertexShader: /* glsl */ `
       varying vec3 vDir;
       void main() {
         vDir = normalize(position);
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
       }
     `,
-    fragmentShader: /* glsl */`
+    fragmentShader: /* glsl */ `
       ${SKY_UNIFORMS_GLSL}
       uniform float uTime;
       varying vec3 vDir;

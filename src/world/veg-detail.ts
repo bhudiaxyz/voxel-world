@@ -1,4 +1,3 @@
-
 /**
  * Sub-voxel ground detail.
  *
@@ -36,11 +35,13 @@ export class DetailField {
   pos: number[] = [];
   nrm: number[] = [];
   col: number[] = [];
-  det: number[] = [];      // (sway, phase)
+  det: number[] = []; // (sway, phase)
   count = 0;
   _c = new THREE.Color();
 
-  get empty() { return this.count === 0; }
+  get empty() {
+    return this.count === 0;
+  }
 
   /** One quad. `sway` is applied to the last two corners (the "top" edge). */
   _quad(verts: any, n: any, colBot: any, colTop: any, sway: any, phase: any) {
@@ -65,21 +66,32 @@ export class DetailField {
     for (let k = 0; k < 2; k++) {
       const ax = k === 0 ? hw : 0;
       const az = k === 0 ? 0 : hw;
-      const tx = x + leanX, tz = z + leanZ;
-      this._quad([
-        [x - ax, y, z - az],
-        [x + ax, y, z + az],
-        [tx + ax * 0.62, y + h, tz + az * 0.62],
-        [tx - ax * 0.62, y + h, tz - az * 0.62],
-      ], UP, colBot, colTop, sway, phase);
+      const tx = x + leanX,
+        tz = z + leanZ;
+      this._quad(
+        [
+          [x - ax, y, z - az],
+          [x + ax, y, z + az],
+          [tx + ax * 0.62, y + h, tz + az * 0.62],
+          [tx - ax * 0.62, y + h, tz - az * 0.62],
+        ],
+        UP,
+        colBot,
+        colTop,
+        sway,
+        phase,
+      );
     }
   }
 
   /** A sub-voxel box: pebbles, flower heads, tiny fungus caps. */
   box(cx: any, y: any, cz: any, sx: any, sy: any, sz: any, color: any, sway = 0, phase = 0) {
-    const x0 = cx - sx * 0.5, x1 = cx + sx * 0.5;
-    const y0 = y, y1 = y + sy;
-    const z0 = cz - sz * 0.5, z1 = cz + sz * 0.5;
+    const x0 = cx - sx * 0.5,
+      x1 = cx + sx * 0.5;
+    const y0 = y,
+      y1 = y + sy;
+    const z0 = cz - sz * 0.5,
+      z1 = cz + sz * 0.5;
     const shade = (m: number) => this._c.copy(color).multiplyScalar(m).clone();
 
     const top = shade(FACE_SHADE.top);
@@ -88,14 +100,86 @@ export class DetailField {
     const sz_ = shade(FACE_SHADE.sideZ);
 
     // +Y / -Y
-    this._quad([[x0,y1,z0],[x0,y1,z1],[x1,y1,z1],[x1,y1,z0]], [0,1,0], top, top, sway, phase);
-    this._quad([[x0,y0,z1],[x0,y0,z0],[x1,y0,z0],[x1,y0,z1]], [0,-1,0], bot, bot, 0, phase);
+    this._quad(
+      [
+        [x0, y1, z0],
+        [x0, y1, z1],
+        [x1, y1, z1],
+        [x1, y1, z0],
+      ],
+      [0, 1, 0],
+      top,
+      top,
+      sway,
+      phase,
+    );
+    this._quad(
+      [
+        [x0, y0, z1],
+        [x0, y0, z0],
+        [x1, y0, z0],
+        [x1, y0, z1],
+      ],
+      [0, -1, 0],
+      bot,
+      bot,
+      0,
+      phase,
+    );
     // +X / -X  (top edge sways)
-    this._quad([[x1,y0,z0],[x1,y0,z1],[x1,y1,z1],[x1,y1,z0]], [1,0,0], sx_, sx_, sway, phase);
-    this._quad([[x0,y0,z1],[x0,y0,z0],[x0,y1,z0],[x0,y1,z1]], [-1,0,0], sx_, sx_, sway, phase);
+    this._quad(
+      [
+        [x1, y0, z0],
+        [x1, y0, z1],
+        [x1, y1, z1],
+        [x1, y1, z0],
+      ],
+      [1, 0, 0],
+      sx_,
+      sx_,
+      sway,
+      phase,
+    );
+    this._quad(
+      [
+        [x0, y0, z1],
+        [x0, y0, z0],
+        [x0, y1, z0],
+        [x0, y1, z1],
+      ],
+      [-1, 0, 0],
+      sx_,
+      sx_,
+      sway,
+      phase,
+    );
     // +Z / -Z
-    this._quad([[x1,y0,z1],[x0,y0,z1],[x0,y1,z1],[x1,y1,z1]], [0,0,1], sz_, sz_, sway, phase);
-    this._quad([[x0,y0,z0],[x1,y0,z0],[x1,y1,z0],[x0,y1,z0]], [0,0,-1], sz_, sz_, 0, phase);
+    this._quad(
+      [
+        [x1, y0, z1],
+        [x0, y0, z1],
+        [x0, y1, z1],
+        [x1, y1, z1],
+      ],
+      [0, 0, 1],
+      sz_,
+      sz_,
+      sway,
+      phase,
+    );
+    this._quad(
+      [
+        [x0, y0, z0],
+        [x1, y0, z0],
+        [x1, y1, z0],
+        [x0, y1, z0],
+      ],
+      [0, 0, -1],
+      sz_,
+      sz_,
+      0,
+      phase,
+    );
   }
 
   /** Three arching frond blades — wider and lower than a grass tuft. */
@@ -111,13 +195,21 @@ export class DetailField {
 
   /** A petal lying flat on the ground, rotated in plan. */
   petal(x: any, y: any, z: any, s: any, rot: any, color: any) {
-    const c = Math.cos(rot) * s * 0.5, sn = Math.sin(rot) * s * 0.5;
-    this._quad([
-      [x - c + sn, y, z - sn - c],
-      [x + c + sn, y, z + sn - c],
-      [x + c - sn, y, z + sn + c],
-      [x - c - sn, y, z - sn + c],
-    ], UP, color, color, 0, 0);
+    const c = Math.cos(rot) * s * 0.5,
+      sn = Math.sin(rot) * s * 0.5;
+    this._quad(
+      [
+        [x - c + sn, y, z - sn - c],
+        [x + c + sn, y, z + sn - c],
+        [x + c - sn, y, z + sn + c],
+        [x - c - sn, y, z - sn + c],
+      ],
+      UP,
+      color,
+      color,
+      0,
+      0,
+    );
   }
 
   /**
@@ -125,11 +217,11 @@ export class DetailField {
    * entry: an Object3D plus an `update(dt)` that advances the shared wind
    * clock.
    */
-  build({ windAmp = 0.10, windSpeed = 1.0, name = 'veg-detail' } = {}) {
+  build({ windAmp = 0.1, windSpeed = 1.0, name = 'veg-detail' } = {}) {
     const uniforms = {
-      uTime:     { value: 0 },
-      uWindAmp:  { value: windAmp },
-      uWindSpeed:{ value: windSpeed },
+      uTime: { value: 0 },
+      uWindAmp: { value: windAmp },
+      uWindSpeed: { value: windSpeed },
       uLodAlpha: { value: 1.0 },
       ...planetUniformValues(new THREE.Vector3()),
     };
@@ -148,11 +240,16 @@ export class DetailField {
       Object.assign(shader.uniforms, uniforms);
       // Bayer 4×4 dither for LOD fade-in (same as terrain).
       shader.fragmentShader = shader.fragmentShader
-        .replace('#include <common>', /* glsl */`
+        .replace(
+          '#include <common>',
+          /* glsl */ `
           #include <common>
           uniform float uLodAlpha;
-        `)
-        .replace('void main() {', /* glsl */`
+        `,
+        )
+        .replace(
+          'void main() {',
+          /* glsl */ `
           void main() {
           {
             const float bayer[16] = float[16](
@@ -166,9 +263,12 @@ export class DetailField {
             float threshold = (bayer[by * 4 + bx] + 0.5) / 16.0;
             if (uLodAlpha < threshold) discard;
           }
-        `);
+        `,
+        );
       shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', /* glsl */`
+        .replace(
+          '#include <common>',
+          /* glsl */ `
           #include <common>
           attribute vec2 aDetail;
           uniform float uTime;
@@ -176,8 +276,11 @@ export class DetailField {
           uniform float uWindSpeed;
           ${PLANET_UNIFORMS_GLSL}
           ${PLANET_BEND_GLSL}
-        `)
-        .replace('#include <begin_vertex>', /* glsl */`
+        `,
+        )
+        .replace(
+          '#include <begin_vertex>',
+          /* glsl */ `
           #include <begin_vertex>
           {
             float sway  = aDetail.x;
@@ -193,7 +296,8 @@ export class DetailField {
             transformed.y -= abs(w) * a * 0.18;   // tips dip as they bend
             applyPlanetBend(transformed, objectNormal);
           }
-        `);
+        `,
+        );
     };
     mat.customProgramCacheKey = () => 'VoxelWorld-vegdetail-v3';
 
@@ -203,7 +307,8 @@ export class DetailField {
     // changes, which makes this a quality-neutral frustum-culling boundary.
     const buckets = new Map();
     for (let vertex = 0; vertex < this.count; vertex += 4) {
-      let x = 0, z = 0;
+      let x = 0,
+        z = 0;
       for (let corner = 0; corner < 4; corner++) {
         const p = (vertex + corner) * 3;
         x += this.pos[p];
@@ -230,9 +335,8 @@ export class DetailField {
       const nrm = new Float32Array(vertexCount * 3);
       const col = new Float32Array(vertexCount * 3);
       const det = new Float32Array(vertexCount * 2);
-      const idx = vertexCount <= 65535
-        ? new Uint16Array(bucket.quads.length * 6)
-        : new Uint32Array(bucket.quads.length * 6);
+      const idx =
+        vertexCount <= 65535 ? new Uint16Array(bucket.quads.length * 6) : new Uint32Array(bucket.quads.length * 6);
 
       for (let q = 0; q < bucket.quads.length; q++) {
         const sourceVertex = bucket.quads[q];

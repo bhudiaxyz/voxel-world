@@ -11,7 +11,7 @@
 import * as THREE from 'three';
 import { createBoxEdges } from '../core/voxel';
 
-const S = 0.30;   // world units per character voxel
+const S = 0.3; // world units per character voxel
 
 /**
  * @param edgeMaterial the world's edge material, shared so the traveller is
@@ -51,20 +51,19 @@ export function createCharacter(edgeMaterial = null) {
    * enough to catch a bright rim, while hood, cloak, trousers and boots stay
    * fully dark-outlined and read as one silhouette.
    */
-  const skin     = new THREE.Color(0xf3d2b8);
-  const hood     = new THREE.Color(0x8fb6ba);
+  const skin = new THREE.Color(0xf3d2b8);
+  const hood = new THREE.Color(0x8fb6ba);
   const hoodDeep = new THREE.Color(0x74a0a6);
-  const tunic    = new THREE.Color(0xf7e9cf);
-  const scarf    = new THREE.Color(0xefb173);
-  const satchel  = new THREE.Color(0xd6a374);
-  const leather  = new THREE.Color(0x8a6660);
-  const trouser  = new THREE.Color(0x7e93a6);
-  const boots    = new THREE.Color(0x7c5f5c);
+  const tunic = new THREE.Color(0xf7e9cf);
+  const scarf = new THREE.Color(0xefb173);
+  const satchel = new THREE.Color(0xd6a374);
+  const leather = new THREE.Color(0x8a6660);
+  const trouser = new THREE.Color(0x7e93a6);
+  const boots = new THREE.Color(0x7c5f5c);
 
   const mkMat = (c: any) => new THREE.MeshLambertMaterial({ color: c });
   const part = (w: any, h: any, d: any, color: any, x: any, y: any, z: any, mat: any = null, outlined = true) => {
-    const m = boxMesh(w, h, d, color, mat || mkMat(color), edgeMaterial,
-                      outlined);
+    const m = boxMesh(w, h, d, color, mat || mkMat(color), edgeMaterial, outlined);
     m.position.set(x * S, y * S, z * S);
     return m;
   };
@@ -124,7 +123,8 @@ export function createCharacter(edgeMaterial = null) {
     body.add(pivot);
     return pivot;
   };
-  const armL = mkArm(-1), armR = mkArm(1);
+  const armL = mkArm(-1),
+    armR = mkArm(1);
 
   // legs
   const trouserMat = mkMat(trouser);
@@ -139,7 +139,8 @@ export function createCharacter(edgeMaterial = null) {
     body.add(pivot);
     return pivot;
   };
-  const legL = mkLeg(-1), legR = mkLeg(1);
+  const legL = mkLeg(-1),
+    legR = mkLeg(1);
 
   /** Chain of lagging segments, used for both the cloak and the scarf tail. */
   const mkTrail = (origin: any, count: any, mat: any, size: any, drop: any) => {
@@ -151,9 +152,8 @@ export function createCharacter(edgeMaterial = null) {
       const [w, h, d, taper] = size;
       // Trail panels overlap and articulate. Their colour boundary preserves
       // the form without accumulating several outlined rectangles.
-      const panel = boxMesh(w - i * taper, h, d, mat.color, mat,
-                            edgeMaterial, false);
-      panel.position.y = (h * -0.5) * S;
+      const panel = boxMesh(w - i * taper, h, d, mat.color, mat, edgeMaterial, false);
+      panel.position.y = h * -0.5 * S;
       seg.add(panel);
       parent.add(seg);
       parent = seg;
@@ -179,19 +179,30 @@ export function createCharacter(edgeMaterial = null) {
   const blobGeo = new THREE.CircleGeometry(1.05, 24);
   blobGeo.rotateX(-Math.PI / 2);
   const blobMat = new THREE.MeshBasicMaterial({
-    color: 0x6d5f7d, transparent: true, opacity: 0.3, depthWrite: false,
+    color: 0x6d5f7d,
+    transparent: true,
+    opacity: 0.3,
+    depthWrite: false,
   });
   const blob = new THREE.Mesh(blobGeo, blobMat);
   blob.renderOrder = 5;
   root.add(blob);
 
   const state = {
-    phase: 0, idle: 0, squash: 1, squashVel: 0, lean: 0, turn: 0, air: 0,
+    phase: 0,
+    idle: 0,
+    squash: 1,
+    squashVel: 0,
+    lean: 0,
+    turn: 0,
+    air: 0,
     swim: 0,
   };
 
   return {
-    root, body, blob,
+    root,
+    body,
+    blob,
     height: 10.5 * S,
     radius: 0.42,
 
@@ -225,17 +236,18 @@ export function createCharacter(edgeMaterial = null) {
       // --- walk cycle -----------------------------------------------
       const cadence = 6.2 + speed01 * 5.4;
       t.phase += dt * cadence * (0.35 + speed01) * (1 - air);
-      const sw = Math.sin(t.phase), sw2 = Math.cos(t.phase);
+      const sw = Math.sin(t.phase),
+        sw2 = Math.cos(t.phase);
       const amp = speed01;
 
       t.idle += dt * 1.9;
       const breathe = Math.sin(t.idle) * 0.028 * (1 - amp);
 
-      legL.rotation.x =  sw * 0.92 * amp;
+      legL.rotation.x = sw * 0.92 * amp;
       legR.rotation.x = -sw * 0.92 * amp;
       armL.rotation.x = -sw * 0.78 * amp;
-      armR.rotation.x =  sw * 0.78 * amp;
-      armL.rotation.z =  0.11 + amp * 0.06 + breathe;
+      armR.rotation.x = sw * 0.78 * amp;
+      armL.rotation.z = 0.11 + amp * 0.06 + breathe;
       armR.rotation.z = -0.11 - amp * 0.06 - breathe;
 
       if (air > 0) {
@@ -255,24 +267,28 @@ export function createCharacter(edgeMaterial = null) {
       if (swim > 0) {
         const stroke = Math.sin(t.phase * 0.85);
         const kick = Math.sin(t.phase * 1.9);
-        legL.rotation.x = THREE.MathUtils.lerp(legL.rotation.x,  kick * 0.30, swim);
-        legR.rotation.x = THREE.MathUtils.lerp(legR.rotation.x, -kick * 0.30, swim);
+        legL.rotation.x = THREE.MathUtils.lerp(legL.rotation.x, kick * 0.3, swim);
+        legR.rotation.x = THREE.MathUtils.lerp(legR.rotation.x, -kick * 0.3, swim);
         armL.rotation.x = THREE.MathUtils.lerp(armL.rotation.x, -1.35 + stroke * 1.35, swim);
         armR.rotation.x = THREE.MathUtils.lerp(armR.rotation.x, -1.35 - stroke * 1.35, swim);
-        armL.rotation.z = THREE.MathUtils.lerp(armL.rotation.z,  0.34, swim);
+        armL.rotation.z = THREE.MathUtils.lerp(armL.rotation.z, 0.34, swim);
         armR.rotation.z = THREE.MathUtils.lerp(armR.rotation.z, -0.34, swim);
       }
 
       // --- bob + squash ---------------------------------------------
       const bob = Math.abs(sw2) * 0.09 * amp * (1 - air);
       // spring the squash back to 1
-      const k = 190, damp = 17;
+      const k = 190,
+        damp = 17;
       t.squashVel += (1 - t.squash) * k * dt - t.squashVel * damp * dt;
       t.squash += t.squashVel * dt;
       // Hard clamp. The volume-preserving term below takes 1/sqrt(squash), so
       // a single bad frame that drives this to zero or negative produces NaN
       // scales and the model detonates into stray triangles.
-      if (!Number.isFinite(t.squash)) { t.squash = 1; t.squashVel = 0; }
+      if (!Number.isFinite(t.squash)) {
+        t.squash = 1;
+        t.squashVel = 0;
+      }
       t.squash = THREE.MathUtils.clamp(t.squash, 0.45, 1.6);
 
       body.position.y = bob + breathe;
@@ -329,11 +345,9 @@ export function createCharacter(edgeMaterial = null) {
       // same cloth: the contrast between the two is what sells either.
       for (let i = 0; i < scarfTail.length; i++) {
         const seg = scarfTail[i];
-        const target = 0.10 + amp * 0.95 + air * 0.75
-                     + Math.sin(t.phase * 0.9 + i * 1.4) * 0.16 * amp;
+        const target = 0.1 + amp * 0.95 + air * 0.75 + Math.sin(t.phase * 0.9 + i * 1.4) * 0.16 * amp;
         seg.rotation.x += (target - seg.rotation.x) * (1 - Math.exp(-(13 - i * 3) * dt));
-        seg.rotation.z = Math.sin(t.idle * 1.5 + i * 1.7) * 0.13 * (0.5 + amp)
-                       - amp * 0.10;
+        seg.rotation.z = Math.sin(t.idle * 1.5 + i * 1.7) * 0.13 * (0.5 + amp) - amp * 0.1;
       }
 
       // --- contact shadow --------------------------------------------
@@ -361,7 +375,7 @@ export function createCharacter(edgeMaterial = null) {
       // this owes is the push-off stretch, scaled to the height cleared.
       // Floor kept low so a kerb barely registers — the stretch should scale
       // with the effort, and a small step costs almost none.
-      state.squash = 1 + 0.14 * THREE.MathUtils.clamp(rise / 3, 0.10, 1);
+      state.squash = 1 + 0.14 * THREE.MathUtils.clamp(rise / 3, 0.1, 1);
       state.squashVel = 0;
     },
 

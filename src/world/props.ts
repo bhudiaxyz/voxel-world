@@ -23,9 +23,12 @@ import { clamp } from '../core/rng';
 export function buildBridge(world: any, node: any, rng: any) {
   const { grid, heights, size: S } = world;
   const alongX = Math.abs(node.nx) >= Math.abs(node.nz);
-  const ax = alongX ? 1 : 0, az = alongX ? 0 : 1;   // deck direction
-  const px = az, pz = ax;                            // deck width direction
-  const cx = Math.round(node.x), cz = Math.round(node.z);
+  const ax = alongX ? 1 : 0,
+    az = alongX ? 0 : 1; // deck direction
+  const px = az,
+    pz = ax; // deck width direction
+  const cx = Math.round(node.x),
+    cz = Math.round(node.z);
 
   const col = (i: any, j = 0) => {
     const x = clamp(cx + ax * i + px * j, 0, S - 1);
@@ -33,7 +36,8 @@ export function buildBridge(world: any, node: any, rng: any) {
     return z * S + x;
   };
   const put = (i: any, j: any, y: any, id: any) => {
-    const x = cx + ax * i + px * j, z = cz + az * i + pz * j;
+    const x = cx + ax * i + px * j,
+      z = cz + az * i + pz * j;
     if (x < 0 || z < 0 || x >= S || z >= S) return;
     grid.set(x, y, z, id);
   };
@@ -47,7 +51,8 @@ export function buildBridge(world: any, node: any, rng: any) {
    * A bank is land, so the test is against the waterline. */
   const SEA = Math.floor(WATER.level);
   const bankStop = (i: any) => heights[col(i)] > Math.max(heights[col(0)] + 1, SEA);
-  let left = 0, right = 0;
+  let left = 0,
+    right = 0;
   while (left > -40 && !bankStop(left)) left--;
   while (right < 40 && !bankStop(right)) right++;
   if (right - left < 6 || right - left > 46) return null;
@@ -69,7 +74,8 @@ export function buildBridge(world: any, node: any, rng: any) {
     // support piers into the water
     if ((i - left) % 7 === 3) {
       for (let y = deckY - 1; y > 0; y--) {
-        const x = cx + ax * i, z = cz + az * i;
+        const x = cx + ax * i,
+          z = cz + az * i;
         if (grid.isSolid(x, y, z)) break;
         put(i, 0, y, BLOCKS.BEAM.id);
       }
@@ -84,10 +90,13 @@ export function buildBridge(world: any, node: any, rng: any) {
 
   const end = (i: any) => [cx + ax * i, cz + az * i];
   return {
-    deckY, alongX,
-    near: end(left), far: end(right),
+    deckY,
+    alongX,
+    near: end(left),
+    far: end(right),
     // Kept for the spawn picker and anything that just wants "somewhere on it".
-    x: cx, z: cz,
+    x: cx,
+    z: cz,
   };
 }
 
@@ -100,15 +109,18 @@ export function carvePath(world: any, ax: any, az: any, bx: any, bz: any, rng: a
     const t = i / steps;
     // gentle sinuous wander so paths never look like a ruler line
     const wobble = Math.sin(t * Math.PI * 3.1) * 3.5 * Math.sin(t * Math.PI);
-    const nx = bx - ax, nz = bz - az;
+    const nx = bx - ax,
+      nz = bz - az;
     const len = Math.hypot(nx, nz) || 1;
-    const px = -nz / len, pz = nx / len;
+    const px = -nz / len,
+      pz = nx / len;
     const x = Math.round(ax + (bx - ax) * t + px * wobble);
     const z = Math.round(az + (bz - az) * t + pz * wobble);
 
     for (let dz = -width; dz <= width; dz++)
       for (let dx = -width; dx <= width; dx++) {
-        const xx = clamp(x + dx, 0, S - 1), zz = clamp(z + dz, 0, S - 1);
+        const xx = clamp(x + dx, 0, S - 1),
+          zz = clamp(z + dz, 0, S - 1);
         if (dx * dx + dz * dz > width * width + 0.5) continue;
         const top = heights[zz * S + xx];
         if (!grid.isSolid(xx, top, zz)) continue;
@@ -123,7 +135,7 @@ export function carvePath(world: any, ax: any, az: any, bx: any, bz: any, rng: a
 
 /** A standing lantern post. */
 export function placeLantern(grid: any, x: any, y: any, z: any) {
-  grid.set(x, y,     z, BLOCKS.BEAM.id);
+  grid.set(x, y, z, BLOCKS.BEAM.id);
   grid.set(x, y + 1, z, BLOCKS.BEAM.id);
   grid.set(x, y + 2, z, BLOCKS.BEAM.id);
   grid.set(x, y + 3, z, BLOCKS.LANTERN.id);
@@ -133,7 +145,11 @@ export function placeLantern(grid: any, x: any, y: any, z: any) {
 /** Populate the world with built structures. */
 export function buildStructures(world: any, rng: any) {
   const { size: S, heights, grid, riverPath } = world;
-  const props: { bridges: any[]; paths: any[]; lanterns: any[] } = { bridges: [], paths: [], lanterns: [] };
+  const props: { bridges: any[]; paths: any[]; lanterns: any[] } = {
+    bridges: [],
+    paths: [],
+    lanterns: [],
+  };
 
   /* Bridges go on the river the plan actually routed.
    *
@@ -146,12 +162,9 @@ export function buildStructures(world: any, rng: any) {
    * bridge over the dry upper channel is a gantry over a ditch, and the first
    * run of this put one at height 63 on a mountainside. */
   const sea = Math.floor(WATER.level);
-  const wet = (p: any) => heights[clamp(Math.round(p.z), 0, S - 1) * S
-                            + clamp(Math.round(p.x), 0, S - 1)] <= sea;
+  const wet = (p: any) => heights[clamp(Math.round(p.z), 0, S - 1) * S + clamp(Math.round(p.x), 0, S - 1)] <= sea;
   const crossable = riverPath.filter((p: any) => !p.ford && wet(p));
-  const ranked = (crossable.length ? crossable : riverPath.filter(wet))
-    .slice()
-    .sort((a: any, b: any) => a.w - b.w);
+  const ranked = (crossable.length ? crossable : riverPath.filter(wet)).slice().sort((a: any, b: any) => a.w - b.w);
 
   /* Count scales with area, spacing does not.
    *
@@ -169,11 +182,10 @@ export function buildStructures(world: any, rng: any) {
 
   // paths running off both bridge heads, along the deck's own direction
   for (const b of props.bridges) {
-    const dx = Math.sign(b.near[0] - b.far[0]), dz = Math.sign(b.near[1] - b.far[1]);
-    props.paths.push(carvePath(world, b.near[0] + dx * 7, b.near[1] + dz * 7,
-                               b.near[0], b.near[1], rng, 1));
-    props.paths.push(carvePath(world, b.far[0], b.far[1],
-                               b.far[0] - dx * 8, b.far[1] - dz * 8, rng, 1));
+    const dx = Math.sign(b.near[0] - b.far[0]),
+      dz = Math.sign(b.near[1] - b.far[1]);
+    props.paths.push(carvePath(world, b.near[0] + dx * 7, b.near[1] + dz * 7, b.near[0], b.near[1], rng, 1));
+    props.paths.push(carvePath(world, b.far[0], b.far[1], b.far[0] - dx * 8, b.far[1] - dz * 8, rng, 1));
   }
 
   // lanterns along the paths
@@ -181,7 +193,10 @@ export function buildStructures(world: any, rng: any) {
     for (let i = 2; i < path.length; i += 9) {
       const [x, z] = path[i];
       const top = heights[clamp(z, 0, S - 1) * S + clamp(x, 0, S - 1)];
-      if (grid.isSolid(x + 2, top, z)) { placeLantern(grid, x + 2, top + 1, z); props.lanterns.push([x + 2, top + 1, z]); }
+      if (grid.isSolid(x + 2, top, z)) {
+        placeLantern(grid, x + 2, top + 1, z);
+        props.lanterns.push([x + 2, top + 1, z]);
+      }
     }
   }
 

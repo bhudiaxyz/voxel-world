@@ -65,8 +65,7 @@ const QUOTA = { waterfall: 2, crossing: 2, pond: 2, overlook: 2, grove: 3 };
 /** How far from the region centre a grammar may hunt for its feature. */
 const SEARCH_R = 30;
 
-const LEAVES = [BLOCKS.LEAF_PINK, BLOCKS.LEAF_BLUSH, BLOCKS.LEAF_LILAC,
-                BLOCKS.LEAF_CREAM, BLOCKS.LEAF_ROSE];
+const LEAVES = [BLOCKS.LEAF_PINK, BLOCKS.LEAF_BLUSH, BLOCKS.LEAF_LILAC, BLOCKS.LEAF_CREAM, BLOCKS.LEAF_ROSE];
 
 /* ================================================================== *
  * Shared toolkit
@@ -90,7 +89,8 @@ function toolkit(world: any) {
   /** Move a column top to `ny`, filling or clearing as required. */
   const ground = (x: any, z: any, ny: any, surf: any, fill = surf) => {
     if (!inb(x, z)) return;
-    const i = idx(x, z), cur = heights[i];
+    const i = idx(x, z),
+      cur = heights[i];
     if (ny > cur) {
       for (let y = cur + 1; y <= ny; y++) grid.set(x, y, z, y === ny ? surf : fill);
     } else if (ny < cur) {
@@ -105,7 +105,9 @@ function toolkit(world: any) {
   /** Put a block above the ground without disturbing the heightfield — decks,
    *  posts, lanterns. Vegetation already treats anything standing proud of the
    *  terrain as occupied, so these reserve themselves. */
-  const put = (x: any, z: any, y: any, id: any) => { if (inb(x, z)) grid.set(x, y, z, id); };
+  const put = (x: any, z: any, y: any, id: any) => {
+    if (inb(x, z)) grid.set(x, y, z, id);
+  };
 
   /** Keep vegetation out. A clearing is a deliberate absence and the scatter
    *  pass will happily fill it in otherwise. */
@@ -113,7 +115,8 @@ function toolkit(world: any) {
     for (let dz = -r; dz <= r; dz++)
       for (let dx = -r; dx <= r; dx++) {
         if (dx * dx + dz * dz > r * r) continue;
-        const x = cx + dx, z = cz + dz;
+        const x = cx + dx,
+          z = cz + dz;
         if (inb(x, z)) reserved[idx(x, z)] = 1;
       }
   };
@@ -125,8 +128,7 @@ function toolkit(world: any) {
    * hunt within 30 blocks of a centre. Rejecting a feature, rather than a
    * site, is what actually keeps compositions off one another. */
   const claims: any[] = [];
-  const claimed = (x: any, z: any) =>
-    claims.some((c) => Math.hypot(c[0] - x, c[1] - z) < MIN_SEPARATION);
+  const claimed = (x: any, z: any) => claims.some((c) => Math.hypot(c[0] - x, c[1] - z) < MIN_SEPARATION);
 
   /** True if a patch is flat, dry and unclaimed — a place to build. */
   const flat = (cx: any, cz: any, r: any, tol = 0) => {
@@ -134,7 +136,8 @@ function toolkit(world: any) {
     const h = top(cx, cz);
     for (let dz = -r; dz <= r; dz++)
       for (let dx = -r; dx <= r; dx++) {
-        const x = cx + dx, z = cz + dz;
+        const x = cx + dx,
+          z = cz + dz;
         if (!inb(x, z) || Math.abs(top(x, z) - h) > tol) return false;
         if (reserved[idx(x, z)]) return false;
       }
@@ -174,9 +177,27 @@ function toolkit(world: any) {
     for (let k = 0; k < h; k++) put(x, z, y + k, BLOCKS.LEAF_MINT.id);
   };
 
-  return Object.assign(T, { S, SEA, grid, heights, inb, idx, top, wet, dry,
-    ground, put, reserve, reserved, flat, tree, lantern, reeds,
-    claims, claimed });
+  return Object.assign(T, {
+    S,
+    SEA,
+    grid,
+    heights,
+    inb,
+    idx,
+    top,
+    wet,
+    dry,
+    ground,
+    put,
+    reserve,
+    reserved,
+    flat,
+    tree,
+    lantern,
+    reeds,
+    claims,
+    claimed,
+  });
 }
 
 /* ================================================================== *
@@ -189,17 +210,20 @@ function toolkit(world: any) {
 
 /** The tallest cliff face near a site that has water at its foot. */
 function findCascadeCliff(T: any, cx: any, cz: any, r: any) {
-  let best = null, bestScore = 0;
+  let best = null,
+    bestScore = 0;
   for (let dz = -r; dz <= r; dz += 2) {
     for (let dx = -r; dx <= r; dx += 2) {
-      const x = cx + dx, z = cz + dz;
+      const x = cx + dx,
+        z = cz + dz;
       if (!T.dry(x, z) || T.claimed(x, z)) continue;
       const h = T.top(x, z);
       for (let d = 0; d < 4; d++) {
         const ux = d === 0 ? 1 : d === 1 ? -1 : 0;
         const uz = d === 2 ? 1 : d === 3 ? -1 : 0;
         // Look a little way out, so a one-block kerb never qualifies.
-        const fx = x + ux * 2, fz = z + uz * 2;
+        const fx = x + ux * 2,
+          fz = z + uz * 2;
         const drop = h - T.top(fx, fz);
         if (drop < 6) continue;
         // Water at the foot is what turns a cliff into a waterfall.
@@ -227,7 +251,8 @@ function findCascadeCliff(T: any, cx: any, cz: any, r: any) {
  * crossed.
  */
 function findChannel(world: any, T: any, cx: any, cz: any, r: any) {
-  let best = null, bestScore = -Infinity;
+  let best = null,
+    bestScore = -Infinity;
   for (const p of world.riverPath) {
     if (T.claimed(p.x, p.z)) continue;
     // The upper course is a dry ravine, not a river — nothing to cross there.
@@ -235,7 +260,10 @@ function findChannel(world: any, T: any, cx: any, cz: any, r: any) {
     const d = Math.hypot(p.x - cx, p.z - cz);
     if (d > r) continue;
     const score = -p.w * 2.0 - d * 0.12;
-    if (score > bestScore) { bestScore = score; best = p; }
+    if (score > bestScore) {
+      bestScore = score;
+      best = p;
+    }
   }
   return best;
 }
@@ -250,13 +278,18 @@ function findChannel(world: any, T: any, cx: any, cz: any, r: any) {
 function findClearing(T: any, cx: any, cz: any, r: any, want: any) {
   for (const need of [want, want - 2, want - 3]) {
     if (need < 2) break;
-    let best = null, bestScore = -1;
+    let best = null,
+      bestScore = -1;
     for (let dz = -r; dz <= r; dz += 2) {
       for (let dx = -r; dx <= r; dx += 2) {
-        const x = cx + dx, z = cz + dz;
+        const x = cx + dx,
+          z = cz + dz;
         if (T.claimed(x, z) || !T.flat(x, z, need, 0)) continue;
         const score = T.top(x, z) - Math.hypot(dx, dz) * 0.4;
-        if (score > bestScore) { bestScore = score; best = [x, z]; }
+        if (score > bestScore) {
+          bestScore = score;
+          best = [x, z];
+        }
       }
     }
     if (best) return best;
@@ -266,10 +299,12 @@ function findClearing(T: any, cx: any, cz: any, r: any, want: any) {
 
 /** A lip: dry, level, with a long drop on one side. Where a view is from. */
 function findLip(T: any, cx: any, cz: any, r: any) {
-  let best = null, bestScore = 0;
+  let best = null,
+    bestScore = 0;
   for (let dz = -r; dz <= r; dz += 2) {
     for (let dx = -r; dx <= r; dx += 2) {
-      const x = cx + dx, z = cz + dz;
+      const x = cx + dx,
+        z = cz + dz;
       if (T.claimed(x, z) || !T.flat(x, z, 3, 0)) continue;
       const h = T.top(x, z);
       for (let d = 0; d < 4; d++) {
@@ -278,7 +313,10 @@ function findLip(T: any, cx: any, cz: any, r: any) {
         const drop = h - T.top(x + ux * 6, z + uz * 6);
         if (drop < 7) continue;
         const score = drop - Math.hypot(dx, dz) * 0.2;
-        if (score > bestScore) { bestScore = score; best = { x, z, ux, uz, h }; }
+        if (score > bestScore) {
+          bestScore = score;
+          best = { x, z, ux, uz, h };
+        }
       }
     }
   }
@@ -301,7 +339,8 @@ function waterfallGarden(world: any, T: any, site: any, rng: any) {
   if (!c) return null;
 
   const { ux, uz } = c;
-  const px = -uz, pz = ux;                       // along the lip
+  const px = -uz,
+    pz = ux; // along the lip
   const w = rng.int(1, 2);
 
   /* 1 — the hero. Notch the lip so the water has somewhere to leave from,
@@ -309,7 +348,8 @@ function waterfallGarden(world: any, T: any, site: any, rng: any) {
    * it. Two planes at slightly different depths is what stops a cascade
    * reading as a painted stripe on the wall. */
   for (let a = -w; a <= w; a++) {
-    const x = c.x + px * a, z = c.z + pz * a;
+    const x = c.x + px * a,
+      z = c.z + pz * a;
     T.ground(x, z, c.hi - 1, CASCADE.id, BLOCKS.STONE_PALE.id);
     for (let y = c.lo; y <= c.hi - 1; y++) T.put(x, z, y, CASCADE.id);
     for (let y = c.lo; y <= c.hi - 2; y++) T.put(x + ux, z + uz, y, CASCADE.id);
@@ -317,14 +357,16 @@ function waterfallGarden(world: any, T: any, site: any, rng: any) {
 
   /* 2 — the plunge pool. A real basin, dug where the water lands, so the
    * depth ramp in the water shader has somewhere to run. */
-  const bx = c.x + ux * 5, bz = c.z + uz * 5;
+  const bx = c.x + ux * 5,
+    bz = c.z + uz * 5;
   for (let dz = -5; dz <= 5; dz++)
     for (let dx = -5; dx <= 5; dx++) {
       const d = Math.hypot(dx, dz);
       if (d > 5) continue;
-      const x = bx + dx, z = bz + dz;
+      const x = bx + dx,
+        z = bz + dz;
       if (!T.inb(x, z)) continue;
-      if (T.top(x, z) > T.SEA + 3) continue;     // never cut into the cliff
+      if (T.top(x, z) > T.SEA + 3) continue; // never cut into the cliff
       const depth = Math.round(6 - d);
       T.ground(x, z, T.SEA - 1 - depth, BLOCKS.STONE.id, BLOCKS.STONE.id);
     }
@@ -332,21 +374,24 @@ function waterfallGarden(world: any, T: any, site: any, rng: any) {
   /* 3 — spray rocks in the pool, and a stone apron round the rim. Broken
    * water needs something to break on. */
   for (let k = 0; k < 5; k++) {
-    const a = rng.range(0, Math.PI * 2), d = rng.range(2, 6);
-    const x = Math.round(bx + Math.cos(a) * d), z = Math.round(bz + Math.sin(a) * d);
+    const a = rng.range(0, Math.PI * 2),
+      d = rng.range(2, 6);
+    const x = Math.round(bx + Math.cos(a) * d),
+      z = Math.round(bz + Math.sin(a) * d);
     if (!T.inb(x, z)) continue;
-    T.ground(x, z, T.SEA + rng.int(0, 1),
-             rng.chance(0.5) ? BLOCKS.STONE_PALE.id : BLOCKS.STONE.id, BLOCKS.STONE.id);
+    T.ground(x, z, T.SEA + rng.int(0, 1), rng.chance(0.5) ? BLOCKS.STONE_PALE.id : BLOCKS.STONE.id, BLOCKS.STONE.id);
   }
 
   /* 4 — the viewing deck, set to one side of the fall on the lip above, so
    * there is a place the scene is composed *from*. */
-  const dx0 = c.x + px * (w + 3), dz0 = c.z + pz * (w + 3);
+  const dx0 = c.x + px * (w + 3),
+    dz0 = c.z + pz * (w + 3);
   if (T.dry(dx0, dz0)) {
     const y = T.top(dx0, dz0) + 1;
     for (let a = -1; a <= 1; a++)
       for (let b = 0; b <= 2; b++) {
-        const x = dx0 + px * a - ux * b, z = dz0 + pz * a - uz * b;
+        const x = dx0 + px * a - ux * b,
+          z = dz0 + pz * a - uz * b;
         T.put(x, z, y, BLOCKS.PLANK.id);
         if (a === -1 || a === 1) T.put(x, z, y + 1, BLOCKS.BEAM.id);
       }
@@ -357,14 +402,13 @@ function waterfallGarden(world: any, T: any, site: any, rng: any) {
 
   /* 5 — framing. Two trees on the lip, unequal, because a symmetrical pair
    * reads as a gateway rather than as foliage. */
-  T.tree(c.x + px * (w + 5) - ux * 2, c.z + pz * (w + 5) - uz * 2,
-         0.95, rng.pick(LEAVES), 'stack');
-  T.tree(c.x - px * (w + 4) - ux * 3, c.z - pz * (w + 4) - uz * 3,
-         0.6, rng.pick(LEAVES));
+  T.tree(c.x + px * (w + 5) - ux * 2, c.z + pz * (w + 5) - uz * 2, 0.95, rng.pick(LEAVES), 'stack');
+  T.tree(c.x - px * (w + 4) - ux * 3, c.z - pz * (w + 4) - uz * 3, 0.6, rng.pick(LEAVES));
 
   /* 6 — micro-detail round the pool. */
   for (let k = 0; k < 14; k++) {
-    const a = rng.range(0, Math.PI * 2), d = rng.range(5, 9);
+    const a = rng.range(0, Math.PI * 2),
+      d = rng.range(5, 9);
     T.reeds(Math.round(bx + Math.cos(a) * d), Math.round(bz + Math.sin(a) * d), rng);
   }
 
@@ -381,8 +425,10 @@ function waterfallGarden(world: any, T: any, site: any, rng: any) {
 function stoneCrossing(world: any, T: any, site: any, rng: any) {
   const node = findChannel(world, T, site.at[0], site.at[1], SEARCH_R);
   if (!node) return null;
-  const cx = Math.round(node.x), cz = Math.round(node.z);
-  const nx = node.nx, nz = node.nz;
+  const cx = Math.round(node.x),
+    cz = Math.round(node.z);
+  const nx = node.nx,
+    nz = node.nz;
   const reach = Math.ceil(node.w) + 4;
   // Nobody hops twenty blocks of open water. Past this it wants a bridge, and
   // props.js is the pass that builds those.
@@ -393,12 +439,14 @@ function stoneCrossing(world: any, T: any, site: any, rng: any) {
   // rather than the first stepping stone that happens to break the surface.
   const bank = (s: any) => {
     for (let k = reach; k >= 1; k--) {
-      const x = Math.round(cx + s * nx * k), z = Math.round(cz + s * nz * k);
+      const x = Math.round(cx + s * nx * k),
+        z = Math.round(cz + s * nz * k);
       if (T.dry(x, z)) return { at: [x, z], k: s * k };
     }
     return null;
   };
-  const near = bank(-1), far = bank(1);
+  const near = bank(-1),
+    far = bank(1);
   if (!near || !far) return null;
 
   /* 1 — the hero: a line of stones from bank to bank, staggered off the
@@ -409,7 +457,8 @@ function stoneCrossing(world: any, T: any, site: any, rng: any) {
    * crossing. Laid over a fixed span it stopped in open water wherever the
    * channel was wider than the guess, which is a line of pillars going
    * nowhere. */
-  const px = -nz, pz = nx;
+  const px = -nz,
+    pz = nx;
   for (let k = near.k; k <= far.k; k++) {
     const jitter = ((k + 99) % 3) - 1;
     const x = Math.round(cx + nx * k + px * jitter);
@@ -426,7 +475,8 @@ function stoneCrossing(world: any, T: any, site: any, rng: any) {
     const [jx, jz] = near.at;
     const y = T.top(jx, jz) + 1;
     for (let k = 0; k < 4; k++) {
-      const x = Math.round(jx + nx * k), z = Math.round(jz + nz * k);
+      const x = Math.round(jx + nx * k),
+        z = Math.round(jz + nz * k);
       for (let a = -1; a <= 1; a++) T.put(x + px * a, z + pz * a, y, BLOCKS.PLANK.id);
       if (k === 3) for (let dy = y - 1; dy > T.SEA - 4; dy--) T.put(x, z, dy, BLOCKS.BEAM.id);
     }
@@ -435,17 +485,19 @@ function stoneCrossing(world: any, T: any, site: any, rng: any) {
   }
 
   /* 3 — framing trees, one per bank, leaning the scene shut. */
-  T.tree(Math.round(near.at[0] - nx * 4 + px * 3), Math.round(near.at[1] - nz * 4 + pz * 3),
-         0.8, rng.pick(LEAVES));
-  T.tree(Math.round(far.at[0] + nx * 4 - px * 3), Math.round(far.at[1] + nz * 4 - pz * 3),
-         0.55, rng.pick(LEAVES));
+  T.tree(Math.round(near.at[0] - nx * 4 + px * 3), Math.round(near.at[1] - nz * 4 + pz * 3), 0.8, rng.pick(LEAVES));
+  T.tree(Math.round(far.at[0] + nx * 4 - px * 3), Math.round(far.at[1] + nz * 4 - pz * 3), 0.55, rng.pick(LEAVES));
 
   /* 4 — reeds down both banks. */
   for (let k = 0; k < 16; k++) {
     const s = rng.chance(0.5) ? -1 : 1;
-    const along = rng.int(-9, 9), out = rng.int(1, 3);
-    T.reeds(Math.round(cx + px * along + nx * s * (reach - out)),
-            Math.round(cz + pz * along + nz * s * (reach - out)), rng);
+    const along = rng.int(-9, 9),
+      out = rng.int(1, 3);
+    T.reeds(
+      Math.round(cx + px * along + nx * s * (reach - out)),
+      Math.round(cz + pz * along + nz * s * (reach - out)),
+      rng,
+    );
   }
   return { kind: 'crossing', at: [cx, cz] };
 }
@@ -464,19 +516,22 @@ function lilyPond(world: any, T: any, site: any, rng: any) {
   // higher up it would be a hole with a view of the sky in it.
   if (T.top(cx, cz) > T.SEA + 6) return null;
 
-  const rx = rng.range(6, 8), rz = rng.range(5, 7.5);
+  const rx = rng.range(6, 8),
+    rz = rng.range(5, 7.5);
   const pads = [];
   for (let dz = -9; dz <= 9; dz++)
     for (let dx = -9; dx <= 9; dx++) {
       const q = (dx / rx) ** 2 + (dz / rz) ** 2;
       if (q > 1.25) continue;
-      const x = cx + dx, z = cz + dz;
+      const x = cx + dx,
+        z = cz + dz;
       if (!T.inb(x, z)) continue;
-      if (q > 1.0) {                       // 1 — the sand rim
+      if (q > 1.0) {
+        // 1 — the sand rim
         T.ground(x, z, T.SEA + 1, BLOCKS.SAND.id, BLOCKS.SOIL.id);
         continue;
       }
-      const depth = Math.round((1 - q) * 5) + 1;   // 2 — the basin
+      const depth = Math.round((1 - q) * 5) + 1; // 2 — the basin
       T.ground(x, z, T.SEA - depth, BLOCKS.SAND.id, BLOCKS.SOIL.id);
       if (q < 0.7) pads.push([x, z]);
     }
@@ -484,21 +539,27 @@ function lilyPond(world: any, T: any, site: any, rng: any) {
   // 3 — pads, sitting flush on the surface.
   for (let k = 0; k < 7 && pads.length; k++) {
     const [x, z] = pads[rng.int(0, pads.length - 1)];
-    T.ground(x, z, T.SEA, rng.chance(0.6) ? BLOCKS.LEAF_MINT.id : BLOCKS.LEAF_CREAM.id,
-             BLOCKS.SOIL.id);
+    T.ground(x, z, T.SEA, rng.chance(0.6) ? BLOCKS.LEAF_MINT.id : BLOCKS.LEAF_CREAM.id, BLOCKS.SOIL.id);
   }
 
   // 4 — one tree leaning over the water, and a sitting rock opposite it.
   const a = rng.range(0, Math.PI * 2);
-  T.tree(Math.round(cx + Math.cos(a) * (rx + 3)), Math.round(cz + Math.sin(a) * (rz + 3)),
-         0.85, rng.pick(LEAVES), 'broad');
+  T.tree(
+    Math.round(cx + Math.cos(a) * (rx + 3)),
+    Math.round(cz + Math.sin(a) * (rz + 3)),
+    0.85,
+    rng.pick(LEAVES),
+    'broad',
+  );
   const b = a + Math.PI;
-  const sx = Math.round(cx + Math.cos(b) * (rx + 2)), sz = Math.round(cz + Math.sin(b) * (rz + 2));
+  const sx = Math.round(cx + Math.cos(b) * (rx + 2)),
+    sz = Math.round(cz + Math.sin(b) * (rz + 2));
   if (T.dry(sx, sz)) T.ground(sx, sz, T.top(sx, sz) + 1, BLOCKS.STONE_PALE.id, BLOCKS.STONE.id);
 
   // 5 — reeds around the rim.
   for (let k = 0; k < 18; k++) {
-    const t = rng.range(0, Math.PI * 2), s = rng.range(1.02, 1.22);
+    const t = rng.range(0, Math.PI * 2),
+      s = rng.range(1.02, 1.22);
     T.reeds(Math.round(cx + Math.cos(t) * rx * s), Math.round(cz + Math.sin(t) * rz * s), rng);
   }
 
@@ -525,7 +586,8 @@ function blossomGrove(world: any, T: any, site: any, rng: any) {
 
   // 1 — the hero: a gate, two posts and a lintel. Human-made, small, and the
   // only right-angle in a hundred blocks of foliage.
-  const ax = rng.chance(0.5) ? 1 : 0, az = ax ? 0 : 1;
+  const ax = rng.chance(0.5) ? 1 : 0,
+    az = ax ? 0 : 1;
   for (const s of [-2, 2]) {
     for (let k = 0; k < 4; k++) T.put(cx + ax * s, cz + az * s, y + k, BLOCKS.BEAM.id);
   }
@@ -539,28 +601,27 @@ function blossomGrove(world: any, T: any, site: any, rng: any) {
   for (let dz = -4; dz <= 4; dz++)
     for (let dx = -4; dx <= 4; dx++) {
       if (dx * dx + dz * dz > 16) continue;
-      const x = cx + dx, z = cz + dz;
+      const x = cx + dx,
+        z = cz + dz;
       if (T.dry(x, z)) T.ground(x, z, T.top(x, z), BLOCKS.PATH.id);
     }
   T.reserve(cx, cz, 5);
 
   // 3 — the great tree, off-centre. Dead centre would fight the gate.
   const ga = rng.range(0, Math.PI * 2);
-  T.tree(Math.round(cx + Math.cos(ga) * 8), Math.round(cz + Math.sin(ga) * 8),
-         1.0, leaf, 'stack');
+  T.tree(Math.round(cx + Math.cos(ga) * 8), Math.round(cz + Math.sin(ga) * 8), 1.0, leaf, 'stack');
 
   // 4 — secondaries at the edge of the clearing, then a supporting ring
   // thinning outward. One species, so the stand reads as one stand.
   for (let k = 0; k < 3; k++) {
     const a = ga + Math.PI * 0.6 + k * 1.5 + rng.bell() * 0.3;
     const d = rng.range(9, 12);
-    T.tree(Math.round(cx + Math.cos(a) * d), Math.round(cz + Math.sin(a) * d),
-           rng.range(0.62, 0.8), leaf);
+    T.tree(Math.round(cx + Math.cos(a) * d), Math.round(cz + Math.sin(a) * d), rng.range(0.62, 0.8), leaf);
   }
   for (let k = 0; k < 14; k++) {
-    const a = rng.range(0, Math.PI * 2), d = rng.range(12, 19);
-    T.tree(Math.round(cx + Math.cos(a) * d), Math.round(cz + Math.sin(a) * d),
-           rng.range(0.22, 0.55), leaf);
+    const a = rng.range(0, Math.PI * 2),
+      d = rng.range(12, 19);
+    T.tree(Math.round(cx + Math.cos(a) * d), Math.round(cz + Math.sin(a) * d), rng.range(0.22, 0.55), leaf);
   }
 
   // 5 — a lantern each side of the approach.
@@ -580,21 +641,25 @@ function cliffOverlook(world: any, T: any, site: any, rng: any) {
   const lip = findLip(T, site.at[0] | 0, site.at[1] | 0, SEARCH_R);
   if (!lip) return null;
   const { ux, uz, h } = lip;
-  const px = -uz, pz = ux;
+  const px = -uz,
+    pz = ux;
   // Sit the terrace back from the edge so the parapet has ground under it.
-  const cx = lip.x - ux, cz = lip.z - uz;
+  const cx = lip.x - ux,
+    cz = lip.z - uz;
 
   // 1 — the terrace.
   for (let a = -3; a <= 3; a++)
     for (let b = -3; b <= 1; b++) {
-      const x = cx + px * a - ux * b, z = cz + pz * a - uz * b;
+      const x = cx + px * a - ux * b,
+        z = cz + pz * a - uz * b;
       if (!T.dry(x, z) || Math.abs(T.top(x, z) - h) > 2) continue;
       T.ground(x, z, h, BLOCKS.PATH.id, BLOCKS.STONE.id);
     }
 
   // 2 — the parapet, one course of pale stone along the drop.
   for (let a = -3; a <= 3; a++) {
-    const x = cx + px * a + ux, z = cz + pz * a + uz;
+    const x = cx + px * a + ux,
+      z = cz + pz * a + uz;
     if (T.top(x, z) >= h) continue;
     T.ground(x, z, h + 1, BLOCKS.STONE_PALE.id, BLOCKS.STONE.id);
   }
@@ -605,8 +670,7 @@ function cliffOverlook(world: any, T: any, site: any, rng: any) {
   T.lantern(cx - px * 4, cz - pz * 4);
 
   // 4 — one tree behind, holding the composition down.
-  T.tree(Math.round(cx - ux * 5 + px * 2), Math.round(cz - uz * 5 + pz * 2),
-         0.8, rng.pick(LEAVES));
+  T.tree(Math.round(cx - ux * 5 + px * 2), Math.round(cz - uz * 5 + pz * 2), 0.8, rng.pick(LEAVES));
 
   T.reserve(cx, cz, 5);
   return { kind: 'overlook', at: [cx, cz] };
@@ -623,10 +687,10 @@ cliffOverlook.kind = 'overlook';
 
 const GRAMMARS = {
   waterfall: [waterfallGarden, stoneCrossing, cliffOverlook, blossomGrove],
-  crossing:  [stoneCrossing, lilyPond, blossomGrove],
-  pond:      [lilyPond, stoneCrossing, blossomGrove],
-  overlook:  [cliffOverlook, blossomGrove],
-  grove:     [blossomGrove, lilyPond],
+  crossing: [stoneCrossing, lilyPond, blossomGrove],
+  pond: [lilyPond, stoneCrossing, blossomGrove],
+  overlook: [cliffOverlook, blossomGrove],
+  grove: [blossomGrove, lilyPond],
 };
 
 /**

@@ -25,10 +25,10 @@ import { BLOCK_BY_ID, WATER } from '../core/palette';
 /** Scene-kind marker colours. Warm for built things, cool for water ones. */
 const KIND = {
   waterfall: { fill: '#eaf3ff', ring: '#7f8fc6', label: 'waterfall' },
-  pond:      { fill: '#cdbde8', ring: '#6f5fa6', label: 'pond' },
-  crossing:  { fill: '#f0dcc4', ring: '#a87f5c', label: 'crossing' },
-  grove:     { fill: '#f6cfd9', ring: '#b3738b', label: 'grove' },
-  overlook:  { fill: '#e2e0d2', ring: '#8d8a70', label: 'overlook' },
+  pond: { fill: '#cdbde8', ring: '#6f5fa6', label: 'pond' },
+  crossing: { fill: '#f0dcc4', ring: '#a87f5c', label: 'crossing' },
+  grove: { fill: '#f6cfd9', ring: '#b3738b', label: 'grove' },
+  overlook: { fill: '#e2e0d2', ring: '#8d8a70', label: 'overlook' },
 };
 
 const CSS = `
@@ -78,7 +78,8 @@ function bakeTerrain(world: any) {
   const { grid, heights, size: S } = world;
   const SEA = Math.floor(WATER.level);
   const cv = document.createElement('canvas');
-  cv.width = S; cv.height = S;
+  cv.width = S;
+  cv.height = S;
   const ctx = cv.getContext('2d')!;
   const img = ctx.createImageData(S, S);
   const px = img.data;
@@ -88,8 +89,7 @@ function bakeTerrain(world: any) {
   const shoal = new THREE.Color(WATER.shoal);
   const deep = new THREE.Color(WATER.deep);
 
-  const at = (x: any, z: any) => heights[
-    (z < 0 ? 0 : z >= S ? S - 1 : z) * S + (x < 0 ? 0 : x >= S ? S - 1 : x)];
+  const at = (x: any, z: any) => heights[(z < 0 ? 0 : z >= S ? S - 1 : z) * S + (x < 0 ? 0 : x >= S ? S - 1 : x)];
 
   for (let z = 0; z < S; z++) {
     for (let x = 0; x < S; x++) {
@@ -110,7 +110,13 @@ function bakeTerrain(world: any) {
       } else {
         const blk = BLOCK_BY_ID[grid.get(x, top, z)];
         const c = blk && blk.top;
-        if (!c) { r = g = b = 0.5; } else { r = c.r; g = c.g; b = c.b; }
+        if (!c) {
+          r = g = b = 0.5;
+        } else {
+          r = c.r;
+          g = c.g;
+          b = c.b;
+        }
 
         /* Hillshade off the terrain heightfield.
          *
@@ -122,16 +128,25 @@ function bakeTerrain(world: any) {
         const dz = at(x, z + 1) - at(x, z - 1);
         const lit = 1 + (-dx * 0.6 - dz * 0.6) * 0.085;
         const s = Math.min(Math.max(lit, 0.42), 1.5);
-        r *= s; g *= s; b *= s;
+        r *= s;
+        g *= s;
+        b *= s;
 
         // A cliff of a whole terrace or more gets its edge picked out, which is
         // what makes the plateaus legible as plateaus rather than as blotches.
         const drop = Math.max(at(x, z) - at(x + 1, z), at(x, z) - at(x, z + 1));
-        if (drop >= 3) { r *= 0.80; g *= 0.80; b *= 0.82; }
+        if (drop >= 3) {
+          r *= 0.8;
+          g *= 0.8;
+          b *= 0.82;
+        }
       }
 
       const o = i * 4;
-      px[o] = enc(r); px[o + 1] = enc(g); px[o + 2] = enc(b); px[o + 3] = 255;
+      px[o] = enc(r);
+      px[o + 1] = enc(g);
+      px[o + 2] = enc(b);
+      px[o + 3] = 255;
     }
   }
   ctx.putImageData(img, 0, 0);
@@ -157,9 +172,10 @@ export function createMap({ world, controller, input }: any) {
 
   const cv = root.querySelector('#map-cv') as HTMLCanvasElement;
   const ctx = cv.getContext('2d')!;
-  cv.width = S; cv.height = S;
+  cv.width = S;
+  cv.height = S;
 
-  let terrain: any = null;      // baked once, on first open
+  let terrain: any = null; // baked once, on first open
   let open = false;
   let wasPaused = false;
 
@@ -194,7 +210,8 @@ export function createMap({ world, controller, input }: any) {
       const r = 3.2 * unit;
       ctx.beginPath();
       ctx.rect(b.x - r, b.z - r, r * 2, r * 2);
-      ctx.fill(); ctx.stroke();
+      ctx.fill();
+      ctx.stroke();
     }
 
     // ---- scenes: a diamond per composed place ----------------------
@@ -209,16 +226,19 @@ export function createMap({ world, controller, input }: any) {
       ctx.lineWidth = 1.3 * unit;
       ctx.beginPath();
       ctx.rect(-r, -r, r * 2, r * 2);
-      ctx.fill(); ctx.stroke();
+      ctx.fill();
+      ctx.stroke();
       ctx.restore();
     }
 
     // ---- the player -------------------------------------------------
-    const px = controller.pos.x, pz = controller.pos.z;
+    const px = controller.pos.x,
+      pz = controller.pos.z;
     // The camera's own facing, so the arrow answers "which way am I looking",
     // which is the only question anyone opens a map to ask.
     const h = controller.heading ?? 0;
-    const dx = Math.sin(h), dz = Math.cos(h);
+    const dx = Math.sin(h),
+      dz = Math.cos(h);
     const a = 11 * unit;
 
     /* A halo and a ring before the arrow.
@@ -232,26 +252,30 @@ export function createMap({ world, controller, input }: any) {
     halo.addColorStop(0.55, 'rgba(255,255,255,.35)');
     halo.addColorStop(1, 'rgba(255,255,255,0)');
     ctx.fillStyle = halo;
-    ctx.beginPath(); ctx.arc(px, pz, a * 3.2, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath();
+    ctx.arc(px, pz, a * 3.2, 0, Math.PI * 2);
+    ctx.fill();
 
     ctx.strokeStyle = 'rgba(58,50,78,.55)';
     ctx.lineWidth = 1.6 * unit;
-    ctx.beginPath(); ctx.arc(px, pz, a * 1.5, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(px, pz, a * 1.5, 0, Math.PI * 2);
+    ctx.stroke();
 
     ctx.save();
     ctx.translate(px, pz);
     ctx.beginPath();
-    ctx.moveTo(dx * a, dz * a);                       // nose
+    ctx.moveTo(dx * a, dz * a); // nose
     ctx.lineTo(-dz * a * 0.62 - dx * a * 0.5, dx * a * 0.62 - dz * a * 0.5);
-    ctx.lineTo(dx * a * -0.16, dz * a * -0.16);       // notched tail
+    ctx.lineTo(dx * a * -0.16, dz * a * -0.16); // notched tail
     ctx.lineTo(dz * a * 0.62 - dx * a * 0.5, -dx * a * 0.62 - dz * a * 0.5);
     ctx.closePath();
     ctx.fillStyle = '#5aa9c9';
     ctx.strokeStyle = '#fdfdff';
     ctx.lineWidth = 2.0 * unit;
-    ctx.fill(); ctx.stroke();
+    ctx.fill();
+    ctx.stroke();
     ctx.restore();
-
   }
 
   function setOpen(v: any) {
@@ -279,7 +303,9 @@ export function createMap({ world, controller, input }: any) {
     } else {
       root.classList.remove('vis');
       input.paused = wasPaused;
-      setTimeout(() => { if (!open) root.classList.remove('on'); }, 190);
+      setTimeout(() => {
+        if (!open) root.classList.remove('on');
+      }, 190);
     }
   }
 
@@ -297,13 +323,19 @@ export function createMap({ world, controller, input }: any) {
     }
   });
   root.querySelector('.close')!.addEventListener('click', () => setOpen(false));
-  root.addEventListener('click', (e) => { if (e.target === root) setOpen(false); });
+  root.addEventListener('click', (e) => {
+    if (e.target === root) setOpen(false);
+  });
 
   return {
     el: root,
-    get open() { return open; },
+    get open() {
+      return open;
+    },
     toggle: () => setOpen(!open),
     /** Cheap no-op while closed; the terrain layer is never re-baked. */
-    update() { if (open && terrain) draw(); },
+    update() {
+      if (open && terrain) draw();
+    },
   };
 }

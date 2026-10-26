@@ -1,4 +1,3 @@
-
 /**
  * Atmospheric particles.
  *
@@ -15,7 +14,7 @@ import * as THREE from 'three';
 import { PETAL_COLORS, MOTE_COLORS } from '../core/palette';
 import { PLANET_UNIFORMS_GLSL, PLANET_BEND_GLSL, planetUniformValues } from '../render/planet.glsl';
 
-const PETAL_VERT = /* glsl */`
+const PETAL_VERT = /* glsl */ `
   #include <common>
   #include <fog_pars_vertex>
   attribute vec3 offset;    // seeded spawn position
@@ -78,7 +77,7 @@ const PETAL_VERT = /* glsl */`
   }
 `;
 
-const PETAL_FRAG = /* glsl */`
+const PETAL_FRAG = /* glsl */ `
   #include <common>
   #include <fog_pars_fragment>
   varying vec3 vCol;
@@ -113,21 +112,23 @@ function makeQuadGeometry(count: any, bounds: any, rng: any, colors: any, sizeRa
   const size = new Float32Array(count);
 
   for (let i = 0; i < count; i++) {
-    off[i*3+0] = rng.range(-bounds.x / 2, bounds.x / 2);
-    off[i*3+1] = rng.range(0, bounds.y);
-    off[i*3+2] = rng.range(-bounds.z / 2, bounds.z / 2);
-    seed[i*3+0] = rng();
-    seed[i*3+1] = rng.range(0.6, 2.4);
-    seed[i*3+2] = rng.range(fallRange[0], fallRange[1]);
+    off[i * 3 + 0] = rng.range(-bounds.x / 2, bounds.x / 2);
+    off[i * 3 + 1] = rng.range(0, bounds.y);
+    off[i * 3 + 2] = rng.range(-bounds.z / 2, bounds.z / 2);
+    seed[i * 3 + 0] = rng();
+    seed[i * 3 + 1] = rng.range(0.6, 2.4);
+    seed[i * 3 + 2] = rng.range(fallRange[0], fallRange[1]);
     const c = rng.pick(colors);
-    col[i*3+0] = c.r; col[i*3+1] = c.g; col[i*3+2] = c.b;
+    col[i * 3 + 0] = c.r;
+    col[i * 3 + 1] = c.g;
+    col[i * 3 + 2] = c.b;
     size[i] = rng.range(sizeRange[0], sizeRange[1]);
   }
 
   geo.setAttribute('offset', new THREE.InstancedBufferAttribute(off, 3));
-  geo.setAttribute('aSeed',  new THREE.InstancedBufferAttribute(seed, 3));
+  geo.setAttribute('aSeed', new THREE.InstancedBufferAttribute(seed, 3));
   geo.setAttribute('aColor', new THREE.InstancedBufferAttribute(col, 3));
-  geo.setAttribute('aSize',  new THREE.InstancedBufferAttribute(size, 1));
+  geo.setAttribute('aSize', new THREE.InstancedBufferAttribute(size, 1));
   geo.instanceCount = count;
   geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e6);
   return geo;
@@ -151,10 +152,10 @@ export function createParticles(worldSize: any, rng: any) {
       uniforms: THREE.UniformsUtils.merge([
         THREE.UniformsLib.fog,
         {
-          uTime:   { value: 0 },
+          uTime: { value: 0 },
           uBounds: { value: bounds.clone() },
           uOrigin: { value: new THREE.Vector3() },
-          uSoft:   { value: soft },
+          uSoft: { value: soft },
           ...planetUniformValues(new THREE.Vector3()),
         },
       ]),

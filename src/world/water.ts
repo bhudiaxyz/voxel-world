@@ -1,4 +1,3 @@
-
 /**
  * Water.
  *
@@ -79,31 +78,31 @@ export function createWater(size: any, depthMap: any) {
     uniforms: THREE.UniformsUtils.merge([
       THREE.UniformsLib.fog,
       {
-        uTime:      { value: 0 },
-        uShoal:     { value: WATER.shoal.clone() },
-        uShallow:   { value: WATER.shallow.clone() },
-        uDeep:      { value: WATER.deep.clone() },
-        uWarm:      { value: WATER.warm.clone() },
-        uSheen:     { value: WATER.sheen.clone() },
-        uHorizon:   { value: SKY.horizon.clone() },
-        uSky:       { value: SKY.zenith.clone() },
-        uSunDir:    { value: LIGHT.sunDir.clone().normalize() },
-        uSunColor:  { value: LIGHT.sunColor.clone() },
-        uExtinction:{ value: new THREE.Vector3(...WATER.extinction) },
-        uDepthMap:  { value: depthMap },
+        uTime: { value: 0 },
+        uShoal: { value: WATER.shoal.clone() },
+        uShallow: { value: WATER.shallow.clone() },
+        uDeep: { value: WATER.deep.clone() },
+        uWarm: { value: WATER.warm.clone() },
+        uSheen: { value: WATER.sheen.clone() },
+        uHorizon: { value: SKY.horizon.clone() },
+        uSky: { value: SKY.zenith.clone() },
+        uSunDir: { value: LIGHT.sunDir.clone().normalize() },
+        uSunColor: { value: LIGHT.sunColor.clone() },
+        uExtinction: { value: new THREE.Vector3(...WATER.extinction) },
+        uDepthMap: { value: depthMap },
         uWorldSize: { value: size },
-        uRange:     { value: DEPTH_RANGE },
-        uOpacity:   { value: WATER.opacity },
-        uDensity:   { value: WATER.density },
-        uSaturation:{ value: WATER.saturation },
-        uCellTone:  { value: WATER.cellTone },
-        uCaustic:   { value: WATER.caustic },
-        uReflect:   { value: WATER.reflect },
-        uLevel:     { value: WATER.level },
+        uRange: { value: DEPTH_RANGE },
+        uOpacity: { value: WATER.opacity },
+        uDensity: { value: WATER.density },
+        uSaturation: { value: WATER.saturation },
+        uCellTone: { value: WATER.cellTone },
+        uCaustic: { value: WATER.caustic },
+        uReflect: { value: WATER.reflect },
+        uLevel: { value: WATER.level },
         ...planetUniformValues(new THREE.Vector3()),
       },
     ]),
-    vertexShader: /* glsl */`
+    vertexShader: /* glsl */ `
       #include <common>
       #include <fog_pars_vertex>
       ${PLANET_UNIFORMS_GLSL}
@@ -119,7 +118,7 @@ export function createWater(size: any, depthMap: any) {
         #include <fog_vertex>
       }
     `,
-    fragmentShader: /* glsl */`
+    fragmentShader: /* glsl */ `
       #include <common>
       #include <packing>
       #include <fog_pars_fragment>

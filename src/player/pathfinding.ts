@@ -10,19 +10,24 @@ import * as THREE from 'three';
 import { WATER } from '../core/palette';
 
 const PLAYER_HEIGHT = 1.75;
-const MAX_STEP = 3.30;
+const MAX_STEP = 3.3;
 const MAX_DROP = 3.35;
 const SWIM_DEPTH = 1.25;
 const FLOAT_Y = WATER.level - 1.05;
-const LAYERS = 2;                 // terrain/water, plus an optional bridge deck
+const LAYERS = 2; // terrain/water, plus an optional bridge deck
 const SEARCH_BUDGET_MS = 1.75;
 const MAX_EXPANSIONS = 420000;
 const PULSE_DURATION = 0.52;
 
 const DIRECTIONS = [
-  [-1, 0, 1], [1, 0, 1], [0, -1, 1], [0, 1, 1],
-  [-1, -1, Math.SQRT2], [1, -1, Math.SQRT2],
-  [-1, 1, Math.SQRT2], [1, 1, Math.SQRT2],
+  [-1, 0, 1],
+  [1, 0, 1],
+  [0, -1, 1],
+  [0, 1, 1],
+  [-1, -1, Math.SQRT2],
+  [1, -1, Math.SQRT2],
+  [-1, 1, Math.SQRT2],
+  [1, 1, Math.SQRT2],
 ];
 
 class MinHeap {
@@ -33,8 +38,13 @@ class MinHeap {
     this.scores = [];
   }
 
-  get size() { return this.nodes.length; }
-  clear() { this.nodes.length = 0; this.scores.length = 0; }
+  get size() {
+    return this.nodes.length;
+  }
+  clear() {
+    this.nodes.length = 0;
+    this.scores.length = 0;
+  }
 
   push(node: any, score: any) {
     let i = this.nodes.length;
@@ -64,8 +74,7 @@ class MinHeap {
         const left = i * 2 + 1;
         if (left >= this.nodes.length) break;
         const right = left + 1;
-        const child = right < this.nodes.length && this.scores[right] < this.scores[left]
-          ? right : left;
+        const child = right < this.nodes.length && this.scores[right] < this.scores[left] ? right : left;
         if (this.scores[i] <= this.scores[child]) break;
         [this.nodes[i], this.nodes[child]] = [this.nodes[child], this.nodes[i]];
         [this.scores[i], this.scores[child]] = [this.scores[child], this.scores[i]];
@@ -84,8 +93,13 @@ class MinHeap {
  * second navigator shares an instance rather than rebuilding one.
  */
 export class NavigationSurface {
-  declare world: any; declare grid: any; declare heights: any; declare size: any;
-  declare cells: any; declare bridgeY: any; declare validity: any;
+  declare world: any;
+  declare grid: any;
+  declare heights: any;
+  declare size: any;
+  declare cells: any;
+  declare bridgeY: any;
+  declare validity: any;
   constructor(world: any) {
     this.world = world;
     this.grid = world.grid;
@@ -104,14 +118,17 @@ export class NavigationSurface {
     for (const bridge of bridges) {
       const [x0, z0] = bridge.near;
       const [x1, z1] = bridge.far;
-      const dx = Math.sign(x1 - x0), dz = Math.sign(z1 - z0);
+      const dx = Math.sign(x1 - x0),
+        dz = Math.sign(z1 - z0);
       const length = Math.max(Math.abs(x1 - x0), Math.abs(z1 - z0));
       const px = dz === 0 ? 0 : 1;
       const pz = dx === 0 ? 0 : 1;
       for (let step = 0; step <= length; step++) {
-        const cx = x0 + dx * step, cz = z0 + dz * step;
+        const cx = x0 + dx * step,
+          cz = z0 + dz * step;
         for (let width = -1; width <= 1; width++) {
-          const x = cx + px * width, z = cz + pz * width;
+          const x = cx + px * width,
+            z = cz + pz * width;
           if (x < 0 || z < 0 || x >= S || z >= S) continue;
           this.bridgeY[z * S + x] = bridge.deckY + 1;
         }
@@ -119,7 +136,9 @@ export class NavigationSurface {
     }
   }
 
-  encode(x: any, z: any, layer = 0) { return (z * this.size + x) * LAYERS + layer; }
+  encode(x: any, z: any, layer = 0) {
+    return (z * this.size + x) * LAYERS + layer;
+  }
 
   decode(node: any) {
     const layer = node & 1;
@@ -140,7 +159,8 @@ export class NavigationSurface {
     const { x, z, layer } = this.decode(node);
     if (x < 1 || z < 1 || x >= this.size - 1 || z >= this.size - 1) return null;
     const cell = z * this.size + x;
-    let y, water = false;
+    let y,
+      water = false;
     if (layer === 1) {
       y = this.bridgeY[cell];
       if (y < 0) return null;
@@ -183,21 +203,22 @@ export class NavigationSurface {
 
   canMove(a: any, b: any) {
     if (!this._heightAllows(a, b)) return false;
-    const dx = b.x - a.x, dz = b.z - a.z;
+    const dx = b.x - a.x,
+      dz = b.z - a.z;
     if (Math.abs(dx) !== 1 || Math.abs(dz) !== 1) return true;
 
     // A diagonal is legal when at least one of its two one-cell L-shaped
     // crossings is clear. This prevents the controller cutting through the
     // touching corners of tree trunks, posts and cliff blocks.
-    return this._cornerRouteExists(a, b, b.x, a.z)
-      || this._cornerRouteExists(a, b, a.x, b.z);
+    return this._cornerRouteExists(a, b, b.x, a.z) || this._cornerRouteExists(a, b, a.x, b.z);
   }
 
   forEachNeighbour(node: any, visit: any) {
     const a = this.info(node);
     if (!a) return;
     for (const [dx, dz, distance] of DIRECTIONS) {
-      const x = a.x + dx, z = a.z + dz;
+      const x = a.x + dx,
+        z = a.z + dz;
       if (x < 1 || z < 1 || x >= this.size - 1 || z >= this.size - 1) continue;
       for (let layer = 0; layer < LAYERS; layer++) {
         const b = this.info(this.encode(x, z, layer));
@@ -212,12 +233,14 @@ export class NavigationSurface {
   nearestNode(x: any, z: any, expectedY: any, radius: any) {
     const cx = THREE.MathUtils.clamp(Math.floor(x), 1, this.size - 2);
     const cz = THREE.MathUtils.clamp(Math.floor(z), 1, this.size - 2);
-    let best = -1, bestScore = Infinity;
+    let best = -1,
+      bestScore = Infinity;
     for (let dz = -radius; dz <= radius; dz++) {
       for (let dx = -radius; dx <= radius; dx++) {
         const distanceSq = dx * dx + dz * dz;
         if (distanceSq > radius * radius) continue;
-        const xx = cx + dx, zz = cz + dz;
+        const xx = cx + dx,
+          zz = cz + dz;
         if (xx < 1 || zz < 1 || xx >= this.size - 1 || zz >= this.size - 1) continue;
         for (let layer = 0; layer < LAYERS; layer++) {
           const candidate = this.info(this.encode(xx, zz, layer));
@@ -235,9 +258,16 @@ export class NavigationSurface {
 }
 
 export class IncrementalAStar {
-  declare surface: any; declare g: any; declare cameFrom: any; declare seen: any;
-  declare generation: any; declare heap: any; declare start: any; declare goal: any;
-  declare expansions: any; declare searching: any;
+  declare surface: any;
+  declare g: any;
+  declare cameFrom: any;
+  declare seen: any;
+  declare generation: any;
+  declare heap: any;
+  declare start: any;
+  declare goal: any;
+  declare expansions: any;
+  declare searching: any;
   constructor(surface: any) {
     this.surface = surface;
     const nodeCount = surface.cells * LAYERS;
@@ -255,7 +285,8 @@ export class IncrementalAStar {
   _heuristic(node: any) {
     const a = this.surface.decode(node);
     const b = this.surface.decode(this.goal);
-    const dx = Math.abs(a.x - b.x), dz = Math.abs(a.z - b.z);
+    const dx = Math.abs(a.x - b.x),
+      dz = Math.abs(a.z - b.z);
     return Math.max(dx, dz) + (Math.SQRT2 - 1) * Math.min(dx, dz);
   }
 
@@ -302,7 +333,7 @@ export class IncrementalAStar {
       const { node, score } = this.heap.pop();
       if (this.seen[node] !== this.generation) continue;
       const expected = this.g[node] + this._heuristic(node);
-      if (score > expected + 0.02) continue;          // stale heap entry
+      if (score > expected + 0.02) continue; // stale heap entry
       if (node === this.goal) {
         this.searching = false;
         return this._reconstruct();
@@ -338,11 +369,13 @@ export function routePoints(nodes: any, surface: any) {
   };
   append(nodes[0]);
 
-  let previousDx = 0, previousDz = 0;
+  let previousDx = 0,
+    previousDz = 0;
   for (let i = 1; i < nodes.length; i++) {
     const a = surface.decode(nodes[i - 1]);
     const b = surface.decode(nodes[i]);
-    const dx = Math.sign(b.x - a.x), dz = Math.sign(b.z - a.z);
+    const dx = Math.sign(b.x - a.x),
+      dz = Math.sign(b.z - a.z);
     const layerChanged = a.layer !== b.layer;
     const waterChanged = surface.info(nodes[i - 1]).water !== surface.info(nodes[i]).water;
     if (i > 1 && (dx !== previousDx || dz !== previousDz || layerChanged || waterChanged)) {
@@ -373,10 +406,7 @@ export function createPathNavigator({ world, controller, camera, dom, input }: a
   });
   // Open at the equator: only the outward half of the sphere rises from the
   // clicked face, so the feedback reads as a soft pulse rather than an orb.
-  const pulse = new THREE.Mesh(
-    new THREE.SphereGeometry(0.62, 24, 12, 0, Math.PI * 2, 0, Math.PI * 0.5),
-    pulseMaterial,
-  );
+  const pulse = new THREE.Mesh(new THREE.SphereGeometry(0.62, 24, 12, 0, Math.PI * 2, 0, Math.PI * 0.5), pulseMaterial);
   pulse.name = 'click-pulse';
   pulse.visible = false;
   pulse.frustumCulled = false;
@@ -389,7 +419,8 @@ export function createPathNavigator({ world, controller, camera, dom, input }: a
   let waypoint = 0;
   let goal = -1;
   let stuckFor = 0;
-  let lastX = controller.pos.x, lastZ = controller.pos.z;
+  let lastX = controller.pos.x,
+    lastZ = controller.pos.z;
   let replans = 0;
 
   const clearRoute = (clearGoal = true) => {
@@ -414,8 +445,7 @@ export function createPathNavigator({ world, controller, camera, dom, input }: a
   };
 
   const showPulse = (hit: any) => {
-    pulseNormal.copy(hit.face?.normal || pulseUp)
-      .transformDirection(hit.object.matrixWorld);
+    pulseNormal.copy(hit.face?.normal || pulseUp).transformDirection(hit.object.matrixWorld);
     pulse.position.copy(hit.point).addScaledVector(pulseNormal, 0.018);
     pulse.quaternion.setFromUnitVectors(pulseUp, pulseNormal);
     pulse.scale.setScalar(0.16);
@@ -440,10 +470,7 @@ export function createPathNavigator({ world, controller, camera, dom, input }: a
 
   const chooseDestination = (clientX: any, clientY: any) => {
     const rect = dom.getBoundingClientRect();
-    pointer.set(
-      ((clientX - rect.left) / rect.width) * 2 - 1,
-      -((clientY - rect.top) / rect.height) * 2 + 1,
-    );
+    pointer.set(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
     raycaster.setFromCamera(pointer, camera);
     const hit = raycaster.intersectObject(world.meshes.solid, true)[0];
     if (!hit) return;
@@ -467,13 +494,17 @@ export function createPathNavigator({ world, controller, camera, dom, input }: a
     pressed = null;
     if (distance <= 6 && !input.paused) chooseDestination(event.clientX, event.clientY);
   });
-  dom.addEventListener('pointercancel', () => { pressed = null; });
+  dom.addEventListener('pointercancel', () => {
+    pressed = null;
+  });
 
   return {
     cancel: clearRoute,
     /** Shared so other agents navigate the same surface. See NavigationSurface. */
     surface,
-    get active() { return search.searching || Boolean(route); },
+    get active() {
+      return search.searching || Boolean(route);
+    },
 
     /** Replace `wish` only when no manual movement is active. */
     update(dt: any, wish: any, manualMovement: any, suspended = false) {
@@ -517,7 +548,7 @@ export function createPathNavigator({ world, controller, camera, dom, input }: a
 
       if (distance > 1e-5) {
         const speed = THREE.MathUtils.clamp(distance / 1.35, 0.18, 1);
-        wish.set(dx / distance * speed, 0, dz / distance * speed);
+        wish.set((dx / distance) * speed, 0, (dz / distance) * speed);
       }
 
       const moved = Math.hypot(controller.pos.x - lastX, controller.pos.z - lastZ);

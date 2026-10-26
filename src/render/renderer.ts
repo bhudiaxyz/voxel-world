@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { GRADE, SKY } from '../core/palette';
+import { GRADE } from '../core/palette';
 import type { GpuTier } from './gpu-tier';
 import { TIER_SETTINGS } from './gpu-tier';
 
@@ -38,7 +38,8 @@ export function createRenderer(container: any, tier: GpuTier = 'high') {
   // Palette colours are stored linear. getHex() encodes back to sRGB, which is
   // what setClearColor expects; the previous convertLinearToSRGB() *before*
   // getHex() applied the transfer twice and cleared to a near-white.
-  renderer.setClearColor(SKY.haze.getHex(THREE.SRGBColorSpace), 1);
+  // Start dark so the canvas doesn't flash sky-haze colour before the first frame renders.
+  renderer.setClearColor(0x07070a, 1);
   container.appendChild(renderer.domElement);
 
   (renderer as any).renderProfile = tier;

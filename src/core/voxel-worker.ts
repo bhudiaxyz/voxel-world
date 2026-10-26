@@ -30,8 +30,7 @@ self.onmessage = ({ data }) => {
   const { key, window } = data;
   try {
     const payload = buildChunkTransferPayload(window);
-    (self as any).postMessage({ key, ci: window.ci, ck: window.ck, payload },
-      collectTransfers(payload));
+    (self as any).postMessage({ key, ci: window.ci, ck: window.ck, payload }, collectTransfers(payload));
   } catch (error) {
     self.postMessage({
       key,

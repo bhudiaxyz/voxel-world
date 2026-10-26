@@ -20,6 +20,7 @@ import { createSettings } from './ui/settings';
 import { createHud } from './ui/hud';
 import { makeRng } from './core/rng';
 import { createDroneMode } from './player/drone';
+import { createFlyMode } from './player/fly';
 import { detectGpuTier } from './render/gpu-tier';
 import { createTouchControls, isTouchDevice } from './ui/touch-controls';
 
@@ -27,8 +28,9 @@ const SEED = 20260820;
 
 // Scratch vectors — reused every frame to avoid GC pressure.
 const _sunWorld = new THREE.Vector3();
-const _sunNDC   = new THREE.Vector3();
-let _lastPlanetX = Infinity, _lastPlanetZ = Infinity;
+const _sunNDC = new THREE.Vector3();
+let _lastPlanetX = Infinity,
+  _lastPlanetZ = Infinity;
 
 const container = document.getElementById('app')!;
 const bootEl = document.getElementById('boot')!;
@@ -47,10 +49,7 @@ async function start(): Promise<void> {
   const world = await buildWorld(SEED, setProgress);
   scene.add(world.group);
 
-  const fpCam = new FPCamera(
-    container.clientWidth / container.clientHeight,
-    renderer.domElement,
-  );
+  const fpCam = new FPCamera(container.clientWidth / container.clientHeight, renderer.domElement);
   const atmo = new Atmosphere(scene, world.size, tier);
   const dayNight = new DayNight(atmo, renderer);
 
@@ -77,37 +76,61 @@ async function start(): Promise<void> {
 
   const controller = new Controller(world.grid, world.spawn);
   const drone = createDroneMode(world.grid);
+  const fly = createFlyMode(world.grid);
   const input = new Input(renderer.domElement);
   const canAct = () => fpCam.isLocked || fpCam.touchActive;
   document.addEventListener('keydown', (e: KeyboardEvent) => {
     if (!canAct()) return;
-    // F or G: enter drone (planet-explorer uses F; G kept as alias)
-    if ((e.code === 'KeyF' || e.code === 'KeyG') && !e.repeat) {
-      if (!drone.active) { drone.enter(fpCam.camera); fpCam.droneActive = true; }
+    // F: toggle fly mode
+    if (e.code === 'KeyF' && !e.repeat && !drone.active) {
+      if (fly.active) {
+        fly.exit();
+        fpCam.flyActive = false;
+        fpCam.yaw = fpCam.camera.rotation.y;
+        fpCam.pitch = 0;
+      } else {
+        fly.enter(fpCam.camera);
+        fpCam.flyActive = true;
+      }
     }
-    // L: land (while airborne; ascend cancels landing — handled in drone.ts)
+    // G: enter drone
+    if (e.code === 'KeyG' && !e.repeat && !drone.active && !fly.active) {
+      drone.enter(fpCam.camera);
+      fpCam.droneActive = true;
+    }
+    // L: land (drone only; ascend cancels landing — handled in drone.ts)
     if (e.code === 'KeyL' && !e.repeat && drone.active) {
       drone.beginLanding();
     }
     if (e.code === 'KeyE' && !e.repeat) {
       const g = post.grade.uniforms;
       const on = g['uEdgeDarkOpacity'].value === 0;
-      g['uEdgeDarkOpacity'].value  = on ? 0.64 : 0;
-      g['uEdgeLightOpacity'].value = on ? 0.30 : 0;
+      g['uEdgeDarkOpacity'].value = on ? 0.64 : 0;
+      g['uEdgeLightOpacity'].value = on ? 0.3 : 0;
     }
   });
 
   const navigator = createPathNavigator({
-    world, controller, camera: fpCam.camera, dom: renderer.domElement, input,
+    world,
+    controller,
+    camera: fpCam.camera,
+    dom: renderer.domElement,
+    input,
   });
   const map = createMap({ world, controller, input });
   const bubbles = createBubbles({
-    camera: fpCam.camera, container, viewport: renderer.domElement as any,
+    camera: fpCam.camera,
+    container,
+    viewport: renderer.domElement as any,
   });
 
   const dog = createDog({
-    world, surface: navigator.surface, player: controller, input: input as any,
-    edgeMaterial: world.meshes.edgeMaterial, rng: makeRng(SEED ^ 0xd06),
+    world,
+    surface: navigator.surface,
+    player: controller,
+    input: input as any,
+    edgeMaterial: world.meshes.edgeMaterial,
+    rng: makeRng(SEED ^ 0xd06),
     onCommand: ((name: string) => bubbles.say(character.root, name, { height: 3.35 })) as any,
   });
   scene.add(dog.root);
@@ -116,17 +139,41 @@ async function start(): Promise<void> {
 
   const post = createPostFX(renderer, scene, fpCam.camera, world.meshes.edgeMaterial, tier);
   // FPCamera has no zoom range; pass a stub so settings.js compiles cleanly
-  const settings = createSettings({ rig: { setZoomRange: () => {} }, atmo, input, world, dayNight });
+  const settings = createSettings({
+    rig: { setZoomRange: () => {} },
+    atmo,
+    input,
+    world,
+    dayNight,
+  });
   const hud = createHud({ dayNight, drone, camera: fpCam.camera });
   const pause = createPause({ input, map });
 
-  touch.onDroneEnter(() => { drone.enter(fpCam.camera); fpCam.droneActive = true; });
-  touch.onLand(() => { if (drone.active) drone.beginLanding(); });
+  touch.onFly(() => {
+    if (fly.active) {
+      fly.exit();
+      fpCam.flyActive = false;
+      fpCam.yaw = fpCam.camera.rotation.y;
+      fpCam.pitch = 0;
+    } else if (!drone.active) {
+      fly.enter(fpCam.camera);
+      fpCam.flyActive = true;
+    }
+  });
+  touch.onDrone(() => {
+    if (!drone.active && !fly.active) {
+      drone.enter(fpCam.camera);
+      fpCam.droneActive = true;
+    }
+  });
+  touch.onLand(() => {
+    if (drone.active) drone.beginLanding();
+  });
   touch.onEdgeToggle(() => {
     const g = post.grade.uniforms;
     const on = g['uEdgeDarkOpacity'].value === 0;
-    g['uEdgeDarkOpacity'].value  = on ? 0.64 : 0;
-    g['uEdgeLightOpacity'].value = on ? 0.30 : 0;
+    g['uEdgeDarkOpacity'].value = on ? 0.64 : 0;
+    g['uEdgeLightOpacity'].value = on ? 0.3 : 0;
   });
 
   // frame the spawn before the veil lifts
@@ -138,7 +185,8 @@ async function start(): Promise<void> {
   scene.matrixWorldAutoUpdate = false;
 
   addEventListener('resize', () => {
-    const w = container.clientWidth, h = container.clientHeight;
+    const w = container.clientWidth,
+      h = container.clientHeight;
     (renderer as any).resizeTo(w, h);
     fpCam.resize(w / h);
     post.setSize(w, h);
@@ -179,7 +227,9 @@ async function start(): Promise<void> {
 
     const STEP = 1 / 60;
     let remaining = dt;
-    let jumped = false, landed = 0, stepped = 0;
+    let jumped = false,
+      landed = 0,
+      stepped = 0;
     while (remaining > 1e-5) {
       const h = Math.min(remaining, STEP);
       const e = controller.update(h, wish, jumpEdge && remaining === dt, jumpHeld);
@@ -204,7 +254,10 @@ async function start(): Promise<void> {
     character.root.updateMatrixWorld(true);
     dog.update(dt);
 
-    if (drone.active) {
+    if (fly.active) {
+      fpCam.camera.rotation.set(fpCam.pitch, fpCam.yaw, 0); // apply mouse/touch look
+      fly.update(dt, fpCam.camera, fpCam._keys, fpCam.drainDroneAltDelta(dt), fpCam._joyX, fpCam._joyY);
+    } else if (drone.active) {
       const done = drone.update(
         dt,
         fpCam.camera,
@@ -216,7 +269,7 @@ async function start(): Promise<void> {
       );
       if (done) {
         fpCam.droneActive = false;
-        fpCam.yaw   = fpCam.camera.rotation.y;
+        fpCam.yaw = fpCam.camera.rotation.y;
         fpCam.pitch = 0;
       }
     } else {
@@ -230,9 +283,10 @@ async function start(): Promise<void> {
       const sunDir = dayNight.sunDir; // read-only reference, no allocation
       _sunWorld.copy(sunDir).multiplyScalar(500).add(fpCam.camera.position);
       _sunNDC.copy(_sunWorld).project(fpCam.camera);
-      const sunVisible = sunDir.y > -0.1 && Math.abs(_sunNDC.x) < 1.2 && Math.abs(_sunNDC.y) < 1.2
-        ? Math.pow(Math.max(0, 0.25 - sunDir.y) / 0.35, 1.5)
-        : 0;
+      const sunVisible =
+        sunDir.y > -0.1 && Math.abs(_sunNDC.x) < 1.2 && Math.abs(_sunNDC.y) < 1.2
+          ? Math.pow(Math.max(0, 0.25 - sunDir.y) / 0.35, 1.5)
+          : 0;
       post.setSunScreenPos(_sunNDC.x * 0.5 + 0.5, -_sunNDC.y * 0.5 + 0.5, sunVisible);
     }
     atmo.update(dt, fpCam.camera);
@@ -240,14 +294,14 @@ async function start(): Promise<void> {
     particles.update(dt, fpCam.camera);
     for (const d of world.animated) d.update(dt, fpCam.camera);
     bubbles.update(dt);
-    touch.update(drone.active, drone.landing);
+    touch.update(drone.active, drone.landing, fly.active);
     map.update();
     hud.update();
     settings.update();
 
     // Update planet-bend uniforms only when the player has moved (saves an
     // iteration over all materials every frame while standing still or hovering).
-    const bendOrigin = fpCam.droneActive ? fpCam.camera.position : controller.pos;
+    const bendOrigin = fpCam.droneActive || fpCam.flyActive ? fpCam.camera.position : controller.pos;
     if (Math.abs(bendOrigin.x - _lastPlanetX) + Math.abs(bendOrigin.z - _lastPlanetZ) > 0.001) {
       _lastPlanetX = bendOrigin.x;
       _lastPlanetZ = bendOrigin.z;
@@ -260,13 +314,19 @@ async function start(): Promise<void> {
       started = true;
       const ctrlEl = bootEl.querySelector('.ls-controls') as HTMLElement;
       ctrlEl.textContent = isTouchDevice
-        ? 'Left stick · move   Swipe right · look   ↑ · jump/ascend   ↓ · descend   ⚡ · sprint   ✈ · drone   🛬 · land'
-        : 'WASD · move   Mouse · look   Space · jump/ascend   C · descend   Shift · sprint   F/G · drone   L · land   E · edges   M · map';
+        ? 'Left stick · move   Swipe right · look   ↑ · jump/ascend   ↓ · descend   ⚡ · sprint   ✈ · fly   🚁 · drone   🛬 · land'
+        : 'WASD · move   Mouse · look   Space · jump   F · fly   G · drone   L · land   E · edges   M · map';
       bootEl.classList.add('ready');
-      bootEl.addEventListener('click', () => {
-        bootEl.classList.add('dismissed');
-        bootEl.addEventListener('transitionend', () => bootEl.classList.add('gone'), { once: true });
-      }, { once: true });
+      bootEl.addEventListener(
+        'click',
+        () => {
+          bootEl.classList.add('dismissed');
+          bootEl.addEventListener('transitionend', () => bootEl.classList.add('gone'), {
+            once: true,
+          });
+        },
+        { once: true },
+      );
     }
   }
 
@@ -274,8 +334,25 @@ async function start(): Promise<void> {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (window as any).__game = {
-    scene, renderer, fpCam, world, controller, character, post, atmo, water,
-    particles, navigator, map, pause, settings, hud, input, dog, bubbles, tier,
+    scene,
+    renderer,
+    fpCam,
+    world,
+    controller,
+    character,
+    post,
+    atmo,
+    water,
+    particles,
+    navigator,
+    map,
+    pause,
+    settings,
+    hud,
+    input,
+    dog,
+    bubbles,
+    tier,
   };
 }
 

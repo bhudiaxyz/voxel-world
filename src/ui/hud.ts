@@ -104,9 +104,9 @@ export function createHud({ dayNight, drone, camera }: HudDeps) {
       const tod = dayNight.timeOfDay;
       const totalH = tod * 24;
       const hour = Math.floor(totalH);
-      const min  = Math.floor((totalH - hour) * 60);
-      const icon = (hour >= 6 && hour < 20) ? '☀' : '🌙';
-      timeEl.textContent = `${icon} ${hour.toString().padStart(2,'0')}:${min.toString().padStart(2,'0')}`;
+      const min = Math.floor((totalH - hour) * 60);
+      const icon = hour >= 6 && hour < 20 ? '☀' : '🌙';
+      timeEl.textContent = `${icon} ${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
 
       // Drone stats — only when active
       if (drone.active) {
@@ -122,8 +122,10 @@ export function createHud({ dayNight, drone, camera }: HudDeps) {
       place.textContent = name;
       place.classList.add('show');
       clearTimeout((place as HTMLElement & { _t?: ReturnType<typeof setTimeout> })._t);
-      (place as HTMLElement & { _t?: ReturnType<typeof setTimeout> })._t =
-        setTimeout(() => place.classList.remove('show'), 2600);
+      (place as HTMLElement & { _t?: ReturnType<typeof setTimeout> })._t = setTimeout(
+        () => place.classList.remove('show'),
+        2600,
+      );
     },
   };
 }

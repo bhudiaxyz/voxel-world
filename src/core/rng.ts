@@ -7,7 +7,8 @@
 export function makeRng(seed = 1337) {
   let a = seed >>> 0;
   const fn = () => {
-    a |= 0; a = (a + 0x6d2b79f5) | 0;
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
     let t = Math.imul(a ^ (a >>> 15), 1 | a);
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
@@ -44,39 +45,57 @@ const lerp = (a: any, b: any, t: any) => a + (b - a) * t;
 /** Value noise in [-1,1]. Smooth enough for terrain; cheap. */
 export function makeNoise2D(seed = 1) {
   return (x: any, y: any) => {
-    const xi = Math.floor(x), yi = Math.floor(y);
-    const xf = x - xi, yf = y - yi;
-    const u = fade(xf), v = fade(yf);
-    const a = hash2(xi,     yi,     seed);
-    const b = hash2(xi + 1, yi,     seed);
-    const cc = hash2(xi,    yi + 1, seed);
+    const xi = Math.floor(x),
+      yi = Math.floor(y);
+    const xf = x - xi,
+      yf = y - yi;
+    const u = fade(xf),
+      v = fade(yf);
+    const a = hash2(xi, yi, seed);
+    const b = hash2(xi + 1, yi, seed);
+    const cc = hash2(xi, yi + 1, seed);
     const d = hash2(xi + 1, yi + 1, seed);
-    return (lerp(lerp(a, b, u), lerp(cc, d, u), v) * 2 - 1);
+    return lerp(lerp(a, b, u), lerp(cc, d, u), v) * 2 - 1;
   };
 }
 
 export function makeNoise3D(seed = 1) {
   return (x: any, y: any, z: any) => {
-    const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z);
-    const xf = x - xi, yf = y - yi, zf = z - zi;
-    const u = fade(xf), v = fade(yf), w = fade(zf);
-    const c000 = hash3(xi,   yi,   zi,   seed), c100 = hash3(xi+1, yi,   zi,   seed);
-    const c010 = hash3(xi,   yi+1, zi,   seed), c110 = hash3(xi+1, yi+1, zi,   seed);
-    const c001 = hash3(xi,   yi,   zi+1, seed), c101 = hash3(xi+1, yi,   zi+1, seed);
-    const c011 = hash3(xi,   yi+1, zi+1, seed), c111 = hash3(xi+1, yi+1, zi+1, seed);
-    const x00 = lerp(c000, c100, u), x10 = lerp(c010, c110, u);
-    const x01 = lerp(c001, c101, u), x11 = lerp(c011, c111, u);
+    const xi = Math.floor(x),
+      yi = Math.floor(y),
+      zi = Math.floor(z);
+    const xf = x - xi,
+      yf = y - yi,
+      zf = z - zi;
+    const u = fade(xf),
+      v = fade(yf),
+      w = fade(zf);
+    const c000 = hash3(xi, yi, zi, seed),
+      c100 = hash3(xi + 1, yi, zi, seed);
+    const c010 = hash3(xi, yi + 1, zi, seed),
+      c110 = hash3(xi + 1, yi + 1, zi, seed);
+    const c001 = hash3(xi, yi, zi + 1, seed),
+      c101 = hash3(xi + 1, yi, zi + 1, seed);
+    const c011 = hash3(xi, yi + 1, zi + 1, seed),
+      c111 = hash3(xi + 1, yi + 1, zi + 1, seed);
+    const x00 = lerp(c000, c100, u),
+      x10 = lerp(c010, c110, u);
+    const x01 = lerp(c001, c101, u),
+      x11 = lerp(c011, c111, u);
     return lerp(lerp(x00, x10, v), lerp(x01, x11, v), w) * 2 - 1;
   };
 }
 
 /** Fractal brownian motion over any 2D noise source. */
 export function fbm2(noise: any, x: any, y: any, octaves = 4, lacunarity = 2.0, gain = 0.5) {
-  let amp = 1, freq = 1, sum = 0, norm = 0;
+  let amp = 1,
+    freq = 1,
+    sum = 0,
+    norm = 0;
   for (let i = 0; i < octaves; i++) {
-    sum  += noise(x * freq, y * freq) * amp;
+    sum += noise(x * freq, y * freq) * amp;
     norm += amp;
-    amp  *= gain;
+    amp *= gain;
     freq *= lacunarity;
   }
   return sum / norm;
@@ -84,12 +103,15 @@ export function fbm2(noise: any, x: any, y: any, octaves = 4, lacunarity = 2.0, 
 
 /** Ridged fbm — good for rocky spines and river banks. */
 export function ridge2(noise: any, x: any, y: any, octaves = 4) {
-  let amp = 1, freq = 1, sum = 0, norm = 0;
+  let amp = 1,
+    freq = 1,
+    sum = 0,
+    norm = 0;
   for (let i = 0; i < octaves; i++) {
     const n = 1 - Math.abs(noise(x * freq, y * freq));
-    sum  += n * n * amp;
+    sum += n * n * amp;
     norm += amp;
-    amp  *= 0.5;
+    amp *= 0.5;
     freq *= 2.0;
   }
   return sum / norm;

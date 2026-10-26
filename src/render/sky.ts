@@ -14,7 +14,7 @@
 import * as THREE from 'three';
 
 /** Uniform block both shaders must declare. */
-export const SKY_UNIFORMS_GLSL = /* glsl */`
+export const SKY_UNIFORMS_GLSL = /* glsl */ `
   uniform vec3 uSkyZenith;
   uniform vec3 uSkyHorizon;
   uniform vec3 uSkyNadir;
@@ -31,7 +31,7 @@ export const SKY_UNIFORMS_GLSL = /* glsl */`
   uniform vec3  uSunColor;
 `;
 
-export const SKY_FN_GLSL = /* glsl */`
+export const SKY_FN_GLSL = /* glsl */ `
   // --- 3D procedural helpers for night sky ---
 
   float _hash3(vec3 p) {
@@ -199,28 +199,35 @@ export const SKY_FN_GLSL = /* glsl */`
 `;
 
 /** Wire the shared uniforms onto a material/pass. Values come from palette. */
-export function skyUniformValues(SKY: {
-  zenith: THREE.Color; horizon: THREE.Color; haze: THREE.Color;
-  sunTint: THREE.Color; ground: THREE.Color;
-}, sunDir: THREE.Vector3, THREE_: typeof THREE) {
+export function skyUniformValues(
+  SKY: {
+    zenith: THREE.Color;
+    horizon: THREE.Color;
+    haze: THREE.Color;
+    sunTint: THREE.Color;
+    ground: THREE.Color;
+  },
+  sunDir: THREE.Vector3,
+  THREE_: typeof THREE,
+) {
   return {
     // Slightly lifted and pushed toward lilac vs the raw palette entries: the
     // references sit their sky in a very narrow, very bright band and any
     // saturation here immediately reads as "outdoors at noon" instead of
     // "miniature under studio light".
-    uSkyZenith:      { value: SKY.zenith.clone().lerp(SKY.haze, 0.30) },
-    uSkyHorizon:     { value: SKY.horizon.clone().lerp(SKY.haze, 0.22) },
-    uSkyNadir:       { value: SKY.ground.clone().lerp(SKY.haze, 0.45).multiplyScalar(0.94) },
-    uSunGlow:        { value: SKY.sunTint.clone().multiplyScalar(0.16) },
-    uSunDirW:        { value: sunDir.clone() },
-    uNight:          { value: 0.0 },
-    uMoonDir:        { value: new THREE_.Vector3(0, -1, 0) },
-    uStarAngle:      { value: 0.0 },
+    uSkyZenith: { value: SKY.zenith.clone().lerp(SKY.haze, 0.3) },
+    uSkyHorizon: { value: SKY.horizon.clone().lerp(SKY.haze, 0.22) },
+    uSkyNadir: { value: SKY.ground.clone().lerp(SKY.haze, 0.45).multiplyScalar(0.94) },
+    uSunGlow: { value: SKY.sunTint.clone().multiplyScalar(0.16) },
+    uSunDirW: { value: sunDir.clone() },
+    uNight: { value: 0.0 },
+    uMoonDir: { value: new THREE_.Vector3(0, -1, 0) },
+    uStarAngle: { value: 0.0 },
     uGalaxyStrength: { value: 0.85 },
     uNebulaStrength: { value: 0.6 },
-    uCloudCover:     { value: 0.08 },
-    uCloudDark:      { value: 0.0 },
-    uWind:           { value: new THREE_.Vector2(1, 0) },
-    uSunColor:       { value: new THREE_.Color(1.0, 0.9, 0.7) },
+    uCloudCover: { value: 0.08 },
+    uCloudDark: { value: 0.0 },
+    uWind: { value: new THREE_.Vector2(1, 0) },
+    uSunColor: { value: new THREE_.Color(1.0, 0.9, 0.7) },
   };
 }

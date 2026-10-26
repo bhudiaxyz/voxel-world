@@ -50,38 +50,38 @@ import { SKY_UNIFORMS_GLSL, SKY_FN_GLSL, skyUniformValues } from './sky';
  * ------------------------------------------------------------------ */
 const GradeShader = {
   uniforms: {
-    tDiffuse:   { value: null },
-    uLift:      { value: GRADE.lift.clone() },
-    uGamma:     { value: GRADE.gamma.clone() },
-    uGain:      { value: GRADE.gain.clone() },
-    uSat:       { value: GRADE.saturation },
-    uContrast:  { value: GRADE.contrast },
-    uVignette:  { value: GRADE.vignette },
-    uTime:      { value: 0 },
-    uGrain:     { value: 0.006 },
-    uAberration:{ value: 0.0008 },
-    tEdges:     { value: null },
+    tDiffuse: { value: null },
+    uLift: { value: GRADE.lift.clone() },
+    uGamma: { value: GRADE.gamma.clone() },
+    uGain: { value: GRADE.gain.clone() },
+    uSat: { value: GRADE.saturation },
+    uContrast: { value: GRADE.contrast },
+    uVignette: { value: GRADE.vignette },
+    uTime: { value: 0 },
+    uGrain: { value: 0.006 },
+    uAberration: { value: 0.0008 },
+    tEdges: { value: null },
     // Display-space ink. It is mixed, never added, after bloom and tone
     // mapping, so the pale stroke cannot become an emitter.
-    uEdgeDark:  { value: new THREE.Vector3(0.39, 0.32, 0.43) },
+    uEdgeDark: { value: new THREE.Vector3(0.39, 0.32, 0.43) },
     uEdgeLight: { value: new THREE.Vector3(0.94, 0.91, 0.93) },
-    uEdgeDarkOpacity:  { value: 0.0 },
+    uEdgeDarkOpacity: { value: 0.0 },
     uEdgeLightOpacity: { value: 0.0 },
     // "Milk": a flat mix toward a bright lilac across the whole frame. The
     // reference frames are clean and confidently coloured, so this stays low
     // — just enough to keep the darkest values from going heavy.
-    uMilk:      { value: 0.010 },
+    uMilk: { value: 0.01 },
     uMilkColor: { value: new THREE.Vector3(0.855, 0.845, 0.925) },
     // Highlight rolloff. ACES already shoulders, but pastels sit high enough
     // that a second, gentler knee is what stops blossom tops clipping to white.
-    uKnee:      { value: 0.80 },
+    uKnee: { value: 0.8 },
     toneMappingExposure: { value: GRADE.exposure },
   },
-  vertexShader: /* glsl */`
+  vertexShader: /* glsl */ `
     varying vec2 vUv;
     void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }
   `,
-  fragmentShader: /* glsl */`
+  fragmentShader: /* glsl */ `
     uniform sampler2D tDiffuse, tEdges;
     uniform vec3 uLift, uGamma, uGain, uMilkColor;
     uniform vec3 uEdgeDark, uEdgeLight;
@@ -197,7 +197,12 @@ class EdgeMaskPass extends Pass {
   material: THREE.Material | null;
   clearColor: THREE.Color;
 
-  constructor(material: THREE.Material | null, camera: THREE.Camera, target: THREE.WebGLRenderTarget, scene: THREE.Scene) {
+  constructor(
+    material: THREE.Material | null,
+    camera: THREE.Camera,
+    target: THREE.WebGLRenderTarget,
+    scene: THREE.Scene,
+  ) {
     super();
     this.needsSwap = false;
     this.camera = camera;
@@ -274,19 +279,21 @@ class SceneDepthPass extends Pass {
   constructor(scene: THREE.Scene, camera: THREE.Camera, fbo: THREE.WebGLRenderTarget) {
     super();
     this.needsSwap = false;
-    this._scene  = scene;
+    this._scene = scene;
     this._camera = camera;
-    this._fbo    = fbo;
-    this._quad   = new FullScreenQuad(new THREE.ShaderMaterial({
-      uniforms: { tDiffuse: { value: fbo.texture } },
-      vertexShader:   `varying vec2 vUv;
+    this._fbo = fbo;
+    this._quad = new FullScreenQuad(
+      new THREE.ShaderMaterial({
+        uniforms: { tDiffuse: { value: fbo.texture } },
+        vertexShader: `varying vec2 vUv;
                        void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
-      fragmentShader: `uniform sampler2D tDiffuse; varying vec2 vUv;
+        fragmentShader: `uniform sampler2D tDiffuse; varying vec2 vUv;
                        void main(){ gl_FragColor=texture2D(tDiffuse,vUv); }`,
-      depthTest: false,
-      depthWrite: false,
-      toneMapped: false,
-    }));
+        depthTest: false,
+        depthWrite: false,
+        toneMapped: false,
+      }),
+    );
   }
 
   render(renderer: THREE.WebGLRenderer, _write: THREE.WebGLRenderTarget, read: THREE.WebGLRenderTarget) {
@@ -298,7 +305,9 @@ class SceneDepthPass extends Pass {
     this._quad.render(renderer);
   }
 
-  setSize(w: number, h: number) { this._fbo.setSize(w, h); }
+  setSize(w: number, h: number) {
+    this._fbo.setSize(w, h);
+  }
 
   dispose() {
     (this._quad.material as THREE.Material).dispose();
@@ -312,51 +321,51 @@ class SceneDepthPass extends Pass {
 function makeAtmosphereShader(sunDir: THREE.Vector3) {
   return {
     uniforms: {
-      tDiffuse:   { value: null },
-      tDepth:     { value: null },
-      uNear:      { value: 1 },
-      uFar:       { value: 620 },
-      uInvProj:   { value: new THREE.Matrix4() },
-      uInvView:   { value: new THREE.Matrix4() },
-      uCamPos:    { value: new THREE.Vector3() },
-      uResolution:{ value: new THREE.Vector2(1600, 900) },
-      uFocal:     { value: 900.0 },
-      uTime:      { value: 0 },
+      tDiffuse: { value: null },
+      tDepth: { value: null },
+      uNear: { value: 1 },
+      uFar: { value: 620 },
+      uInvProj: { value: new THREE.Matrix4() },
+      uInvView: { value: new THREE.Matrix4() },
+      uCamPos: { value: new THREE.Vector3() },
+      uResolution: { value: new THREE.Vector2(1600, 900) },
+      uFocal: { value: 900.0 },
+      uTime: { value: 0 },
 
       ...skyUniformValues(SKY, sunDir, THREE),
 
       /** must match scene.fog's 1/density so the two agree */
-      uAerialD:   { value: 196 },
+      uAerialD: { value: 196 },
       /** Must match the near plane patched into three's fog chunk. */
-      uFogNear:   { value: FOG_NEAR },
+      uFogNear: { value: FOG_NEAR },
       /** how much residual chroma distance eats, on top of the fog mix */
-      uDesat:     { value: 0.58 },
+      uDesat: { value: 0.58 },
       /** how far a fogged pixel is pulled toward its true directional sky colour */
-      uSkyBlend:  { value: 0.62 },
+      uSkyBlend: { value: 0.62 },
 
       /* ---- valley mist ---- */
-      uMistColor: { value: new THREE.Color(0.80, 0.79, 0.90) },
-      uMistBase:  { value: 8.0 },     // waterline-ish
-      uMistH:     { value: 9.0 },     // e-folding height
-      uMistDens:  { value: 0.012 },
-      uMistMax:   { value: 0.34 },
+      uMistColor: { value: new THREE.Color(0.8, 0.79, 0.9) },
+      uMistBase: { value: 8.0 }, // waterline-ish
+      uMistH: { value: 9.0 }, // e-folding height
+      uMistDens: { value: 0.012 },
+      uMistMax: { value: 0.34 },
 
       /* ---- large-scale AO ---- */
-      uAOStrength:{ value: 0.24 },
-      uAORadius:  { value: 2.4 },     // world units (tuned for the ~40u play camera)
-      uAORange:   { value: 4.5 },     // depth delta that counts as fully occluding
-      uAOTint:    { value: new THREE.Color(0.61, 0.57, 0.72) },
+      uAOStrength: { value: 0.24 },
+      uAORadius: { value: 2.4 }, // world units (tuned for the ~40u play camera)
+      uAORange: { value: 4.5 }, // depth delta that counts as fully occluding
+      uAOTint: { value: new THREE.Color(0.61, 0.57, 0.72) },
 
       /* ---- extras ---- */
       uInscatter: { value: 0.28 },
-      uDof:       { value: 1.2 },     // pixels of defocus at full haze
-      uCloud:     { value: 0.055 },
+      uDof: { value: 1.2 }, // pixels of defocus at full haze
+      uCloud: { value: 0.055 },
     },
-    vertexShader: /* glsl */`
+    vertexShader: /* glsl */ `
       varying vec2 vUv;
       void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }
     `,
-    fragmentShader: /* glsl */`
+    fragmentShader: /* glsl */ `
       #include <packing>
       uniform sampler2D tDiffuse, tDepth;
       uniform float uNear, uFar, uAerialD, uFogNear, uDesat, uSkyBlend;
@@ -548,7 +557,10 @@ export function createPostFX(
   // field that soft luminous edge instead of a flat wash.
   const bloom = new UnrealBloomPass(
     new THREE.Vector2(size.x, size.y),
-    GRADE.bloom.strength, GRADE.bloom.radius, GRADE.bloom.threshold);
+    GRADE.bloom.strength,
+    GRADE.bloom.radius,
+    GRADE.bloom.threshold,
+  );
   // The palette's numbers are display-space intuitions, but this pass sees
   // linear HDR, where a threshold of 0.72 catches most of a pastel palette
   // outright. Only genuine emitters and specular hits should bloom.
@@ -559,18 +571,18 @@ export function createPostFX(
 
   const CrepuscularShader = {
     uniforms: {
-      tDiffuse:    { value: null as THREE.Texture | null },
-      uSunScreen:  { value: new THREE.Vector2(0.5, 0.5) },
+      tDiffuse: { value: null as THREE.Texture | null },
+      uSunScreen: { value: new THREE.Vector2(0.5, 0.5) },
       uSunVisible: { value: 0.0 },
-      uDecay:      { value: 0.96 },
-      uDensity:    { value: 0.96 },
-      uWeight:     { value: 0.35 },
+      uDecay: { value: 0.96 },
+      uDensity: { value: 0.96 },
+      uWeight: { value: 0.35 },
     },
-    vertexShader: /* glsl */`
+    vertexShader: /* glsl */ `
       varying vec2 vUv;
       void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.); }
     `,
-    fragmentShader: /* glsl */`
+    fragmentShader: /* glsl */ `
       uniform sampler2D tDiffuse;
       uniform vec2  uSunScreen;
       uniform float uSunVisible;
@@ -630,7 +642,13 @@ export function createPostFX(
   setRes(size.x, size.y);
 
   return {
-    composer, bloom, grade, haze, target, edgeMask, edgePass,
+    composer,
+    bloom,
+    grade,
+    haze,
+    target,
+    edgeMask,
+    edgePass,
     setSunScreenPos(x: number, y: number, visible: number): void {
       crepPass.uniforms['uSunScreen'].value.set(x, y);
       crepPass.uniforms['uSunVisible'].value = visible;

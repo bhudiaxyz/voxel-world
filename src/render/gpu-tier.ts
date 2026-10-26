@@ -27,15 +27,15 @@ export interface TierSettings {
 }
 
 export const TIER_SETTINGS: Record<GpuTier, TierSettings> = {
-  high: { dprCap: 2,   shadowRes: 3072, blurSamples: 16, bloom: true  },
-  mid:  { dprCap: 1.5, shadowRes: 2048, blurSamples: 8,  bloom: true  },
-  low:  { dprCap: 1,   shadowRes: 1024, blurSamples: 4,  bloom: false },
+  high: { dprCap: 2, shadowRes: 3072, blurSamples: 16, bloom: true },
+  mid: { dprCap: 1.5, shadowRes: 2048, blurSamples: 8, bloom: true },
+  low: { dprCap: 1, shadowRes: 1024, blurSamples: 4, bloom: false },
 };
 
 export function detectGpuTier(): GpuTier {
   const cores = navigator.hardwareConcurrency ?? 4;
   // deviceMemory is in GB; not available on Firefox/Safari — default to 4
-  const mem = (navigator as any).deviceMemory as number | undefined ?? 4;
+  const mem = ((navigator as any).deviceMemory as number | undefined) ?? 4;
   const mobile = /Mobi|Android/i.test(navigator.userAgent);
 
   if (cores <= 4 || mem <= 2) return 'low';

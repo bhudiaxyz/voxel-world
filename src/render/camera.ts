@@ -13,10 +13,21 @@ import * as THREE from 'three';
 const DEG = Math.PI / 180;
 
 export class CameraRig {
-  declare camera: any; declare yaw: any; declare targetYaw: any; declare pitch: any;
-  declare distance: any; declare targetDistance: any; declare minDistance: any; declare maxDistance: any;
-  declare focus: any; declare smoothFocus: any; declare lead: any; declare smoothLead: any;
-  declare shake: any; declare _shakeOff: any; declare _tmp: any;
+  declare camera: any;
+  declare yaw: any;
+  declare targetYaw: any;
+  declare pitch: any;
+  declare distance: any;
+  declare targetDistance: any;
+  declare minDistance: any;
+  declare maxDistance: any;
+  declare focus: any;
+  declare smoothFocus: any;
+  declare lead: any;
+  declare smoothLead: any;
+  declare shake: any;
+  declare _shakeOff: any;
+  declare _tmp: any;
   constructor(aspect: any) {
     this.camera = new THREE.PerspectiveCamera(21, aspect, 1, 620);
 
@@ -47,25 +58,27 @@ export class CameraRig {
     this._tmp = new THREE.Vector3();
   }
 
-  rotate(dir: any) { this.targetYaw += dir * 45 * DEG; }
+  rotate(dir: any) {
+    this.targetYaw += dir * 45 * DEG;
+  }
   zoom(delta: any) {
-    this.targetDistance = THREE.MathUtils.clamp(
-      this.targetDistance + delta, this.minDistance, this.maxDistance);
+    this.targetDistance = THREE.MathUtils.clamp(this.targetDistance + delta, this.minDistance, this.maxDistance);
   }
   setZoomRange(min: any, max: any) {
     this.minDistance = min;
     this.maxDistance = Math.max(max, min + 1);
-    this.targetDistance = THREE.MathUtils.clamp(
-      this.targetDistance, this.minDistance, this.maxDistance);
+    this.targetDistance = THREE.MathUtils.clamp(this.targetDistance, this.minDistance, this.maxDistance);
   }
-  kick(amount: any) { this.shake = Math.min(this.shake + amount, 1); }
+  kick(amount: any) {
+    this.shake = Math.min(this.shake + amount, 1);
+  }
 
   /**
    * @param target  world position to frame (the player)
    * @param velocity player velocity, used for look-ahead
    */
   update(dt: any, target: any, velocity: any) {
-    const k = 1 - Math.exp(-7.5 * dt);       // frame-rate independent damping
+    const k = 1 - Math.exp(-7.5 * dt); // frame-rate independent damping
     const kSlow = 1 - Math.exp(-4.0 * dt);
 
     this.yaw += (this.targetYaw - this.yaw) * (1 - Math.exp(-9 * dt));
@@ -82,20 +95,22 @@ export class CameraRig {
     this.focus.y += 2.2;
     this.smoothFocus.lerp(this._tmp.copy(this.focus).add(this.smoothLead), k);
 
-    const cp = Math.cos(this.pitch), sp = Math.sin(this.pitch);
-    const cy = Math.cos(this.yaw), sy = Math.sin(this.yaw);
+    const cp = Math.cos(this.pitch),
+      sp = Math.sin(this.pitch);
+    const cy = Math.cos(this.yaw),
+      sy = Math.sin(this.yaw);
     const d = this.distance;
 
     this.camera.position.set(
       this.smoothFocus.x + cy * cp * d,
       this.smoothFocus.y + sp * d,
-      this.smoothFocus.z + sy * cp * d);
+      this.smoothFocus.z + sy * cp * d,
+    );
 
     if (this.shake > 0.0001) {
       const s = this.shake * this.shake * 0.55;
       const t = performance.now() * 0.001;
-      this._shakeOff.set(
-        Math.sin(t * 47.3) * s, Math.sin(t * 39.7) * s * 0.8, Math.cos(t * 53.1) * s);
+      this._shakeOff.set(Math.sin(t * 47.3) * s, Math.sin(t * 39.7) * s * 0.8, Math.cos(t * 53.1) * s);
       this.camera.position.add(this._shakeOff);
       this.shake = Math.max(0, this.shake - dt * 3.2);
     }
@@ -105,10 +120,13 @@ export class CameraRig {
 
   /** Movement input is given in screen space; convert it to world space. */
   screenToWorld(ix: any, iz: any, out: any) {
-    const cy = Math.cos(this.yaw), sy = Math.sin(this.yaw);
+    const cy = Math.cos(this.yaw),
+      sy = Math.sin(this.yaw);
     // forward = -camera horizontal direction, right = forward x up
-    const fx = -cy, fz = -sy;
-    const rx = sy, rz = -cy;
+    const fx = -cy,
+      fz = -sy;
+    const rx = sy,
+      rz = -cy;
     out.set(fx * -iz + rx * ix, 0, fz * -iz + rz * ix);
     if (out.lengthSq() > 1) out.normalize();
     return out;

@@ -1,29 +1,33 @@
-<!DOCTYPE html>
-<html lang="en" style="background:#07070a">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Voxel World</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,400;0,700;1,400&family=Roboto+Condensed:wght@700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/src/styles.css">
-</head>
-<body style="background:#07070a">
-  <div id="app"></div>
-  <div id="boot">
-    <div class="ls-bg"></div>
-    <div class="ls-frame">
-      <div class="ls-emblem"></div>
-      <h1 class="ls-title">Voxel World</h1>
-      <div class="ls-rule"></div>
-      <p class="ls-sub" role="status" aria-live="polite">A procedural voxel planet</p>
-      <div class="ls-bar"><span></span></div>
-      <p class="ls-tip">Generating world&hellip;</p>
-      <p class="ls-controls"></p>
-      <p class="ls-enter">Click to enter</p>
+<!doctype html>
+<html lang="en" style="background: #07070a">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Voxel World</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <style>html,body,#app,canvas{background:#07070a}</style>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body style="background: #07070a">
+    <div id="app"></div>
+    <div id="boot">
+      <div class="ls-bg"></div>
+      <div class="ls-frame">
+        <div class="ls-emblem"></div>
+        <h1 class="ls-title">Voxel World</h1>
+        <div class="ls-rule"></div>
+        <p class="ls-sub" role="status" aria-live="polite">A procedural voxel planet</p>
+        <div class="ls-bar"><span></span></div>
+        <p class="ls-tip">Generating world&hellip;</p>
+        <p class="ls-controls"></p>
+        <p class="ls-enter">Click to enter</p>
+      </div>
     </div>
-  </div>
-  <script type="module" src="/src/main.ts"></script>
-</body>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
 </html>

@@ -11,16 +11,16 @@
 import * as THREE from 'three';
 import { WATER } from '../core/palette';
 
-const GRAVITY      = 58;
-const MAX_SPEED    = 13.5;
-const ACCEL        = 118;
-const AIR_ACCEL    = 46;
-const FRICTION     = 14.5;
-const AIR_DRAG     = 1.4;
-const JUMP_VEL     = 20.5;
-const COYOTE       = 0.12;
-const BUFFER       = 0.14;
-const STEP_HEIGHT  = 3.30;
+const GRAVITY = 58;
+const MAX_SPEED = 13.5;
+const ACCEL = 118;
+const AIR_ACCEL = 46;
+const FRICTION = 14.5;
+const AIR_DRAG = 1.4;
+const JUMP_VEL = 20.5;
+const COYOTE = 0.12;
+const BUFFER = 0.14;
+const STEP_HEIGHT = 3.3;
 /**
  * Rises up to this are taken in stride rather than jumped.
  *
@@ -29,8 +29,8 @@ const STEP_HEIGHT  = 3.30;
  * hops; below this the body is simply placed and the drawn position eases up
  * to meet it, which is what taking a small step actually looks like.
  */
-const STEP_SMALL   = 1.25;
-const TERMINAL     = -70;
+const STEP_SMALL = 1.25;
+const TERMINAL = -70;
 
 /* ---- swimming ------------------------------------------------------
  * The traveller floats rather than sinks. Water deeper than a stride is
@@ -49,12 +49,12 @@ const TERMINAL     = -70;
  * Two thresholds, so walking the line between wading and swimming cannot
  * chatter as you cross a cell boundary.
  */
-const SWIM_ENTER   = 1.70;
-const SWIM_EXIT    = 1.25;
+const SWIM_ENTER = 1.7;
+const SWIM_EXIT = 1.25;
 /** Where pos.y settles relative to the surface: chest deep, head clear. */
-const FLOAT_LINE   = 1.05;
+const FLOAT_LINE = 1.05;
 /** Spring pulling the body to the waterline. Stiff enough to surface a dive. */
-const BUOYANCY     = 26;
+const BUOYANCY = 26;
 /**
  * Vertical damping, kept separate from the horizontal drag.
  *
@@ -64,12 +64,12 @@ const BUOYANCY     = 26;
  * Critical damping is 2*sqrt(k); slightly past it settles without ringing at
  * all, which is what floating should look like.
  */
-const FLOAT_DAMP   = 2 * Math.sqrt(BUOYANCY) * 1.18;
-const WATER_DRAG   = 6.5;
-const SWIM_SPEED   = 6.4;
-const SWIM_ACCEL   = 34;
+const FLOAT_DAMP = 2 * Math.sqrt(BUOYANCY) * 1.18;
+const WATER_DRAG = 6.5;
+const SWIM_SPEED = 6.4;
+const SWIM_ACCEL = 34;
 /** Downward push while the jump key is held, so you can duck under. */
-const DIVE_VEL     = -7.0;
+const DIVE_VEL = -7.0;
 /**
  * Collision radius while swimming.
  *
@@ -79,13 +79,27 @@ const DIVE_VEL     = -7.0;
  * floating beside. This covers the torso and head; arms and cloak may still
  * brush, which reads as contact rather than as clipping.
  */
-const SWIM_RADIUS  = 1.02;
+const SWIM_RADIUS = 1.02;
 
 export class Controller {
-  declare grid: any; declare pos: any; declare vel: any; declare radius: any; declare height: any;
-  declare grounded: any; declare groundY: any; declare autoStep: any; declare swimming: any; declare submersion: any;
-  declare visualY: any; declare coyote: any; declare buffered: any; declare heading: any; declare jumpHeld: any;
-  declare speed01: any; declare events: any; declare _wish: any;
+  declare grid: any;
+  declare pos: any;
+  declare vel: any;
+  declare radius: any;
+  declare height: any;
+  declare grounded: any;
+  declare groundY: any;
+  declare autoStep: any;
+  declare swimming: any;
+  declare submersion: any;
+  declare visualY: any;
+  declare coyote: any;
+  declare buffered: any;
+  declare heading: any;
+  declare jumpHeld: any;
+  declare speed01: any;
+  declare events: any;
+  declare _wish: any;
   constructor(grid: any, spawn: any) {
     this.grid = grid;
     this.pos = spawn.clone();
@@ -139,7 +153,8 @@ export class Controller {
    * Scan down from the feet instead.
    */
   groundBelow(x: any, y: any, z: any) {
-    const xi = Math.floor(x), zi = Math.floor(z);
+    const xi = Math.floor(x),
+      zi = Math.floor(z);
     for (let yy = Math.floor(y + 0.01); yy >= 0; yy--) {
       if (this.grid.isSolid(xi, yy, zi)) return yy + 1;
     }
@@ -194,7 +209,9 @@ export class Controller {
     // Small rises, and hauling out of water, are placements. Only a climb
     // worth committing to gets an arc.
     if (this.swimming || rise <= STEP_SMALL) {
-      this.pos.y = top; this.pos.x = x; this.pos.z = z;
+      this.pos.y = top;
+      this.pos.x = x;
+      this.pos.z = z;
       return;
     }
     this.vel.y = Math.sqrt(2 * GRAVITY * Math.max(rise + 0.55, 0.1));
@@ -215,7 +232,10 @@ export class Controller {
    */
   update(dt: any, wish: any, jump: any, jumpHeld: any) {
     const ev = this.events;
-    ev.landed = 0; ev.jumped = false; ev.stepped = false; ev.stepRise = 0;
+    ev.landed = 0;
+    ev.jumped = false;
+    ev.stepped = false;
+    ev.stepRise = 0;
 
     if (jump) this.buffered = BUFFER;
     else if (this.buffered > 0) this.buffered -= dt;
@@ -246,8 +266,7 @@ export class Controller {
       if (t > bedY) bedY = t;
     }
     const standDepth = WATER.level - bedY;
-    this.swimming = !this.grounded
-      && (wasSwimming ? standDepth > SWIM_EXIT : standDepth > SWIM_ENTER);
+    this.swimming = !this.grounded && (wasSwimming ? standDepth > SWIM_EXIT : standDepth > SWIM_ENTER);
 
     /* Entering the water kills most of the fall.
      *
@@ -261,11 +280,10 @@ export class Controller {
     }
 
     /* ---- horizontal ------------------------------------------------ */
-    const accel = this.swimming ? SWIM_ACCEL
-                : this.grounded ? ACCEL : AIR_ACCEL;
-    const target = this._wish.copy(wish)
-      .multiplyScalar(this.swimming ? SWIM_SPEED : MAX_SPEED);
-    const dvx = target.x - this.vel.x, dvz = target.z - this.vel.z;
+    const accel = this.swimming ? SWIM_ACCEL : this.grounded ? ACCEL : AIR_ACCEL;
+    const target = this._wish.copy(wish).multiplyScalar(this.swimming ? SWIM_SPEED : MAX_SPEED);
+    const dvx = target.x - this.vel.x,
+      dvz = target.z - this.vel.z;
     const dv = Math.hypot(dvx, dvz);
     if (dv > 1e-5) {
       const step = Math.min(dv, accel * dt);
@@ -274,9 +292,9 @@ export class Controller {
     }
 
     if (wish.lengthSq() < 1e-4) {
-      const f = Math.exp(-(this.swimming ? WATER_DRAG
-                         : this.grounded ? FRICTION : AIR_DRAG) * dt);
-      this.vel.x *= f; this.vel.z *= f;
+      const f = Math.exp(-(this.swimming ? WATER_DRAG : this.grounded ? FRICTION : AIR_DRAG) * dt);
+      this.vel.x *= f;
+      this.vel.z *= f;
     }
 
     /* ---- jump ------------------------------------------------------ */
@@ -343,8 +361,7 @@ export class Controller {
       }
       // Ignore anything level with us, or we would emit a step every frame.
       if (top <= p.y + 0.05) return null;
-      const reach = this.swimming ? WATER.level + STEP_HEIGHT - p.y
-                                  : STEP_HEIGHT;
+      const reach = this.swimming ? WATER.level + STEP_HEIGHT - p.y : STEP_HEIGHT;
       return top - p.y <= reach + 0.001 ? top : null;
     };
 
@@ -372,23 +389,27 @@ export class Controller {
     // X
     const nx = p.x + this.vel.x * dt;
     if (barred(nx, p.z)) {
-      const up = (this.grounded || this.swimming) ? stepTo(nx, p.z) : null;
+      const up = this.grounded || this.swimming ? stepTo(nx, p.z) : null;
       if (up !== null && this.penetration(nx, up, p.z) <= pen) {
         ev.stepRise = up - p.y;
         ev.stepped = true;
         this.launchStep(up, nx, p.z);
-      } else { this.vel.x = 0; }
+      } else {
+        this.vel.x = 0;
+      }
     } else p.x = nx;
 
     // Z
     const nz = p.z + this.vel.z * dt;
     if (barred(p.x, nz)) {
-      const up = (this.grounded || this.swimming) ? stepTo(p.x, nz) : null;
+      const up = this.grounded || this.swimming ? stepTo(p.x, nz) : null;
       if (up !== null && this.penetration(p.x, up, nz) <= pen) {
         ev.stepRise = up - p.y;
         ev.stepped = true;
         this.launchStep(up, p.x, nz);
-      } else { this.vel.z = 0; }
+      } else {
+        this.vel.z = 0;
+      }
     } else p.z = nz;
 
     // Y
@@ -426,7 +447,10 @@ export class Controller {
     const g = this.grid;
     p.x = THREE.MathUtils.clamp(p.x, 1.5, g.sx - 1.5);
     p.z = THREE.MathUtils.clamp(p.z, 1.5, g.sz - 1.5);
-    if (p.y < -20) { p.set(g.sx / 2, g.sy - 4, g.sz / 2); this.vel.set(0, 0, 0); }
+    if (p.y < -20) {
+      p.set(g.sx / 2, g.sy - 4, g.sz / 2);
+      this.vel.set(0, 0, 0);
+    }
 
     /* ---- bookkeeping ----------------------------------------------- */
     const sp = Math.hypot(this.vel.x, this.vel.z);
@@ -457,8 +481,15 @@ export class Controller {
  * Input
  * ------------------------------------------------------------------ */
 export class Input {
-  declare keys: any; declare axis: any; declare jumpPressed: any; declare jumpHeld: any;
-  declare rotateL: any; declare rotateR: any; declare zoom: any; declare _touch: any; declare paused: any;
+  declare keys: any;
+  declare axis: any;
+  declare jumpPressed: any;
+  declare jumpHeld: any;
+  declare rotateL: any;
+  declare rotateR: any;
+  declare zoom: any;
+  declare _touch: any;
+  declare paused: any;
   constructor(dom: any) {
     this.keys = new Set();
     this.axis = new THREE.Vector2();
@@ -475,7 +506,10 @@ export class Input {
       if (e.repeat) return;
       if (this.paused) return;
       this.keys.add(e.code);
-      if (e.code === 'Space') { this.jumpPressed = true; e.preventDefault(); }
+      if (e.code === 'Space') {
+        this.jumpPressed = true;
+        e.preventDefault();
+      }
       if (e.code === 'KeyQ') this.rotateL = true;
       if (e.code === 'KeyE') this.rotateR = true;
     });
@@ -484,10 +518,15 @@ export class Input {
       if (e.code === 'Space') this.jumpHeld = false;
     });
     addEventListener('blur', () => this.keys.clear());
-    dom.addEventListener('wheel', (e: any) => {
-      if (this.paused) return;
-      this.zoom += e.deltaY * 0.045; e.preventDefault();
-    }, { passive: false });
+    dom.addEventListener(
+      'wheel',
+      (e: any) => {
+        if (this.paused) return;
+        this.zoom += e.deltaY * 0.045;
+        e.preventDefault();
+      },
+      { passive: false },
+    );
 
     // touch: left half is a virtual stick, right half jumps
     dom.addEventListener('pointerdown', (e: any) => {
@@ -501,7 +540,12 @@ export class Input {
       const dy = (e.clientY - this._touch.y) / 58;
       this.axis.set(THREE.MathUtils.clamp(dx, -1, 1), THREE.MathUtils.clamp(dy, -1, 1));
     });
-    const end = (e: any) => { if (this._touch && e.pointerId === this._touch.id) { this._touch = null; this.axis.set(0, 0); } };
+    const end = (e: any) => {
+      if (this._touch && e.pointerId === this._touch.id) {
+        this._touch = null;
+        this.axis.set(0, 0);
+      }
+    };
     dom.addEventListener('pointerup', end);
     dom.addEventListener('pointercancel', end);
   }
@@ -516,18 +560,24 @@ export class Input {
       return { x: 0, y: 0, jump: false, jumpHeld: false, rotateL: false, rotateR: false, zoom: 0 };
     }
     const k = this.keys;
-    let x = 0, y = 0;
-    if (k.has('KeyW') || k.has('ArrowUp'))    y -= 1;
-    if (k.has('KeyS') || k.has('ArrowDown'))  y += 1;
-    if (k.has('KeyA') || k.has('ArrowLeft'))  x -= 1;
+    let x = 0,
+      y = 0;
+    if (k.has('KeyW') || k.has('ArrowUp')) y -= 1;
+    if (k.has('KeyS') || k.has('ArrowDown')) y += 1;
+    if (k.has('KeyA') || k.has('ArrowLeft')) x -= 1;
     if (k.has('KeyD') || k.has('ArrowRight')) x += 1;
-    if (x === 0 && y === 0 && this._touch) { x = this.axis.x; y = this.axis.y; }
+    if (x === 0 && y === 0 && this._touch) {
+      x = this.axis.x;
+      y = this.axis.y;
+    }
 
     const out = {
-      x, y,
+      x,
+      y,
       jump: this.jumpPressed,
       jumpHeld: this.jumpHeld || k.has('Space'),
-      rotateL: this.rotateL, rotateR: this.rotateR,
+      rotateL: this.rotateL,
+      rotateR: this.rotateR,
       zoom: this.zoom,
     };
     if (this.jumpPressed) this.jumpHeld = true;
