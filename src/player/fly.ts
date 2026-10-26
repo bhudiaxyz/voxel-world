@@ -81,7 +81,7 @@ export function createFlyMode(grid: VoxelGrid): FlyMode {
 
       camera.position.x += dx * speed * dt;
       camera.position.z += dz * speed * dt;
-      camera.position.y += altDelta;
+      camera.position.y += altDelta * dt;
 
       // Terrain floor constraint — cannot fly below ground
       const floor = grid.surfaceY(camera.position.x, camera.position.z) + FLY.floorClearance;

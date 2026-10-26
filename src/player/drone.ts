@@ -125,8 +125,10 @@ export function createDroneMode(grid: VoxelGrid): DroneMode {
       if (keys.has('KeyA') || keys.has('ArrowLeft')) yaw += DRONE.keyYawSpeed * dt;
       if (keys.has('KeyD') || keys.has('ArrowRight')) yaw -= DRONE.keyYawSpeed * dt;
       yaw -= joyX * DRONE.keyYawSpeed * dt;
-      camera.position.x -= Math.sin(yaw) * currentSpeed * dt;
-      camera.position.z -= Math.cos(yaw) * currentSpeed * dt;
+      // joyY < 0 brakes proportionally; 0 or positive = full cruise speed
+      const speedMult = joyY < 0 ? Math.max(0, 1 + joyY) : 1;
+      camera.position.x -= Math.sin(yaw) * currentSpeed * speedMult * dt;
+      camera.position.z -= Math.cos(yaw) * currentSpeed * speedMult * dt;
 
       const gY = grid.surfaceY(camera.position.x, camera.position.z);
       const rawTargetY = gY + hoverAltitude;
