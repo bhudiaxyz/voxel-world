@@ -29,6 +29,8 @@ export const SKY_UNIFORMS_GLSL = /* glsl */ `
   uniform float uCloudDark;
   uniform vec2  uWind;
   uniform vec3  uSunColor;
+  uniform float uAurora;
+  uniform float uAuroraTime;
 `;
 
 export const SKY_FN_GLSL = /* glsl */ `
@@ -68,6 +70,53 @@ export const SKY_FN_GLSL = /* glsl */ `
     float c = cos(angle);
     float s = sin(angle);
     return p * c + cross(axis, p) * s + axis * dot(axis, p) * (1.0 - c);
+  }
+
+  // Curtain aurora — animated with sweep pulses, flickering rays, and slow breathing.
+  // Returned as additive linear radiance; zero when uAurora or uNight is 0.
+  vec3 _aurora(vec3 dir) {
+    float night = uNight * uAurora * smoothstep(0.04, 0.10, dir.y);
+    if (night < 0.001) return vec3(0.0);
+
+    float t  = uAuroraTime;        // ~0.3 units/s — structural motion
+    float tf = uAuroraTime * 4.0;  // fast shimmer for flickering rays
+    float az = atan(dir.x, dir.z);
+
+    // Curtain lower edge: slow drift + fast flutter gives eerie instability
+    float ripple = sin(az * 2.3 + t * 0.4) * 0.08
+                 + sin(az * 5.1 - t * 0.7) * 0.04
+                 + sin(az * 11.3 + tf * 0.2) * 0.015;
+    float bandLo = smoothstep(0.10 + ripple, 0.28 + ripple, dir.y);
+    float bandHi = 1.0 - smoothstep(0.38, 0.82, dir.y);
+    float band   = bandLo * bandHi;
+
+    // Vertical rays: slow structural noise + fast shimmer layer
+    float rays = _noise3(dir * vec3(6.0, 18.0, 6.0) + vec3(t * 0.5, 0.0, t * 0.3)) * 0.6
+               + _noise3(dir * vec3(12.1, 36.3, 12.1) + vec3(tf, 0.0, tf * 0.5)) * 0.4;
+    rays = pow(smoothstep(0.28, 0.72, rays), 1.5);
+
+    // Sweeping pulse wave that travels across the sky — the core eerie effect
+    float pulse = 0.60 + 0.40 * sin(az * 1.7 + t * 0.5) * sin(az * 0.8 - t * 0.28);
+
+    // Horizontal patchiness
+    float n1 = _noise3(dir * 1.8 + vec3(11.0, t * 0.12, 7.0));
+    float n2 = _noise3(dir * 3.7 + vec3(2.3,  t * 0.22, 14.1));
+    float coverage = smoothstep(0.35, 0.75, n1 * 0.6 + n2 * 0.4);
+
+    // Slow breathing: two incommensurate frequencies produce an irregular beat
+    float breathe = 0.72 + 0.28 * sin(t * 0.45) * sin(t * 0.29 + 1.9);
+
+    float shape = band * rays * coverage * pulse * breathe;
+
+    // Colour: green → cyan at tips; magenta fringe; ghostly white flare at peaks
+    float tipGrad    = smoothstep(0.15, 0.65, dir.y);
+    float colorNoise = _noise3(dir * 3.5 + vec3(t * 0.04, 5.0, t * 0.07));
+    float flare      = pow(rays * coverage, 2.5);
+    vec3 col = mix(vec3(0.08, 0.90, 0.25), vec3(0.02, 0.55, 0.75), tipGrad);
+    col = mix(col, vec3(0.65, 0.05, 0.50), smoothstep(0.55, 0.85, colorNoise) * 0.35);
+    col = mix(col, vec3(0.80, 1.00, 0.88), flare * 0.38);  // ghostly white at intensity peaks
+
+    return col * shape * night * 1.1;
   }
 
   /**
@@ -147,6 +196,7 @@ export const SKY_FN_GLSL = /* glsl */ `
       add += nebColor * nebula * uNebulaStrength * clearNight * horizonFade;
     }
 
+    add += _aurora(dir);
     return add;
   }
 
@@ -229,5 +279,7 @@ export function skyUniformValues(
     uCloudDark: { value: 0.0 },
     uWind: { value: new THREE_.Vector2(1, 0) },
     uSunColor: { value: new THREE_.Color(1.0, 0.9, 0.7) },
+    uAurora:     { value: 0.0 },
+    uAuroraTime: { value: 0.0 },
   };
 }

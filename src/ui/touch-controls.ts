@@ -43,6 +43,8 @@ export interface TouchControls {
   onDrone: (fn: () => void) => void;
   onLand: (fn: () => void) => void;
   onEdgeToggle: (fn: () => void) => void;
+  onTimeBack: (fn: () => void) => void;
+  onTimeForward: (fn: () => void) => void;
   /** Call each frame with current mode state to show/hide contextual buttons. */
   update(droneActive: boolean, landing: boolean, flyActive: boolean): void;
   destroy(): void;
@@ -67,6 +69,8 @@ export function createTouchControls(fpCam: FPCamera, dom: HTMLElement): TouchCon
     onDrone: () => {},
     onLand: () => {},
     onEdgeToggle: () => {},
+    onTimeBack: () => {},
+    onTimeForward: () => {},
     update: () => {},
     destroy: () => {},
   };
@@ -92,6 +96,8 @@ export function createTouchControls(fpCam: FPCamera, dom: HTMLElement): TouchCon
     <button id="btn-drone"   aria-label="Enter drone">🚁</button>
     <button id="btn-land"    aria-label="Land">🛬</button>
     <button id="btn-edges"   aria-label="Toggle edges">⬡</button>
+    <button id="btn-time-back"    aria-label="Step time back">◀</button>
+    <button id="btn-time-forward" aria-label="Step time forward">▶</button>
   `;
   document.body.appendChild(btns);
 
@@ -253,6 +259,20 @@ export function createTouchControls(fpCam: FPCamera, dom: HTMLElement): TouchCon
           fn();
           el.classList.toggle('active');
         },
+        { passive: true },
+      );
+    },
+    onTimeBack(fn) {
+      document.getElementById('btn-time-back')!.addEventListener(
+        'touchend',
+        (e) => { e.stopPropagation(); fn(); },
+        { passive: true },
+      );
+    },
+    onTimeForward(fn) {
+      document.getElementById('btn-time-forward')!.addEventListener(
+        'touchend',
+        (e) => { e.stopPropagation(); fn(); },
         { passive: true },
       );
     },

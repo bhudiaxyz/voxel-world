@@ -109,6 +109,9 @@ async function start(): Promise<void> {
       g['uEdgeDarkOpacity'].value = on ? 0.64 : 0;
       g['uEdgeLightOpacity'].value = on ? 0.3 : 0;
     }
+    // [ / ] — step time of day back/forward by 3 hours for transition testing
+    if (e.code === 'BracketLeft'  && !e.repeat) dayNight.timeOfDay = (dayNight.timeOfDay - 0.125 + 1) % 1;
+    if (e.code === 'BracketRight' && !e.repeat) dayNight.timeOfDay = (dayNight.timeOfDay + 0.125) % 1;
   });
 
   const navigator = createPathNavigator({
@@ -186,6 +189,8 @@ async function start(): Promise<void> {
     g['uEdgeDarkOpacity'].value = on ? 0.64 : 0;
     g['uEdgeLightOpacity'].value = on ? 0.3 : 0;
   });
+  touch.onTimeBack(    () => { dayNight.timeOfDay = (dayNight.timeOfDay - 0.125 + 1) % 1; });
+  touch.onTimeForward( () => { dayNight.timeOfDay = (dayNight.timeOfDay + 0.125) % 1; });
 
   // frame the spawn before the veil lifts
   fpCam.update(1 / 60, controller.pos, 0, true);
@@ -366,6 +371,7 @@ async function start(): Promise<void> {
     dog,
     bubbles,
     tier,
+    dayNight,
   };
 }
 

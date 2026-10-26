@@ -170,7 +170,11 @@ export class DayNight {
     (skyMat.uniforms['uSunColor'].value as THREE.Color).copy(this._col).multiplyScalar(sunColorScale);
 
     // Night sky uniforms
-    skyMat.uniforms['uNight'].value = this.getNightFactor();
+    const nightF = this.getNightFactor();
+    skyMat.uniforms['uNight'].value = nightF;
+    // Aurora fades in as deep night deepens (nightF > 0.5 → full at nightF = 1)
+    skyMat.uniforms['uAurora'].value = Math.max(0, (nightF - 0.5) / 0.5);
+    skyMat.uniforms['uAuroraTime'].value += dt * 0.3;
     (skyMat.uniforms['uMoonDir'].value as THREE.Vector3).copy(this._moonDir);
     skyMat.uniforms['uStarAngle'].value =
       ((skyMat.uniforms['uStarAngle'].value as number) + dt * 0.0001) % (Math.PI * 2);
