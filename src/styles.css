@@ -154,10 +154,20 @@ canvas { display: block; width: 100%; height: 100%; }
   animation: pulse 2.2s ease-in-out infinite;
 }
 
+.ls-controls {
+  margin-top: 20px;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  display: none;
+}
+
 #boot.ready .ls-bar,
 #boot.ready .ls-tip { display: none; }
 
-#boot.ready .ls-enter { display: block; }
+#boot.ready .ls-enter,
+#boot.ready .ls-controls { display: block; }
 
 @keyframes ls-spin { to { transform: rotate(360deg); } }
 

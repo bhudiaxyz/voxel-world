@@ -20,6 +20,8 @@ import { createSettings } from './ui/settings';
 import { createHud } from './ui/hud';
 import { makeRng } from './core/rng';
 import { createDroneMode } from './player/drone';
+import { detectGpuTier } from './render/gpu-tier';
+import { createTouchControls, isTouchDevice } from './ui/touch-controls';
 
 const SEED = 20260820;
 
@@ -38,7 +40,8 @@ const setProgress = (p: number): void => {
 };
 
 async function start(): Promise<void> {
-  const renderer = createRenderer(container);
+  const tier = detectGpuTier();
+  const renderer = createRenderer(container, tier);
   const scene = new THREE.Scene();
 
   const world = await buildWorld(SEED, setProgress);
@@ -48,7 +51,7 @@ async function start(): Promise<void> {
     container.clientWidth / container.clientHeight,
     renderer.domElement,
   );
-  const atmo = new Atmosphere(scene, world.size);
+  const atmo = new Atmosphere(scene, world.size, tier);
   const dayNight = new DayNight(atmo, renderer);
 
   const waterDepth = makeDepthMap(world);
@@ -75,16 +78,18 @@ async function start(): Promise<void> {
   const controller = new Controller(world.grid, world.spawn);
   const drone = createDroneMode(world.grid);
   const input = new Input(renderer.domElement);
+  const canAct = () => fpCam.isLocked || fpCam.touchActive;
   document.addEventListener('keydown', (e: KeyboardEvent) => {
-    if (e.code === 'KeyG' && fpCam.isLocked) {
-      if (drone.active) {
-        drone.beginLanding();
-      } else {
-        drone.enter(fpCam.camera);
-        fpCam.droneActive = true;
-      }
+    if (!canAct()) return;
+    // F or G: enter drone (planet-explorer uses F; G kept as alias)
+    if ((e.code === 'KeyF' || e.code === 'KeyG') && !e.repeat) {
+      if (!drone.active) { drone.enter(fpCam.camera); fpCam.droneActive = true; }
     }
-    if (e.code === 'KeyE' && fpCam.isLocked) {
+    // L: land (while airborne; ascend cancels landing — handled in drone.ts)
+    if (e.code === 'KeyL' && !e.repeat && drone.active) {
+      drone.beginLanding();
+    }
+    if (e.code === 'KeyE' && !e.repeat) {
       const g = post.grade.uniforms;
       const on = g['uEdgeDarkOpacity'].value === 0;
       g['uEdgeDarkOpacity'].value  = on ? 0.64 : 0;
@@ -107,11 +112,22 @@ async function start(): Promise<void> {
   });
   scene.add(dog.root);
 
-  const post = createPostFX(renderer, scene, fpCam.camera, world.meshes.edgeMaterial);
+  const touch = createTouchControls(fpCam, renderer.domElement);
+
+  const post = createPostFX(renderer, scene, fpCam.camera, world.meshes.edgeMaterial, tier);
   // FPCamera has no zoom range; pass a stub so settings.js compiles cleanly
   const settings = createSettings({ rig: { setZoomRange: () => {} }, atmo, input, world, dayNight });
   const hud = createHud({ dayNight, drone, camera: fpCam.camera });
   const pause = createPause({ input, map });
+
+  touch.onDroneEnter(() => { drone.enter(fpCam.camera); fpCam.droneActive = true; });
+  touch.onLand(() => { if (drone.active) drone.beginLanding(); });
+  touch.onEdgeToggle(() => {
+    const g = post.grade.uniforms;
+    const on = g['uEdgeDarkOpacity'].value === 0;
+    g['uEdgeDarkOpacity'].value  = on ? 0.64 : 0;
+    g['uEdgeLightOpacity'].value = on ? 0.30 : 0;
+  });
 
   // frame the spawn before the veil lifts
   fpCam.update(1 / 60, controller.pos, 0, true);
@@ -194,7 +210,9 @@ async function start(): Promise<void> {
         fpCam.camera,
         fpCam._keys,
         fpCam.drainDroneMX(),
-        fpCam.drainDroneAltDelta(),
+        fpCam.drainDroneAltDelta(dt),
+        fpCam._joyX,
+        fpCam._joyY,
       );
       if (done) {
         fpCam.droneActive = false;
@@ -222,6 +240,7 @@ async function start(): Promise<void> {
     particles.update(dt, fpCam.camera);
     for (const d of world.animated) d.update(dt, fpCam.camera);
     bubbles.update(dt);
+    touch.update(drone.active, drone.landing);
     map.update();
     hud.update();
     settings.update();
@@ -239,6 +258,10 @@ async function start(): Promise<void> {
 
     if (!started) {
       started = true;
+      const ctrlEl = bootEl.querySelector('.ls-controls') as HTMLElement;
+      ctrlEl.textContent = isTouchDevice
+        ? 'Left stick · move   Swipe right · look   ↑ · jump/ascend   ↓ · descend   ⚡ · sprint   ✈ · drone   🛬 · land'
+        : 'WASD · move   Mouse · look   Space · jump/ascend   C · descend   Shift · sprint   F/G · drone   L · land   E · edges   M · map';
       bootEl.classList.add('ready');
       bootEl.addEventListener('click', () => {
         bootEl.classList.add('dismissed');
@@ -252,7 +275,7 @@ async function start(): Promise<void> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (window as any).__game = {
     scene, renderer, fpCam, world, controller, character, post, atmo, water,
-    particles, navigator, map, pause, settings, hud, input, dog, bubbles,
+    particles, navigator, map, pause, settings, hud, input, dog, bubbles, tier,
   };
 }
 

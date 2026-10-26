@@ -41,6 +41,7 @@ import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
 import { Pass, FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
 import { GRADE, SKY, LIGHT } from '../core/palette';
 import { FOG_NEAR } from './lighting';
+import type { GpuTier } from './gpu-tier';
 import { EDGE_LAYER } from '../core/voxel';
 import { SKY_UNIFORMS_GLSL, SKY_FN_GLSL, skyUniformValues } from './sky';
 
@@ -496,6 +497,7 @@ export function createPostFX(
   scene: THREE.Scene,
   camera: THREE.PerspectiveCamera,
   edgeMaterial: THREE.ShaderMaterial,
+  tier: GpuTier = 'high',
 ) {
   const size = renderer.getSize(new THREE.Vector2());
   const dpr = renderer.getPixelRatio();
@@ -553,7 +555,7 @@ export function createPostFX(
   bloom.threshold = 1.25;
   bloom.strength = 0.22;
   bloom.radius = 0.9;
-  composer.addPass(bloom);
+  if (tier !== 'low') composer.addPass(bloom);
 
   const CrepuscularShader = {
     uniforms: {

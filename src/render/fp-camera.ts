@@ -14,10 +14,22 @@ export class FPCamera {
   droneActive: boolean;
   _keys: Set<string>;
 
+  /** Set true on touch devices; bypasses pointer-lock requirement for movement. */
+  touchActive: boolean;
+  /** Touch ascend (+1) / descend (-1) held state for drone mode. */
+  touchAltAxis: number;
+  /** Set true while sprint button held on touch; injects ShiftLeft into _keys. */
+  set touchSprint(on: boolean) {
+    if (on) this._keys.add('ShiftLeft'); else this._keys.delete('ShiftLeft');
+  }
   private _dom: HTMLElement;
   private _jumpEdge: boolean;
   private _bobPhase: number;
   private _wishV: THREE.Vector3;
+  private _touchWish: THREE.Vector3;
+  /** Raw joystick axes set by setTouchMove — used by drone for its own yaw. */
+  _joyX = 0;
+  _joyY = 0;
   private _prevSpace: boolean;
   // Drone mouse/altitude accumulators — drained each frame by DroneMode (Task 9)
   private _droneMX: number;
@@ -31,12 +43,15 @@ export class FPCamera {
     this.pitch = 0;
     this.isLocked  = false;
     this.droneActive = false;
+    this.touchActive  = false;
+    this.touchAltAxis = 0;
 
     this._dom        = domElement;
     this._keys       = new Set<string>();
     this._jumpEdge   = false;
     this._bobPhase   = 0;
     this._wishV      = new THREE.Vector3();
+    this._touchWish  = new THREE.Vector3();
     this._prevSpace  = false;
     this._droneMX    = 0;
     this._droneAltDelta = 0;
@@ -96,6 +111,10 @@ export class FPCamera {
    */
   getWish(): THREE.Vector3 {
     const w = this._wishV.set(0, 0, 0);
+    // Touch wish is already in world space (set by touch-controls.ts)
+    if (this.touchActive && this._touchWish.lengthSq() > 0) {
+      return w.copy(this._touchWish);
+    }
     if (!this.isLocked || this.droneActive) return w;
     const fwd = -Math.sin(this.yaw);
     const rgt =  Math.cos(this.yaw);
@@ -106,6 +125,30 @@ export class FPCamera {
     if (w.lengthSq() > 0) w.normalize();
     return w;
   }
+
+  /** Called by touch-controls each frame with joystick vector (-1..1 each axis). */
+  setTouchMove(nx: number, ny: number): void {
+    if (!this.touchActive) return;
+    this._joyX = nx;
+    this._joyY = ny;
+    const fwd = -Math.sin(this.yaw);
+    const rgt =  Math.cos(this.yaw);
+    this._touchWish.set(
+      fwd * ny + rgt * nx,
+      0,
+      -rgt * ny + fwd * nx,
+    );
+    if (this._touchWish.lengthSq() > 0) this._touchWish.normalize();
+  }
+
+  /** Accumulate touch look delta (radians). */
+  applyTouchLook(dyaw: number, dpitch: number): void {
+    this.yaw   -= dyaw;
+    this.pitch -= dpitch;
+    this.pitch  = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, this.pitch));
+  }
+
+  triggerTouchJump(): void { if (!this._prevSpace) this._jumpEdge = true; }
 
   /** Returns true on the frame Space is first pressed, then resets. */
   getJumpEdge(): boolean {
@@ -125,9 +168,13 @@ export class FPCamera {
     return v;
   }
 
-  /** Drain accumulated drone altitude delta since last call. */
-  drainDroneAltDelta(): number {
-    const v = this._droneAltDelta;
+  /**
+   * Drain accumulated drone altitude delta since last call.
+   * Space / touch-ascend = up; C / touch-descend = down (rate: 12 m/s).
+   */
+  drainDroneAltDelta(dt = 0): number {
+    const keyAxis = (this._keys.has('Space') ? 1 : 0) - (this._keys.has('KeyC') ? 1 : 0);
+    const v = this._droneAltDelta + (keyAxis + this.touchAltAxis) * 12 * dt;
     this._droneAltDelta = 0;
     return v;
   }

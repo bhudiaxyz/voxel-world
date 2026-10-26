@@ -29,6 +29,8 @@
 import * as THREE from 'three';
 import { LIGHT, SKY, FOG } from '../core/palette';
 import { SKY_UNIFORMS_GLSL, SKY_FN_GLSL, skyUniformValues } from './sky';
+import type { GpuTier } from './gpu-tier';
+import { TIER_SETTINGS } from './gpu-tier';
 
 /**
  * Full-resolution dynamic shadowing. `?shadow=` remains only as a diagnostic
@@ -108,12 +110,13 @@ export class Atmosphere {
   declare scene: any; declare worldSize: any; declare time: any; declare aerialD: any;
   declare fogEnabled: any; declare hazeColor: any; declare sky: any; declare shadowExtent: any;
   declare sun: any; declare shadowResolution: any; declare hemi: any; declare fill: any;
-  constructor(scene: any, worldSize: any) {
+  constructor(scene: any, worldSize: any, tier: GpuTier = 'high') {
     this.scene = scene;
     this.worldSize = worldSize;
     this.time = 0;
     this.aerialD = AERIAL_D;
     this.fogEnabled = true;
+    const ts = TIER_SETTINGS[tier];
 
     /* ---- the air ------------------------------------------------- */
     // Fog colour is the skyline colour, because that is where most of the
@@ -142,7 +145,8 @@ export class Atmosphere {
     sun.shadow.camera.bottom = -S;
     sun.shadow.camera.near = 1;
     sun.shadow.camera.far = worldSize * 3.2;
-    sun.shadow.mapSize.set(SHADOW_RES, SHADOW_RES);
+    const shadowRes = ts.shadowRes > 0 ? ts.shadowRes : SHADOW_RES;
+    sun.shadow.mapSize.set(shadowRes, shadowRes);
     // Voxels are 1 unit. The old normalBias of 0.5 was half a block, which
     // slid every shadow half a block off its caster (peter-panning at every
     // terrace lip). A tenth of a block kills acne without visible detachment.
@@ -151,7 +155,7 @@ export class Atmosphere {
     // VSM's separable blur: enough softness to match the painted reference,
     // with enough samples that the penumbra is smooth rather than speckled.
     sun.shadow.radius = 2.25;
-    sun.shadow.blurSamples = 16;
+    sun.shadow.blurSamples = ts.blurSamples;
     sun.shadow.intensity = 0.48;
     // Keep this fully dynamic. A day/night system can animate the sun every
     // frame and both terrain and player shadows will respond immediately.
@@ -160,7 +164,7 @@ export class Atmosphere {
     scene.add(sun);
     scene.add(sun.target);
     this.sun = sun;
-    this.shadowResolution = SHADOW_RES;
+    this.shadowResolution = shadowRes;
 
     /* ---- hemisphere fill ----------------------------------------- */
     const hemi = new THREE.HemisphereLight(

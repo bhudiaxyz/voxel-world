@@ -1,13 +1,13 @@
 import * as THREE from 'three';
 import { GRADE, SKY } from '../core/palette';
+import type { GpuTier } from './gpu-tier';
+import { TIER_SETTINGS } from './gpu-tier';
 
-export function createRenderer(container: any) {
+export function createRenderer(container: any, tier: GpuTier = 'high') {
   const captureMode = new URLSearchParams(location.search).get('capture') === '1';
+  const dprCap = TIER_SETTINGS[tier].dprCap;
 
-  // Full-quality rendering is the only gameplay path. The cap prevents a 3x
-  // or 4x browser zoom/device scale from creating pathological render targets,
-  // but normal 1x/2x displays always render at their native pixel ratio.
-  const choosePixelRatio = (_w?: any, _h?: any) => Math.min(window.devicePixelRatio || 1, 2);
+  const choosePixelRatio = (_w?: any, _h?: any) => Math.min(window.devicePixelRatio || 1, dprCap);
 
   const renderer = new THREE.WebGLRenderer({
     // The scene is rendered through EffectComposer and receives post-process AA at the
@@ -41,7 +41,7 @@ export function createRenderer(container: any) {
   renderer.setClearColor(SKY.haze.getHex(THREE.SRGBColorSpace), 1);
   container.appendChild(renderer.domElement);
 
-  (renderer as any).renderProfile = 'high';
+  (renderer as any).renderProfile = tier;
   (renderer as any).resizeTo = (width: any, height: any) => {
     renderer.setPixelRatio(choosePixelRatio(width, height));
     renderer.setSize(width, height);
