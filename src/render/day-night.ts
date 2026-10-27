@@ -92,6 +92,7 @@ export class DayNight {
   private readonly _moonDir = new THREE.Vector3();
   private readonly _col = new THREE.Color();
   private readonly _fillBase = new THREE.Color(0x8090c0);
+  private _shadowSunY = Infinity;
 
   constructor(atmosphere: AtmoLike, renderer?: THREE.WebGLRenderer) {
     this.atmo = atmosphere;
@@ -189,10 +190,13 @@ export class DayNight {
     // Renderer clear colour (used for the brief gap before the sky dome covers it)
     if (this.renderer) {
       this.renderer.setClearColor(atmo.scene.fog.color);
-      // When shadowMap.autoUpdate is off (very-low tier) we must trigger an
-      // update here — once per animation tick is exactly the right cadence.
+      // When shadowMap.autoUpdate is off (very-low tier) only re-render shadows
+      // when the sun has moved enough to be visible (~0.5° in Y).
       if (!this.renderer.shadowMap.autoUpdate) {
-        this.renderer.shadowMap.needsUpdate = true;
+        if (Math.abs(this._sunDir.y - this._shadowSunY) > 0.009) {
+          this._shadowSunY = this._sunDir.y;
+          this.renderer.shadowMap.needsUpdate = true;
+        }
       }
     }
 

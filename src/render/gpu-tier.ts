@@ -2,17 +2,20 @@
  * Lightweight GPU tier detection.
  *
  * Buckets:
- *   high      — desktop or flagship phone (≥8 cores, ≥6 GB, not mobile)
- *   mid       — laptop / modern tablet / recent mid-range phone
- *   low       — old phone / budget device (≤4 cores or ≤2 GB RAM)
- *   very-low  — 7-year-old or weaker mobile (≤4 cores or ≤2 GB and mobile)
+ *   high      — desktop or flagship mobile (≥8 cores, ≥6 GB, or flagship mobile)
+ *   mid       — laptop / modern tablet / capable mid-range phone (≥6 cores AND ≥3 GB)
+ *   low       — older or constrained device (≤4 cores or ≤2 GB, desktop/non-mobile)
+ *   very-low  — 7-year-old or weaker mobile
  *
  * Samsung Galaxy S22 Ultra (8-core, 12 GB)     → high
  * Apple iPad M2 (8-core, 8 GB)                 → high
  * Apple iPad Air A14 (6-core, 4 GB)            → mid
  * 2019-era phone (6-core, 3 GB)                → mid
- * Budget / 7-year-old phone (4-core, 2 GB)     → low
+ * Budget phone (4-core, 2 GB)                  → low (desktop) / very-low (mobile)
  * 7-year-old mobile (4-core, 2 GB, mobile UA)  → very-low
+ *
+ * Key fix over previous version: mid now requires ≥6 cores AND ≥3 GB (previously OR),
+ * so weak devices that passed on cores alone no longer get EdgeMask + bloom.
  */
 
 export type GpuTier = 'high' | 'mid' | 'low' | 'very-low';
@@ -30,36 +33,33 @@ export interface TierSettings {
   dof: boolean;
   /** Crepuscular ray taps per pixel (0 = disabled, 4 = half, 8 = full). */
   crepuscularTaps: number;
-  /** Whether EdgeMaskPass (full second scene render) is added. */
+  /** Whether EdgeMaskPass (full second scene render) is added. High-only — it doubles scene draw calls. */
   edgeMask: boolean;
   /** Whether cloud-shadow noise runs in the atmosphere pass. */
   cloudShadow: boolean;
   /** Whether the full night-sky FBM (Milky Way, nebulae) runs. */
   nightSkyFull: boolean;
+  /** Chunk stream radius in chunk units. Lower = fewer draw calls on weak devices. */
+  streamRadius: number;
+  /** Water plane subdivision (NxN quads). Higher = smoother waves but more vertices. */
+  waterSubdivision: number;
+  /** Particle instance count for leaves/dust effects. */
+  particleCount: number;
 }
 
 export const TIER_SETTINGS: Record<GpuTier, TierSettings> = {
-  high:       { dprCap: 2,    shadowRes: 3072, bloom: true,  aoTaps: 8, dof: true,  crepuscularTaps: 8, edgeMask: true,  cloudShadow: true,  nightSkyFull: true  },
-  mid:        { dprCap: 1.25, shadowRes: 2048, bloom: true,  aoTaps: 4, dof: true,  crepuscularTaps: 4, edgeMask: true,  cloudShadow: true,  nightSkyFull: true  },
-  low:        { dprCap: 1,    shadowRes: 1024, bloom: false, aoTaps: 2, dof: false, crepuscularTaps: 0, edgeMask: false, cloudShadow: false, nightSkyFull: false },
-  'very-low': { dprCap: 1,    shadowRes: 512,  bloom: false, aoTaps: 0, dof: false, crepuscularTaps: 0, edgeMask: false, cloudShadow: false, nightSkyFull: false },
+  //                dprCap  shadowRes  bloom   aoTaps  dof    crep  edge   cloud  nightFull  stream  waterSub  particles
+  high:       { dprCap: 2,    shadowRes: 3072, bloom: true,  aoTaps: 8, dof: true,  crepuscularTaps: 8, edgeMask: true,  cloudShadow: true,  nightSkyFull: true,  streamRadius: 8, waterSubdivision: 64, particleCount: 1200 },
+  mid:        { dprCap: 1.25, shadowRes: 2048, bloom: true,  aoTaps: 4, dof: true,  crepuscularTaps: 4, edgeMask: false, cloudShadow: true,  nightSkyFull: true,  streamRadius: 7, waterSubdivision: 32, particleCount: 600  },
+  low:        { dprCap: 1,    shadowRes: 1024, bloom: false, aoTaps: 2, dof: false, crepuscularTaps: 0, edgeMask: false, cloudShadow: false, nightSkyFull: false, streamRadius: 5, waterSubdivision: 16, particleCount: 200  },
+  'very-low': { dprCap: 1,    shadowRes: 512,  bloom: false, aoTaps: 0, dof: false, crepuscularTaps: 0, edgeMask: false, cloudShadow: false, nightSkyFull: false, streamRadius: 4, waterSubdivision: 8,  particleCount: 0    },
 };
 
 /**
  * Detect GPU tier from hardware signals.
  *
- * Tier mapping:
- *   high      — desktop or flagship phone (≥8 cores, ≥6 GB, not mobile)
- *   mid       — laptop / modern tablet / recent mid-range phone
- *   low       — old phone / budget device
- *   very-low  — 7-year-old or weaker mobile
- *
- * Samsung Galaxy S22 Ultra (8-core, 12 GB)     → high
- * Apple iPad M2 (8-core, 8 GB)                 → high
- * Apple iPad Air A14 (6-core, 4 GB)            → mid
- * 2019-era phone (6-core, 3 GB)                → mid
- * Budget / 7-year-old phone (4-core, 2 GB)     → low
- * 7-year-old mobile (4-core, 2 GB, mobile UA)  → very-low
+ * Uses hardwareConcurrency, deviceMemory (with canvas-timing fallback for
+ * Firefox/Safari), WebGL2 availability, and UA mobile detection.
  */
 export function detectGpuTier(): GpuTier {
   const cores = navigator.hardwareConcurrency ?? 4;
@@ -87,9 +87,16 @@ export function detectGpuTier(): GpuTier {
     } catch { return 4; }
   })();
 
+  // very-low: no WebGL2, or weak mobile hardware
   if (mobile && (!hasWebGL2 || cores <= 4 || estimatedMem <= 2)) return 'very-low';
+  // low: weak desktop/non-mobile (≤4 cores OR ≤2 GB)
   if (cores <= 4 || estimatedMem <= 2) return 'low';
-  if (mobile && cores >= 8 && estimatedMem >= 8) return 'high';
+  // high: flagship — desktop ≥8 core/≥6 GB, or flagship mobile ≥8 core/≥8 GB
   if (!mobile && cores >= 8 && estimatedMem >= 6) return 'high';
-  return 'mid';
+  if (mobile  && cores >= 8 && estimatedMem >= 8) return 'high';
+  // mid: capable device — requires BOTH ≥6 cores AND ≥3 GB (previously OR, which
+  // let weak single-signal devices through to mid with EdgeMask + bloom).
+  if (cores >= 6 && estimatedMem >= 3) return 'mid';
+  // anything else (e.g. 6-core/2 GB or 4-core/4 GB) falls to low
+  return 'low';
 }

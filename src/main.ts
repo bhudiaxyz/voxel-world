@@ -22,7 +22,7 @@ import { createHud } from './ui/hud';
 import { makeRng, genSeedWord, hashSeedWord } from './core/rng';
 import { createDroneMode } from './player/drone';
 import { createFlyMode } from './player/fly';
-import { detectGpuTier } from './render/gpu-tier';
+import { detectGpuTier, TIER_SETTINGS } from './render/gpu-tier';
 import { createTouchControls, isTouchDevice } from './ui/touch-controls';
 
 export let currentSeedWord = 'LusaliBenoruLezagi';
@@ -59,7 +59,8 @@ async function start(): Promise<void> {
   const renderer = createRenderer(container, tier);
   const scene = new THREE.Scene();
 
-  const world = await buildWorld(SEED, setProgress);
+  const ts = TIER_SETTINGS[tier];
+  const world = await buildWorld(SEED, setProgress, ts.streamRadius);
   scene.add(world.group);
 
   const fpCam = new FPCamera(container.clientWidth / container.clientHeight, renderer.domElement);
@@ -67,12 +68,12 @@ async function start(): Promise<void> {
   const dayNight = new DayNight(atmo, renderer);
 
   const waterDepth = makeDepthMap(world);
-  const water = createWater(world.size, waterDepth, tier);
+  const water = createWater(world.size, waterDepth, tier, ts.waterSubdivision);
   scene.add(water.mesh);
   setVoxelWaterline(world.meshes.material, waterDepth, world.size, DEPTH_RANGE);
   dayNight.voxelUniforms = world.meshes.material.userData.uniforms;
 
-  const particles = createParticles(world.size, makeRng(SEED ^ 0x1234));
+  const particles = createParticles(world.size, makeRng(SEED ^ 0x1234), ts.particleCount);
   scene.add(particles.group);
 
   // Register water + particle planet uniforms so they all bend together.
@@ -94,6 +95,11 @@ async function start(): Promise<void> {
   const input = new Input(renderer.domElement);
   const canAct = () => fpCam.isLocked || fpCam.touchActive;
   document.addEventListener('keydown', (e: KeyboardEvent) => {
+    // L: land — allowed even without pointer lock so Escape-then-L still lands.
+    if (e.code === 'KeyL' && !e.repeat && drone.active) {
+      drone.beginLanding();
+      return;
+    }
     if (!canAct()) return;
     // F: toggle fly mode
     if (e.code === 'KeyF' && !e.repeat && !drone.active) {
@@ -111,10 +117,6 @@ async function start(): Promise<void> {
     if (e.code === 'KeyG' && !e.repeat && !drone.active && !fly.active) {
       drone.enter(fpCam.camera);
       fpCam.droneActive = true;
-    }
-    // L: land (drone only; ascend cancels landing — handled in drone.ts)
-    if (e.code === 'KeyL' && !e.repeat && drone.active) {
-      drone.beginLanding();
     }
     if (e.code === 'KeyE' && !e.repeat) {
       const g = post.grade.uniforms;

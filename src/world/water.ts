@@ -71,8 +71,8 @@ export function makeDepthMap(world: any) {
   return tex;
 }
 
-export function createWater(size: any, depthMap: any, tier: string = 'high') {
-  const sub = tier === 'high' ? 64 : 32;
+export function createWater(size: any, depthMap: any, tier: string = 'high', waterSubdivision?: number) {
+  const sub = waterSubdivision ?? (tier === 'high' ? 64 : 32);
   const geo = new THREE.PlaneGeometry(size * 1.9, size * 1.9, sub, sub);
   geo.rotateX(-Math.PI / 2);
 

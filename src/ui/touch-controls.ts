@@ -292,7 +292,7 @@ export function createTouchControls(fpCam: FPCamera, dom: HTMLElement): TouchCon
       const fly = document.getElementById('btn-fly')! as HTMLElement;
       const drone = document.getElementById('btn-drone')! as HTMLElement;
       // Land: only shown while drone is airborne (fly exits via ✈ toggle)
-      land.style.display = droneActive && !landing ? '' : 'none';
+      land.style.display = droneActive && !landing ? 'block' : 'none';
       // Fly: hidden while drone active; shows "exit fly" label when fly active
       fly.style.display = droneActive ? 'none' : '';
       fly.textContent = flyActive ? '🛫' : '✈';

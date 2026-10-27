@@ -134,12 +134,15 @@ function makeQuadGeometry(count: any, bounds: any, rng: any, colors: any, sizeRa
   return geo;
 }
 
-export function createParticles(worldSize: any, rng: any) {
+export function createParticles(worldSize: any, rng: any, maxCount = 1110) {
   const group = new THREE.Group();
   group.name = 'particles';
   const layers: THREE.ShaderMaterial[] = [];
+  const scale = maxCount / 1110;
 
   const mk = (count: any, bounds: any, colors: any, sizeRange: any, fallRange: any, soft: any, blend: any) => {
+    count = Math.max(0, Math.round(count * scale));
+    if (count === 0) return;
     const geo = makeQuadGeometry(count, bounds, rng, colors, sizeRange, fallRange);
     const mat = new THREE.ShaderMaterial({
       vertexShader: PETAL_VERT,
@@ -167,6 +170,7 @@ export function createParticles(worldSize: any, rng: any) {
     layers.push(mat);
     return mat;
   };
+
 
   const B = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 

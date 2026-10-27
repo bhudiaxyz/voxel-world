@@ -43,7 +43,7 @@ export interface World {
   decorations: any[];
 }
 
-export async function buildWorld(seed: number, onProgress: (p: number, s?: string) => void = () => {}): Promise<World> {
+export async function buildWorld(seed: number, onProgress: (p: number, s?: string) => void = () => {}, streamRadius = 8): Promise<World> {
   const yieldFrame = () => new Promise((r) => setTimeout(r, 0));
 
   /* The plan comes before the voxels.
@@ -96,7 +96,7 @@ export async function buildWorld(seed: number, onProgress: (p: number, s?: strin
   // the spawn is ready before the loading veil lifts; the rest streams during
   // idle time as the camera moves.
   onProgress(0.58, 'carving the stone');
-  const streaming = createWorldChunkStreamer(world.grid);
+  const streaming = createWorldChunkStreamer(world.grid, { loadRadius: streamRadius });
   await streaming.preload(world.spawn, {
     radius: 3,
     onProgress: (p: number) => onProgress(0.58 + p * 0.38, 'carving the stone'),
