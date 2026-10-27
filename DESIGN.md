@@ -416,6 +416,25 @@ On startup (`main.ts`):
 
 `pushSeedUrl(word)` uses `history.replaceState` (not `pushState`) so the browser back button is not cluttered.
 
+### Startup progress sequence
+
+`buildWorld` (`src/world/world.ts`) drives the loading bar via an `onProgress(fraction, label)` callback. Each step yields to the browser before the next synchronous block so the label is visible before the work starts. `generateTerrain` receives a sub-callback that maps its internal 0–1 range into the 0.06–0.24 window.
+
+| Progress | Label | Source |
+| --- | --- | --- |
+| 0.02 | drawing the map | `planWorld` — continent layout, region graph, river routing |
+| *(yield)* | | browser paints before synchronous terrain block |
+| 0.06 | sculpting the terrain | `generateTerrain` — macro relief discs, contour field |
+| 0.14 | carving the rivers | `generateTerrain` — river distance field + bank carving |
+| 0.19 | shaping the banks | `generateTerrain` — walkability, stairs, boulders |
+| 0.21 | filling the voxels | `generateTerrain` — voxel fill loop |
+| 0.26 | building the crossings | `buildStructures` — bridges, stepping stones |
+| 0.34 | placing the landmarks | `buildStamps` — spires, obelisks, biospheres, tombs |
+| 0.40 | growing the forests | `scatterVegetation` — trees, mushrooms, crystals |
+| 0.50 | finding the path | `findSpawn` — locate a good player start position |
+| 0.54 → 0.96 | meshing the world | chunk streaming preload (per-chunk sub-progress) |
+| 1.0 | ready | loading overlay fades out |
+
 The settings panel's seed input and the pause menu's **Generate new world** button both call `pushSeedUrl(newWord)` then `location.reload()`, which re-enters the startup path with the new seed in the URL.
 
 ---

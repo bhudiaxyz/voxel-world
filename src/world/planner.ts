@@ -483,7 +483,7 @@ export function planWorld(seed: any, size: any) {
   const traceRiver = (sx: any, sz: any, opts: any = {}) => {
     const step = opts.step ?? 3;
     const join = opts.join ?? null; // polyline to merge into, if any
-    const joinR2 = (opts.joinRadius ?? 7) ** 2;
+    const joinR2 = (opts.joinRadius ?? 18) ** 2;
     const pts = [[sx, sz]];
     let x = sx,
       z = sz;
@@ -555,7 +555,13 @@ export function planWorld(seed: any, size: any) {
      * spring some way down the slope; discarding the first stretch gives the
      * same result for free and leaves the peak intact to be a peak. */
     const skip = opts.spring === false ? 0 : Math.round(pts.length * 0.14);
-    return pts.length - skip >= 8 ? pts.slice(skip) : pts;
+    // Trim the tail: drop any trailing points that have crossed into the sea
+    // (elevation below SHORE threshold). The trace loop stops at nearIsland>0.99
+    // but by then the path often has 1–3 ocean-side points already appended.
+    let tail = pts.length;
+    while (tail > skip + 4 && elevationAt(pts[tail - 1][0], pts[tail - 1][1]) < 0.15) tail--;
+    const trimmed = pts.slice(skip, tail);
+    return trimmed.length >= 8 ? trimmed : pts.slice(skip);
   };
 
   /* The lake is a planning decision too.
@@ -626,14 +632,49 @@ export function planWorld(seed: any, size: any) {
   // Tributaries from lesser summits, merged into whichever channel they meet.
   // Confluences are what make a drainage look drained rather than decorated.
   const trunks = rivers.filter((r) => r.order === 0);
-  for (const p of peaks) {
-    if (rivers.length >= trunkCount * 3) break;
+  // Expand the source pool beyond just the top peaks — include any inland region
+  // above the 50th percentile elevation so hillside ridges can feed tributaries.
+  const midElevThreshold = peaks.length > 1
+    ? peaks[Math.floor(peaks.length * 0.5)].elevation
+    : 0;
+  const tributarySources = [...pool].filter((r) => r.elevation >= midElevThreshold)
+    .sort((a, b) => b.elevation - a.elevation);
+  for (const p of tributarySources) {
+    if (rivers.length >= trunkCount * 5) break;
     if (rivers.some((r) => r.source === p.id)) continue;
     const host = trunks[rivers.length % Math.max(trunks.length, 1)];
     if (!host) break;
     const pts = traceRiver(p.center[0], p.center[1], { join: host.points });
     if (pts.length < 10) continue;
     rivers.push({ order: 1, source: p.id, tributary: true, points: pts });
+  }
+
+  // Streams: narrow order-2 branches from mid-elevation terrain, joining the
+  // nearest trunk or tributary. Short traces (≤200 steps) for upland rills.
+  const allChannels = rivers.slice(); // snapshot before we push streams
+  // SHORE_ELEV matches the biome threshold in region assignment (elevation < 0.15 = SHORE).
+  // Streams must start above this so they flow down toward water, not from it.
+  const SHORE_ELEV = 0.15;
+  const streamSources = [...pool].filter((r) =>
+    r.elevation > SHORE_ELEV + 0.05 && r.elevation < midElevThreshold * 1.4
+  ).sort(() => rng.range(-1, 1)); // shuffle so streams scatter across the map
+  const streamTarget = Math.min(Math.round(trunkCount * 4), 32);
+  for (const p of streamSources) {
+    if (rivers.filter((r) => r.order === 2).length >= streamTarget) break;
+    if (rivers.some((r) => r.source === p.id)) continue;
+    // Join the nearest already-placed channel (trunk or tributary)
+    const nearest = allChannels.reduce((best: any, r: any) => {
+      const d = r.points.reduce((bd: number, pt: any) =>
+        Math.min(bd, Math.hypot(pt[0] - p.center[0], pt[1] - p.center[1])), Infinity);
+      return d < (best?.dist ?? Infinity) ? { r, dist: d } : best;
+    }, null as any);
+    if (!nearest || nearest.dist > REGION_SPACING * 8) continue;
+    const pts = traceRiver(p.center[0], p.center[1], {
+      join: nearest.r.points,
+      step: 2,
+    });
+    if (pts.length < 8) continue;
+    rivers.push({ order: 2, source: p.id, tributary: true, points: pts });
   }
 
   /** Distance from a point to the nearest channel centreline, in blocks. */

@@ -55,9 +55,10 @@ export async function buildWorld(seed: number, onProgress: (p: number, s?: strin
   onProgress(0.02, 'drawing the map');
   const plan = planWorld(seed, WORLD.size);
 
-  onProgress(0.05, 'raising the land');
+  await yieldFrame(); // let the browser paint 'drawing the map' before terrain blocks
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const world: any = generateTerrain(seed, plan);
+  const world: any = generateTerrain(seed, plan,
+    (p, s) => onProgress(0.06 + p * 0.18, s));
   world.plan = plan;
   world.rng = makeRng(seed ^ 0x5f3a);
 
@@ -71,7 +72,7 @@ export async function buildWorld(seed: number, onProgress: (p: number, s?: strin
   world.decorations = [];
   await yieldFrame();
 
-  onProgress(0.24, 'building the crossings');
+  onProgress(0.26, 'building the crossings');
   buildStructures(world, world.rng);
   await yieldFrame();
 
@@ -81,25 +82,28 @@ export async function buildWorld(seed: number, onProgress: (p: number, s?: strin
    * scene should stand clear of one. Before vegetation, because the clearings
    * a scene reserves are the whole point of it, and the scatter pass would
    * cheerfully fill them in. */
-  onProgress(0.34, 'composing the scenes');
+  onProgress(0.34, 'placing the landmarks');
   buildStamps(world, world.rng);
   await yieldFrame();
 
-  onProgress(0.42, 'planting the blossom');
+  onProgress(0.40, 'growing the forests');
   scatterVegetation(world, world.rng);
   await yieldFrame();
 
   world.spawn = findSpawn(world);
 
+  onProgress(0.50, 'finding the path');
+  await yieldFrame();
+
   // Keep the complete voxel grid on the CPU for collision, swimming and the
   // map, but only create nearby GPU geometry. A small playable island around
   // the spawn is ready before the loading veil lifts; the rest streams during
   // idle time as the camera moves.
-  onProgress(0.58, 'carving the stone');
+  onProgress(0.54, 'meshing the world');
   const streaming = createWorldChunkStreamer(world.grid, { loadRadius: streamRadius });
   await streaming.preload(world.spawn, {
     radius: 3,
-    onProgress: (p: number) => onProgress(0.58 + p * 0.38, 'carving the stone'),
+    onProgress: (p: number) => onProgress(0.54 + p * 0.42, 'meshing the world'),
   } as any);
   const meshes = streaming.meshes;
   await yieldFrame();

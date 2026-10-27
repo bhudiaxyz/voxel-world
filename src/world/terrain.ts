@@ -72,7 +72,18 @@ export const CASCADE = registerBlock('CASCADE', {
   emissive: 0.14,
 });
 
-export function generateTerrain(seed = 20260820, plan: any = null) {
+// River water: passable (isWater:true so isSolid skips it), teal-blue to match
+// the water plane palette. Placed as voxels in river channels above sea level
+// so the carved gorge looks wet rather than dry.
+export const RIVER_WATER = registerBlock('RIVER_WATER', {
+  top:    lin(0x4fa8bc),
+  side:   lin(0x3d97ae),
+  bottom: lin(0x2e8899),
+  rough: 0.05,
+  isWater: true,
+});
+
+export function generateTerrain(seed = 20260820, plan: any = null, onProgress: (p: number, s: string) => void = () => {}) {
   const S = WORLD.size;
   const L = WORLD.step;
   const SEA = WORLD.seaLevel;
@@ -110,6 +121,7 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
   /** How much bigger than the authored 256-block world this one is, by area. */
   const AREA = (S / 256) ** 2;
 
+  onProgress(0.0, 'sculpting the terrain');
   /* ================================================================
    * 1. Contour composition
    * ================================================================
@@ -400,7 +412,7 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
       /* Channels widen downstream. A river of constant width reads as a
        * canal however it meanders — the taper is most of what says "this
        * water is going somewhere". */
-      let w = (ch.order === 0 ? 3.2 + t * 5.4 : 2.2 + t * 2.6) * K;
+      let w = (ch.order === 0 ? 3.2 + t * 5.4 : ch.order === 1 ? 2.2 + t * 2.6 : 1.2 + t * 1.4) * K;
       w += fbm2(nRiver, px * 0.02, pz * 0.02, 2) * 1.6 * K;
 
       /* Pools on the outside of the hardest bends, measured from the path
@@ -582,6 +594,7 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
   }
   H = despeckle(ledged, S, land, 12);
 
+  onProgress(0.45, 'carving the rivers');
   /* ================================================================
    * 3. River, banks and beaches — carved after terracing
    * ================================================================ */
@@ -853,6 +866,7 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
     }
   }
 
+  onProgress(0.7, 'shaping the banks');
   /* ================================================================
    * 4. Walkability
    * ================================================================ */
@@ -947,6 +961,7 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
     }
   }
 
+  onProgress(0.85, 'filling the voxels');
   /* ================================================================
    * 6. Voxel fill
    * ================================================================ */
@@ -979,6 +994,25 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
    * number of outcrops or cascades spread over sixteen times the area is not
    * "the same world, bigger" — it is a sparser world, and the sparseness is
    * exactly what makes a large map feel like an empty one. */
+  // Fill river channels above sea level with passable river-water voxels so
+  // the carved gorge looks wet. Three blocks deep — enough to trigger swimming
+  // and to show colour from walking level. Columns at or below sea level are
+  // already flooded by the water plane and need no voxels.
+  const RIVER_FILL = 3;
+  for (let z = 0; z < S; z++) {
+    for (let x = 0; x < S; x++) {
+      const i = z * S + x;
+      if (heights[i] <= SEA) continue;
+      const d = rivD[i];
+      const hw = rivHalf[i];
+      if (hw <= 0 || d >= hw) continue; // outside channel
+      for (let dy = 1; dy <= RIVER_FILL; dy++) {
+        const wy = heights[i] + dy;
+        if (wy < WORLD.height) grid.set(x, wy, z, RIVER_WATER.id);
+      }
+    }
+  }
+
   decorateCliffs(grid, heights, land, S, rng, nRock, AREA);
   addCascades(grid, heights, land, S, riverPath, rng, CASCADE.id, AREA);
 

@@ -85,7 +85,8 @@ export class VoxelGrid {
   }
 
   isSolid(x: number, y: number, z: number) {
-    return this.get(x, y, z) !== 0;
+    const id = this.get(x, y, z);
+    return id !== 0 && !BLOCK_BY_ID[id]?.isWater;
   }
 
   /** Fill an axis-aligned box (inclusive bounds). */

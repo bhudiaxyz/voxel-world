@@ -9,7 +9,7 @@
  */
 
 import * as THREE from 'three';
-import { WATER } from '../core/palette';
+import { WATER, BLOCK_BY_ID } from '../core/palette';
 import { isTouchDevice } from '../ui/touch-controls';
 
 const GRAVITY = 58;
@@ -246,7 +246,21 @@ export class Controller {
      * that you are wading: the ground still carries you, which keeps fords
      * and shallow shelves walkable rather than turning every puddle into a
      * swim. */
-    const underBy = WATER.level - this.pos.y;
+    // Effective water surface: global plane OR the top of any river-water voxel
+    // stack immediately above the player's feet (for rivers above sea level).
+    let waterSurface = WATER.level;
+    {
+      const px = Math.floor(this.pos.x), pz = Math.floor(this.pos.z);
+      const scanTop = Math.floor(this.pos.y + 4);
+      const scanBot = Math.floor(this.pos.y - 1);
+      for (let wy = scanTop; wy >= scanBot; wy--) {
+        if (BLOCK_BY_ID[this.grid.get(px, wy, pz)]?.isWater) {
+          waterSurface = Math.max(waterSurface, wy + 1);
+          break;
+        }
+      }
+    }
+    const underBy = waterSurface - this.pos.y;
     this.submersion = THREE.MathUtils.clamp(underBy / 1.8, 0, 1);
     /* Depth of water underfoot: the surface, less the ground beneath you.
      *
@@ -266,7 +280,7 @@ export class Controller {
       const t = this.groundBelow(cx, this.pos.y + 0.2, cz);
       if (t > bedY) bedY = t;
     }
-    const standDepth = WATER.level - bedY;
+    const standDepth = waterSurface - bedY;
     this.swimming = !this.grounded && (wasSwimming ? standDepth > SWIM_EXIT : standDepth > SWIM_ENTER);
 
     /* Entering the water kills most of the fall.
@@ -322,7 +336,7 @@ export class Controller {
        * the water at speed carries you under and you bob back up — and so a
        * dive is possible at all. Damping is what stops that bob turning into
        * a permanent oscillation. */
-      const rest = WATER.level - FLOAT_LINE;
+      const rest = waterSurface - FLOAT_LINE;
       this.vel.y += (rest - this.pos.y) * BUOYANCY * dt;
       if (jumpHeld) this.vel.y += (DIVE_VEL - this.vel.y) * 4.0 * dt;
       this.vel.y *= Math.exp(-FLOAT_DAMP * dt);
@@ -352,7 +366,7 @@ export class Controller {
       // the floating body. Chest-deep in the water the body sits about a
       // block low, so measuring from it would refuse banks that are plainly
       // within arm's reach of someone at the surface.
-      const from = this.swimming ? WATER.level : p.y;
+      const from = this.swimming ? waterSurface : p.y;
       let top = -1;
       for (let i = 0; i < 4; i++) {
         const cx = x + (i & 1 ? r : -r);
@@ -362,7 +376,7 @@ export class Controller {
       }
       // Ignore anything level with us, or we would emit a step every frame.
       if (top <= p.y + 0.05) return null;
-      const reach = this.swimming ? WATER.level + STEP_HEIGHT - p.y : STEP_HEIGHT;
+      const reach = this.swimming ? waterSurface + STEP_HEIGHT - p.y : STEP_HEIGHT;
       return top - p.y <= reach + 0.001 ? top : null;
     };
 

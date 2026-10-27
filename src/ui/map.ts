@@ -171,6 +171,48 @@ function bakeTerrain(world: any) {
     }
   }
   ctx.putImageData(img, 0, 0);
+
+  // Draw river network over the baked terrain.
+  // Two passes per river: a soft glow, then a solid line — the same technique
+  // cartographers use to lift water above the terrain without boxing it.
+  const rivers: any[] = world.plan?.rivers ?? [];
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  // Order → [glowWidth, glowAlpha, lineWidth, lineColor]
+  const RIVER_STYLE: Record<number, [number, string, number, string]> = {
+    0: [7,   'rgba(60,150,210,0.22)', 3.2, 'rgba(70,165,230,0.92)'],  // trunk
+    1: [4.5, 'rgba(60,150,210,0.18)', 2.0, 'rgba(80,170,225,0.82)'],  // tributary
+    2: [3,   'rgba(60,150,210,0.14)', 1.2, 'rgba(100,180,230,0.68)'], // stream
+  };
+
+  // Sort so wider trunks are drawn first, streams last (on top).
+  const sorted = [...rivers].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+  for (const pass of [0, 1] as const) { // 0=glow, 1=solid
+    for (const r of sorted) {
+      if (!r.points || r.points.length < 2) continue;
+      const order: number = r.order ?? 0;
+      const style = RIVER_STYLE[order] ?? RIVER_STYLE[1];
+      ctx.lineWidth   = pass === 0 ? style[0] : style[2];
+      ctx.strokeStyle = pass === 0 ? style[1] : style[3];
+      ctx.beginPath();
+      let penDown = false;
+      for (let i = 0; i < r.points.length; i++) {
+        const [wx, wz] = r.points[i];
+        // Clip to land — river paths extend to the geometric island rim which
+        // can be below sea level; skip any point that is ocean or sea floor.
+        const hx = Math.max(0, Math.min(S - 1, Math.round(wx)));
+        const hz = Math.max(0, Math.min(S - 1, Math.round(wz)));
+        if (heights[hz * S + hx] <= SEA) { penDown = false; continue; }
+        const c = proj.toCanvas(wx, wz);
+        if (!penDown) { ctx.moveTo(c.cx, c.cy); penDown = true; }
+        else ctx.lineTo(c.cx, c.cy);
+      }
+      ctx.stroke();
+    }
+  }
+
   return cv;
 }
 
