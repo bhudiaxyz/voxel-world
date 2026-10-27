@@ -283,6 +283,9 @@ async function start(): Promise<void> {
         fpCam._joyY,
       );
       if (done) {
+        controller.pos.x = fpCam.camera.position.x;
+        controller.pos.z = fpCam.camera.position.z;
+        controller.pos.y = world.grid.surfaceY(controller.pos.x, controller.pos.z);
         fpCam.droneActive = false;
         fpCam.yaw = fpCam.camera.rotation.y;
         fpCam.pitch = 0;

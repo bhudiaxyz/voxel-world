@@ -9,7 +9,7 @@ const DRONE = {
   altitudeChangeRate: 12.0, // m/s per unit axis input
   enterLiftHeight: 18,
   keyYawSpeed: 1.2,
-  landingDescentRate: 45,  // m/s hover-height reduction while landing
+  landingDescentRate: 90,  // m/s hover-height reduction while landing
   landingCompleteHeight: 2.5,
   // Terrain-follow tuning:
   //   heightSmoothRate — lerp rate for the ground-height target.
