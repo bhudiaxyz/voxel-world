@@ -57,6 +57,15 @@ export const WORLD = {
 };
 
 /**
+ * Wrap a single axis coordinate to [0, WORLD.size) using standard modulo so
+ * the player exits one edge and enters the exact opposite edge.
+ */
+export function wrapAxis(v: number): number {
+  const S = WORLD.size;
+  return ((v % S) + S) % S;
+}
+
+/**
  * Falling water. The water surface itself is a plane at sea level, so a
  * cascade has to be voxels: a pale, faintly luminous column that catches the
  * bloom and reads as spray without introducing a second transparent pass.

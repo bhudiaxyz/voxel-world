@@ -678,7 +678,7 @@ export function buildWorldMeshes(grid: any, { onProgress }: { onProgress?: (p: n
  * Collision, map queries and procedural data continue to use the full CPU
  * grid, so unloading a visual chunk can never change gameplay.
  */
-export function createWorldChunkStreamer(grid: any, { loadRadius = DEFAULT_STREAM_RADIUS, unloadPadding = 1 } = {}) {
+export function createWorldChunkStreamer(grid: any, { loadRadius = DEFAULT_STREAM_RADIUS, unloadPadding = 1, wrapBuffer = 0, toroidalWrap = false } = {}) {
   const meshes = createMeshRoots();
   const chunksX = Math.ceil(grid.sx / CHUNK);
   const chunksZ = Math.ceil(grid.sz / CHUNK);
@@ -916,11 +916,26 @@ export function createWorldChunkStreamer(grid: any, { loadRadius = DEFAULT_STREA
     const loadSq = loadMargin * loadMargin;
     const unloadSq = (trimToRadius ? loadMargin : unloadMargin) ** 2;
 
+    // Toroidal pre-loading: when the player is within the stream radius of a
+    // world edge, also evaluate chunk distances from the ±worldSize-shifted
+    // "ghost" positions. This is equivalent to computing wrapped distance on a
+    // torus and ensures the opposite-side chunks are loaded before the modulo
+    // wrap fires.
+    const mirrorOffsets: [number, number][] = [[0, 0]];
+    if (toroidalWrap) {
+      const Sx = grid.sx, Sz = grid.sz;
+      mirrorOffsets.push([Sx, 0], [-Sx, 0], [0, Sz], [0, -Sz]);
+    }
+
     for (let ci = 0; ci < chunksX; ci++) {
       const x = Math.min((ci + 0.5) * CHUNK, grid.sx);
       for (let ck = 0; ck < chunksZ; ck++) {
         const z = Math.min((ck + 0.5) * CHUNK, grid.sz);
-        const distanceSq = distanceToSegmentSq(x, z, ax, az, bx, bz);
+        let distanceSq = Infinity;
+        for (const [dx, dz] of mirrorOffsets) {
+          const d = distanceToSegmentSq(x, z, ax + dx, az + dz, bx + dx, bz + dz);
+          if (d < distanceSq) distanceSq = d;
+        }
         const key = keyOf(ci, ck);
         if (distanceSq <= unloadSq) keep.add(key);
         if (distanceSq <= loadSq && !loaded.has(key)) {

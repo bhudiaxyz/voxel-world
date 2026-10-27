@@ -11,6 +11,7 @@
 import * as THREE from 'three';
 import { WATER, BLOCK_BY_ID } from '../core/palette';
 import { isTouchDevice } from '../ui/touch-controls';
+import { wrapAxis } from '../world/terrain';
 
 const GRAVITY = 58;
 const MAX_SPEED = 13.5;
@@ -413,6 +414,7 @@ export class Controller {
         this.vel.x = 0;
       }
     } else p.x = nx;
+    p.x = wrapAxis(p.x);
 
     // Z
     const nz = p.z + this.vel.z * dt;
@@ -426,6 +428,7 @@ export class Controller {
         this.vel.z = 0;
       }
     } else p.z = nz;
+    p.z = wrapAxis(p.z);
 
     // Y
     const wasGrounded = this.grounded;

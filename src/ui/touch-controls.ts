@@ -91,6 +91,7 @@ export function createTouchControls(fpCam: FPCamera, dom: HTMLElement): TouchCon
   const btns = document.createElement('div');
   btns.id = 'touch-btns';
   btns.innerHTML = `
+    <button id="btn-map"          aria-label="Toggle map">🗺</button>
     <button id="btn-jump"    aria-label="Jump / Ascend">↑</button>
     <button id="btn-descend" aria-label="Descend">↓</button>
     <button id="btn-sprint"  aria-label="Sprint">⚡</button>
@@ -100,7 +101,6 @@ export function createTouchControls(fpCam: FPCamera, dom: HTMLElement): TouchCon
     <button id="btn-edges"   aria-label="Toggle edges">⬡</button>
     <button id="btn-time-back"    aria-label="Step time back">◀</button>
     <button id="btn-time-forward" aria-label="Step time forward">▶</button>
-    <button id="btn-map"          aria-label="Toggle map">🗺</button>
   `;
   document.body.appendChild(btns);
 

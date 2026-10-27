@@ -100,7 +100,7 @@ export async function buildWorld(seed: number, onProgress: (p: number, s?: strin
   // the spawn is ready before the loading veil lifts; the rest streams during
   // idle time as the camera moves.
   onProgress(0.54, 'meshing the world');
-  const streaming = createWorldChunkStreamer(world.grid, { loadRadius: streamRadius });
+  const streaming = createWorldChunkStreamer(world.grid, { loadRadius: streamRadius, toroidalWrap: true });
   await streaming.preload(world.spawn, {
     radius: 3,
     onProgress: (p: number) => onProgress(0.54 + p * 0.42, 'meshing the world'),

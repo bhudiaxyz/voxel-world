@@ -313,6 +313,11 @@ async function start(): Promise<void> {
   let perfTime = 0;
   let perfFrames = 0;
 
+  // Wrap-flash: spike aberration + vignette when the camera teleports across a
+  // world edge, then decay back to normal over ~0.35 s.
+  let wrapFlash = 0; // 0..1, decays to 0
+  let prevCamX = 0, prevCamZ = 0;
+
   // Wind state — slowly varying direction + gust envelope
   let windTime = 0.0;
   const windDir = new THREE.Vector2(1.0, 0.3).normalize();
@@ -447,6 +452,18 @@ async function start(): Promise<void> {
       _lastPlanetX = bendOrigin.x;
       _lastPlanetZ = bendOrigin.z;
       for (const unis of world.allPlanetUnis) updatePlanetUniforms(unis, bendOrigin);
+    }
+
+    // Detect world-edge wrap (camera teleports > 50 units in one frame) and
+    // spike chromatic aberration + vignette for a brief warp-flash effect.
+    const camX = fpCam.camera.position.x, camZ = fpCam.camera.position.z;
+    if (Math.abs(camX - prevCamX) > 50 || Math.abs(camZ - prevCamZ) > 50) wrapFlash = 1;
+    prevCamX = camX; prevCamZ = camZ;
+    wrapFlash = Math.max(0, wrapFlash - dt * 3);
+    if (wrapFlash > 0 && post.grade?.uniforms) {
+      const gu = post.grade.uniforms;
+      if (gu.uAberration) gu.uAberration.value = 0.0008 + wrapFlash * 0.025;
+      if (gu.uVignette)   gu.uVignette.value   = GRADE.vignette + wrapFlash * 1.2;
     }
 
     post.render(dt);

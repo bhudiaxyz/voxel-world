@@ -54,17 +54,6 @@ const CSS = `
   box-shadow:0 24px 72px rgba(0,0,0,.55); }
 #map canvas { display:block; border-radius:9px; background:#0d0c0f;
   box-shadow:inset 0 0 0 1px rgba(201,173,115,.12); }
-#map .north { position:absolute; left:18px; top:17px; z-index:2;
-  width:25px; height:25px; display:grid; place-items:center; border-radius:6px;
-  background:rgba(20,19,24,.88); border:1px solid var(--line);
-  color:var(--gold); backdrop-filter:blur(9px); font-size:10px; font-weight:700;
-  letter-spacing:.06em; box-shadow:0 4px 14px rgba(0,0,0,.35); }
-#map .close { position:absolute; right:17px; top:16px; z-index:2;
-  width:28px; height:28px; display:grid; place-items:center; padding:0;
-  border:1px solid rgba(201,173,115,.18); border-radius:7px;
-  background:rgba(30,28,35,.80); color:var(--ink-soft);
-  backdrop-filter:blur(7px); font:400 18px/1 Inter, sans-serif; cursor:pointer; }
-#map .close:hover { color:var(--gold); background:rgba(42,39,48,.88); border-color:var(--gold); }
 #map .busy { position:absolute; inset:0; display:flex; align-items:center;
   justify-content:center; }
 #map .busy::after { content:""; width:22px; height:22px; border-radius:50%;
@@ -229,8 +218,6 @@ export function createMap({ world, controller, input, fpCam }: any) {
   root.id = 'map';
   root.innerHTML = `
     <div class="frame" role="dialog" aria-label="Map" aria-modal="true">
-      <div class="north" aria-hidden="true">N</div>
-      <button class="close" type="button" aria-label="Close map">×</button>
       <canvas id="map-cv"></canvas>
     </div>
   `;
@@ -473,7 +460,6 @@ export function createMap({ world, controller, input, fpCam }: any) {
       e.stopImmediatePropagation();
     }
   });
-  root.querySelector('.close')!.addEventListener('click', () => setOpen(false));
   root.addEventListener('click', (e) => {
     if (e.target === root) setOpen(false);
   });

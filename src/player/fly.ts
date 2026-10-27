@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { VoxelGrid } from '../core/voxel';
+import { WORLD, wrapAxis } from '../world/terrain';
 
 const FLY = {
   speed: 20,
@@ -93,13 +94,16 @@ export function createFlyMode(grid: VoxelGrid): FlyMode {
 
       camera.position.x += dx * speed * dt;
       camera.position.z += dz * speed * dt;
+      camera.position.x = wrapAxis(camera.position.x);
+      camera.position.z = wrapAxis(camera.position.z);
       camera.position.y += altDelta * dt;
 
       // Terrain floor: smooth downward so cliffs don't snap the floor away beneath the player.
       // Ascent is uncapped — rising terrain must be respected immediately.
-      const rawFloor = grid.surfaceY(camera.position.x, camera.position.z) + FLY.floorClearance;
+      const seaFloor = WORLD.seaLevel + FLY.floorClearance;
+      const rawFloor = Math.max(grid.surfaceY(camera.position.x, camera.position.z), WORLD.seaLevel) + FLY.floorClearance;
       const maxDrop = FLY.floorDescentRate * dt;
-      smoothedFloor = Math.max(rawFloor, smoothedFloor - maxDrop);
+      smoothedFloor = Math.max(rawFloor, smoothedFloor - maxDrop, seaFloor);
       if (camera.position.y < smoothedFloor) camera.position.y = smoothedFloor;
 
       // Auto-climb: if moving horizontally and the path ahead is blocked, push upward.
