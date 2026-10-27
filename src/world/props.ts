@@ -142,6 +142,139 @@ export function placeLantern(grid: any, x: any, y: any, z: any) {
   grid.set(x, y + 4, z, BLOCKS.BEAM.id);
 }
 
+/**
+ * A sea bridge between two island centres, landing at low-elevation shore.
+ *
+ * Key differences from a river bridge:
+ *  - Scans outward from each centre to find the LOWEST land crossing point
+ *    (beach/grassland level) rather than stopping at the first land hit.
+ *    This keeps landings near the sand rather than on cliffs.
+ *  - Deck height is fixed just above sea level (SEA + 3) so the whole span
+ *    sits low and reads as a causeway.
+ *  - At each land end the deck ramps down to ground level over several steps
+ *    so the bridge is continuous — no floating section, no buried section.
+ *  - Stone piers extend to seabed over open water.
+ */
+export function buildSeaBridge(world: any, ax: number, az: number, bx: number, bz: number) {
+  const { grid, heights, size: S } = world;
+  const SEA = Math.floor(WATER.level);
+  const BEACH = SEA + 5; // maximum landing height — stay at beach/grassland level
+
+  const dx = bx - ax, dz = bz - az;
+  const len = Math.hypot(dx, dz);
+  if (len < 4) return null;
+  const ux = dx / len, uz = dz / len;
+  const rpx = -uz, rpz = ux; // railing perpendicular
+  const halfW = 1;
+
+  const colH = (t: number) => {
+    const x = clamp(Math.round(ax + ux * t), 0, S - 1);
+    const z = clamp(Math.round(az + uz * t), 0, S - 1);
+    return heights[z * S + x];
+  };
+
+  // Walk outward from A centre to find the best (lowest) land entry point.
+  // "Best" = first land column whose height is ≤ BEACH. If none is that low,
+  // fall back to the lowest land column in the outer half of A's side.
+  const findShore = (fromCenter: boolean) => {
+    const step = fromCenter ? 1 : -1;
+    const start = fromCenter ? 0 : Math.round(len);
+    const end   = fromCenter ? Math.round(len / 2) : Math.round(len / 2);
+    let bestI = start, bestH = Infinity;
+    let firstLand = -1;
+    for (let i = start; fromCenter ? i <= end : i >= end; i += step) {
+      const h = colH(i);
+      if (h > SEA) {
+        if (firstLand < 0) firstLand = i;
+        if (h <= BEACH) return i; // ideal: beach/grass level
+        if (h < bestH) { bestH = h; bestI = i; }
+      }
+    }
+    return firstLand >= 0 ? bestI : -1; // lowest land, or -1 if no land found
+  };
+
+  const startI = findShore(true);
+  const endI   = findShore(false);
+  if (startI < 0 || endI < 0 || endI <= startI + 2) return null;
+
+  // Deck travels at a fixed low height — just clears the water.
+  const deckY = SEA + 3;
+
+  // Ramp length: how many blocks to slope up/down onto the island
+  const RAMP = 6;
+
+  for (let i = startI; i <= endI; i++) {
+    const wx = ax + ux * i, wz = az + uz * i;
+    const xi = clamp(Math.round(wx), 0, S - 1);
+    const zi = clamp(Math.round(wz), 0, S - 1);
+    const groundH = heights[zi * S + xi];
+    const isLand  = groundH > SEA;
+
+    // At the landings ramp the deck up/down to meet the ground smoothly.
+    const rampNear = i - startI;
+    const rampFar  = endI - i;
+    const rampFrac = Math.min(rampNear, rampFar, RAMP) / RAMP;
+    // On land: deck follows terrain + 1, blending toward deckY over the ramp.
+    // Over water: always deckY.
+    const thisY = isLand
+      ? Math.round(deckY + (groundH + 1 - deckY) * (1 - rampFrac))
+      : deckY;
+
+    const put = (offP: number, y: number, id: number) => {
+      const x = clamp(Math.round(wx + rpx * offP), 0, S - 1);
+      const z = clamp(Math.round(wz + rpz * offP), 0, S - 1);
+      grid.set(x, y, z, id);
+    };
+
+    // Deck planks
+    for (let j = -halfW; j <= halfW; j++) put(j, thisY, BLOCKS.PLANK.id);
+
+    // Fill any gap between deck and ground so there is no floating section
+    if (isLand && thisY > groundH + 1) {
+      for (let y = groundH + 1; y < thisY; y++)
+        for (let j = -halfW; j <= halfW; j++) put(j, y, BLOCKS.BEAM.id);
+    }
+
+    // Railings (skip inside ramp on land so they don't stick up through terrain)
+    if (!isLand || rampFrac > 0.5) {
+      for (const side of [-halfW - 1, halfW + 1]) {
+        put(side, thisY, BLOCKS.BEAM.id);
+        if (i % 4 === 0) put(side, thisY + 1, BLOCKS.BEAM.id);
+        put(side, thisY + 2, BLOCKS.PLANK_PALE.id);
+      }
+    }
+
+    // Stone piers down to seabed every 5 blocks over water
+    if (!isLand && i % 5 === 0) {
+      for (let y = thisY - 1; y > 0; y--) {
+        if (grid.isSolid(xi, y, zi)) break;
+        put(0, y, y > SEA - 2 ? BLOCKS.BEAM.id : BLOCKS.STONE.id);
+      }
+    }
+  }
+
+  // Lanterns at quarter-points and mid-span (water section only)
+  for (const frac of [0.25, 0.5, 0.75]) {
+    const i = Math.round(startI + (endI - startI) * frac);
+    if (colH(i) > SEA) continue; // skip if over land
+    const wx = ax + ux * i, wz = az + uz * i;
+    const x = clamp(Math.round(wx + rpx * (halfW + 1)), 0, S - 1);
+    const z = clamp(Math.round(wz + rpz * (halfW + 1)), 0, S - 1);
+    grid.set(x, deckY + 3, z, BLOCKS.BEAM.id);
+    grid.set(x, deckY + 4, z, BLOCKS.LANTERN.id);
+  }
+
+  return {
+    deckY,
+    alongX: Math.abs(ux) >= Math.abs(uz),
+    near: [Math.round(ax + ux * startI), Math.round(az + uz * startI)],
+    far:  [Math.round(ax + ux * endI),   Math.round(az + uz * endI)],
+    x: Math.round(ax + ux * ((startI + endI) / 2)),
+    z: Math.round(az + uz * ((startI + endI) / 2)),
+    seaBridge: true,
+  };
+}
+
 /** Populate the world with built structures. */
 export function buildStructures(world: any, rng: any) {
   const { size: S, heights, grid, riverPath } = world;
@@ -180,8 +313,29 @@ export function buildStructures(world: any, rng: any) {
     if (b) props.bridges.push(b);
   }
 
+  /* Sea bridges — short hops along stepping-stone chains.
+   *
+   * Each chain is [mainA, stone1?, stone2?, mainB]. Build one bridge per
+   * consecutive hop: center-to-center, then buildSeaBridge walks inward to
+   * find the actual shore on each side, so each span is short. */
+  const plan = world.plan;
+  if (plan?.bridgeChains?.length) {
+    for (const chain of plan.bridgeChains as [number, number][][]) {
+      for (let k = 0; k < chain.length - 1; k++) {
+        const [ax, az] = chain[k], [bx, bz] = chain[k + 1];
+        const sb = buildSeaBridge(world, ax, az, bx, bz);
+        if (sb) {
+          props.bridges.push(sb);
+          const dx = Math.sign(sb.far[0] - sb.near[0]), dz = Math.sign(sb.far[1] - sb.near[1]);
+          props.paths.push(carvePath(world, sb.near[0], sb.near[1], sb.near[0] - dx * 10, sb.near[1] - dz * 10, rng, 1));
+          props.paths.push(carvePath(world, sb.far[0],  sb.far[1],  sb.far[0]  + dx * 10, sb.far[1]  + dz * 10, rng, 1));
+        }
+      }
+    }
+  }
+
   // paths running off both bridge heads, along the deck's own direction
-  for (const b of props.bridges) {
+  for (const b of props.bridges.filter((b: any) => !b.seaBridge)) {
     const dx = Math.sign(b.near[0] - b.far[0]),
       dz = Math.sign(b.near[1] - b.far[1]);
     props.paths.push(carvePath(world, b.near[0] + dx * 7, b.near[1] + dz * 7, b.near[0], b.near[1], rng, 1));

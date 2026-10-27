@@ -68,85 +68,100 @@ const CSS = `
 const enc = (v: any) => Math.round(255 * Math.pow(Math.min(Math.max(v, 0), 1), 1 / 2.2));
 
 /**
- * Bake the terrain layer.
+ * Equirectangular projection helpers — flat 2:1 world-map rectangle.
  *
- * One pixel per block. Colour comes from the topmost block in the column, so
- * anything the generators placed — canopies, decks, lanterns, paved paths —
- * appears without this file knowing those things exist.
+ * The canvas is W×H with W = 2·H. World (x,z) maps linearly: x → canvas x,
+ * z → canvas y, with uniform scaling so the full world fits inside the canvas.
+ * This matches the standard equirectangular (plate carrée) look of world maps.
+ */
+function makeRect(S: number) {
+  const W = S, H = S / 2; // canvas dimensions
+
+  /** World (wx, wz) → canvas (cx, cy). Always returns a value. */
+  const toCanvas = (wx: number, wz: number) => ({
+    cx: (wx / S) * W,
+    cy: (wz / S) * H,
+  });
+
+  /** Canvas (cx, cy) → world (wx, wz). Always returns a value. */
+  const fromCanvas = (cx: number, cy: number) => ({
+    wx: (cx / W) * S,
+    wz: (cy / H) * S,
+  });
+
+  return { toCanvas, fromCanvas, W, H };
+}
+
+/** Sample one world column and return its map colour. */
+function worldPixel(
+  wx: number, wz: number,
+  grid: any, heights: any, S: number, SEA: number,
+  shoal: THREE.Color, deep: THREE.Color,
+) {
+  const x = Math.max(0, Math.min(S - 1, Math.round(wx)));
+  const z = Math.max(0, Math.min(S - 1, Math.round(wz)));
+  const ter = heights[z * S + x];
+  const top = grid.columnTop(x, z);
+  const at = (xx: number, zz: number) =>
+    heights[(zz < 0 ? 0 : zz >= S ? S - 1 : zz) * S + (xx < 0 ? 0 : xx >= S ? S - 1 : xx)];
+
+  let r: number, g: number, b: number;
+
+  if (ter <= SEA && top <= SEA) {
+    const t = Math.min((SEA - ter) / 16, 1);
+    const k = t * t * (3 - 2 * t);
+    r = shoal.r + (deep.r - shoal.r) * k;
+    g = shoal.g + (deep.g - shoal.g) * k;
+    b = shoal.b + (deep.b - shoal.b) * k;
+  } else {
+    const blk = BLOCK_BY_ID[grid.get(x, top, z)];
+    const c = blk && blk.top;
+    r = c ? c.r : 0.5;
+    g = c ? c.g : 0.5;
+    b = c ? c.b : 0.5;
+
+    const dx = at(x + 1, z) - at(x - 1, z);
+    const dz = at(x, z + 1) - at(x, z - 1);
+    const lit = 1 + (-dx * 0.6 - dz * 0.6) * 0.085;
+    const s = Math.min(Math.max(lit, 0.42), 1.5);
+    r *= s; g *= s; b *= s;
+
+    const drop = Math.max(at(x, z) - at(x + 1, z), at(x, z) - at(x, z + 1));
+    if (drop >= 3) { r *= 0.8; g *= 0.8; b *= 0.82; }
+  }
+  return { r, g, b };
+}
+
+/**
+ * Bake the terrain layer using an equirectangular (flat rectangle) projection.
+ *
+ * Canvas is W×H (2:1). Each canvas pixel maps 1:1 to world (x,z) via a simple
+ * scale, so the full world square is displayed as a 2:1 rectangle — the same
+ * plate carrée layout used in standard world atlas maps.
  */
 function bakeTerrain(world: any) {
   const { grid, heights, size: S } = world;
   const SEA = Math.floor(WATER.level);
+  const proj = makeRect(S);
   const cv = document.createElement('canvas');
-  cv.width = S;
-  cv.height = S;
+  cv.width = proj.W;
+  cv.height = proj.H;
   const ctx = cv.getContext('2d')!;
-  const img = ctx.createImageData(S, S);
+  const img = ctx.createImageData(proj.W, proj.H);
   const px = img.data;
 
-  // Palette colours are linear; so are these, and they get encoded on the way
-  // out with everything else.
   const shoal = new THREE.Color(WATER.shoal);
-  const deep = new THREE.Color(WATER.deep);
+  const deep  = new THREE.Color(WATER.deep);
 
-  const at = (x: any, z: any) => heights[(z < 0 ? 0 : z >= S ? S - 1 : z) * S + (x < 0 ? 0 : x >= S ? S - 1 : x)];
-
-  for (let z = 0; z < S; z++) {
-    for (let x = 0; x < S; x++) {
-      const i = z * S + x;
-      const ter = heights[i];
-      const top = grid.columnTop(x, z);
-      let r, g, b;
-
-      if (ter <= SEA && top <= SEA) {
-        /* Water. Shaded by depth on the same Beer-Lambert-ish ramp the water
-         * shader uses, so a lake reads deep in the middle on the map for the
-         * same reason it does in the world. */
-        const t = Math.min((SEA - ter) / 16, 1);
-        const k = t * t * (3 - 2 * t);
-        r = shoal.r + (deep.r - shoal.r) * k;
-        g = shoal.g + (deep.g - shoal.g) * k;
-        b = shoal.b + (deep.b - shoal.b) * k;
-      } else {
-        const blk = BLOCK_BY_ID[grid.get(x, top, z)];
-        const c = blk && blk.top;
-        if (!c) {
-          r = g = b = 0.5;
-        } else {
-          r = c.r;
-          g = c.g;
-          b = c.b;
-        }
-
-        /* Hillshade off the terrain heightfield.
-         *
-         * Without it the map is a flat colour chart: the terraces are the
-         * whole shape of this world and they are invisible from directly
-         * above unless the slope is lit. The light comes from the north-west
-         * so the shading agrees with the scene's own key light. */
-        const dx = at(x + 1, z) - at(x - 1, z);
-        const dz = at(x, z + 1) - at(x, z - 1);
-        const lit = 1 + (-dx * 0.6 - dz * 0.6) * 0.085;
-        const s = Math.min(Math.max(lit, 0.42), 1.5);
-        r *= s;
-        g *= s;
-        b *= s;
-
-        // A cliff of a whole terrace or more gets its edge picked out, which is
-        // what makes the plateaus legible as plateaus rather than as blotches.
-        const drop = Math.max(at(x, z) - at(x + 1, z), at(x, z) - at(x, z + 1));
-        if (drop >= 3) {
-          r *= 0.8;
-          g *= 0.8;
-          b *= 0.82;
-        }
-      }
-
-      const o = i * 4;
-      px[o] = enc(r);
-      px[o + 1] = enc(g);
-      px[o + 2] = enc(b);
-      px[o + 3] = 255;
+  for (let cy = 0; cy < proj.H; cy++) {
+    for (let cx = 0; cx < proj.W; cx++) {
+      const w = proj.fromCanvas(cx, cy);
+      const { r, g, b } = worldPixel(w.wx, w.wz, grid, heights, S, SEA, shoal, deep);
+      const o = (cy * proj.W + cx) * 4;
+      px[o]   = enc(r);
+      px[o+1] = enc(g);
+      px[o+2] = enc(b);
+      px[o+3] = 255;
     }
   }
   ctx.putImageData(img, 0, 0);
@@ -172,54 +187,54 @@ export function createMap({ world, controller, input }: any) {
 
   const cv = root.querySelector('#map-cv') as HTMLCanvasElement;
   const ctx = cv.getContext('2d')!;
-  cv.width = S;
-  cv.height = S;
+  const proj = makeRect(S);
+  cv.width  = proj.W;
+  cv.height = proj.H;
 
   let terrain: any = null; // baked once, on first open
   let open = false;
   let wasPaused = false;
 
-  /* World units per displayed pixel.
-   *
-   * The canvas is one pixel per block internally and is then scaled down by
-   * CSS, so anything drawn in world units shrinks with the map. Markers must
-   * not: how big the "you are here" arrow needs to be is a fact about eyes and
-   * screens, not about how many blocks the world happens to be. Every marker
-   * below is sized in screen pixels and converted through this. */
+  /* World units per displayed pixel. The canvas is 2:1 (W×H); fit it inside
+   * the viewport keeping that aspect ratio. */
   let unit = 1;
   const fit = () => {
-    // Square, as large as the viewport comfortably allows.
-    const side = Math.max(240, Math.min(innerWidth - 48, innerHeight - 48));
-    cv.style.width = `${side}px`;
-    cv.style.height = `${side}px`;
-    unit = S / side;
+    const maxW = innerWidth  - 48;
+    const maxH = innerHeight - 48;
+    const w = Math.min(maxW, maxH * 2, 1200);
+    const h = w / 2;
+    cv.style.width  = `${Math.max(240, w)}px`;
+    cv.style.height = `${Math.max(120, h)}px`;
+    unit = proj.W / Math.max(240, w);
   };
   fit();
   addEventListener('resize', fit);
 
   function draw() {
     if (!terrain) return;
-    ctx.clearRect(0, 0, S, S);
+    ctx.clearRect(0, 0, proj.W, proj.H);
     ctx.drawImage(terrain, 0, 0);
 
     // ---- bridges: small timber ticks -------------------------------
     ctx.lineWidth = 1.4 * unit;
     for (const b of world.props?.bridges || []) {
-      ctx.fillStyle = 'rgba(184,130,74,0.88)'; // plank amber
+      const p = proj.toCanvas(b.x, b.z);
+      ctx.fillStyle = 'rgba(184,130,74,0.88)';
       ctx.strokeStyle = 'rgba(90,58,28,0.85)';
       const r = 3.2 * unit;
       ctx.beginPath();
-      ctx.rect(b.x - r, b.z - r, r * 2, r * 2);
+      ctx.rect(p.cx - r, p.cy - r, r * 2, r * 2);
       ctx.fill();
       ctx.stroke();
     }
 
     // ---- scenes: a diamond per composed place ----------------------
     for (const s of world.stamps || []) {
+      const p = proj.toCanvas(s.at[0], s.at[1]);
       const k = (KIND as any)[s.kind] || KIND.grove;
       const r = 4.0 * unit;
       ctx.save();
-      ctx.translate(s.at[0], s.at[1]);
+      ctx.translate(p.cx, p.cy);
       ctx.rotate(Math.PI / 4);
       ctx.fillStyle = k.fill;
       ctx.strokeStyle = k.ring;
@@ -232,8 +247,7 @@ export function createMap({ world, controller, input }: any) {
     }
 
     // ---- the player -------------------------------------------------
-    const px = controller.pos.x,
-      pz = controller.pos.z;
+    const { cx: px, cy: pz } = proj.toCanvas(controller.pos.x, controller.pos.z);
     // The camera's own facing, so the arrow answers "which way am I looking",
     // which is the only question anyone opens a map to ask.
     const h = controller.heading ?? 0;

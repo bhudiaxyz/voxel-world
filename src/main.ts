@@ -41,7 +41,8 @@ const ctrlEl = bootEl.querySelector('.ls-controls') as HTMLElement;
 
 const setProgress = (p: number, s?: string): void => {
   (barEl as HTMLElement).style.width = `${Math.round(p * 100)}%`;
-  if (s) ctrlEl.textContent = s;
+  if (s && p < 1) ctrlEl.textContent = s;
+  if (p >= 1) ctrlEl.textContent = '';
 };
 
 async function start(): Promise<void> {

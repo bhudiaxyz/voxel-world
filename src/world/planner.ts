@@ -56,15 +56,15 @@ export const REGION_SPACING = 30;
 const FEATURE = { elevation: 210, temperature: 320, moisture: 300, magic: 250 };
 
 /**
- * Where the coast is, as a fraction of the world size.
+ * Radius of each individual island, as a fraction of the world size.
  *
- * Terrain perturbs this with noise to get a lobed rim, but every planning
- * decision that needs to know where the island ends reads it from here. A
- * second literal is a second coastline, and the two drift apart the moment
- * either is tuned — which is how rivers end up stopping in mid-air or running
- * off the plinth.
+ * Multiple islands are scattered across the world; each one has this radius.
+ * Terrain perturbs the rim with noise. Every downstream decision that needs to
+ * know where land ends derives it from `plan.islandCenters` + this constant so
+ * the two never drift apart.
  */
-export const ISLAND_R = 0.427;
+export const ISLAND_R = 0.427; // kept for any external consumers
+export const ISLAND_RADIUS_FRAC = 0.21; // per-island radius as fraction of world size
 
 /**
  * Poisson-disc by dart throwing.
@@ -134,7 +134,63 @@ export function planWorld(seed: any, size: any) {
   const nMagic = makeNoise2D(seed + 43);
   const nEdge = makeNoise2D(seed + 44);
 
-  const half = size / 2;
+  const islandRadius = size * ISLAND_RADIUS_FRAC;
+
+  /* ---- 0. island centres ------------------------------------------
+   * Scatter 3–5 main islands across the world. Minimum separation keeps them
+   * distinct; the margin keeps every island fully inside the map boundary. */
+  const islandCenters: [number, number][] = [];
+  const islandCount = clamp(2 + Math.round(rng.range(0, 2)), 3, 5);
+  const islandMargin = islandRadius * 1.1;
+  const islandMinSep = islandRadius * 2.2;
+  for (let attempts = 0; attempts < 200 && islandCenters.length < islandCount; attempts++) {
+    const ix = rng.range(islandMargin, size - islandMargin);
+    const iz = rng.range(islandMargin, size - islandMargin);
+    if (islandCenters.some(([ex, ez]) => Math.hypot(ix - ex, iz - ez) < islandMinSep)) continue;
+    islandCenters.push([ix, iz]);
+  }
+
+  /* ---- 0b. stepping-stone islands ---------------------------------
+   * Place 1–2 small intermediate islands along the line between each pair of
+   * main islands. Stored separately so terrain can mask them at their own
+   * (smaller) radius while bridge-building can find the chain of hops. */
+  const steppingRadius = islandRadius * 0.35;
+  /** Per bridge pair: ordered waypoints [mainA, ...stones, mainB] as centers */
+  const bridgeChains: Array<[number, number][]> = [];
+
+  const stoneIslands: [number, number][] = []; // small islands only
+  for (let a = 0; a < islandCenters.length; a++) {
+    for (let b = a + 1; b < islandCenters.length; b++) {
+      const [ax, az] = islandCenters[a], [bx, bz] = islandCenters[b];
+      const dist = Math.hypot(bx - ax, bz - az);
+      const nStones = dist > islandRadius * 3.5 ? 2 : 1;
+      const chain: [number, number][] = [[ax, az]];
+      for (let k = 1; k <= nStones; k++) {
+        const t = k / (nStones + 1);
+        const perpX = -(bz - az) / dist, perpZ = (bx - ax) / dist;
+        const jitter = (rng.range(0, 1) - 0.5) * islandRadius * 0.4;
+        const sx = clamp(ax + (bx - ax) * t + perpX * jitter, steppingRadius * 1.5, size - steppingRadius * 1.5);
+        const sz = clamp(az + (bz - az) * t + perpZ * jitter, steppingRadius * 1.5, size - steppingRadius * 1.5);
+        stoneIslands.push([sx, sz]);
+        chain.push([sx, sz]);
+      }
+      chain.push([bx, bz]);
+      bridgeChains.push(chain);
+    }
+  }
+
+  /** Distance from (x,z) to the nearest island (main or stone), normalised to
+   *  islandRadius so terrain's single threshold still works.  */
+  const nearIsland = (x: number, z: number) => {
+    // Main islands: raw distance
+    let best = islandCenters.reduce((mn, [ix, iz]) => Math.min(mn, Math.hypot(x - ix, z - iz)), Infinity);
+    // Stepping stones: shift so that steppingRadius maps to islandRadius
+    for (const [sx, sz] of stoneIslands) {
+      const d = Math.hypot(x - sx, z - sz) - steppingRadius + islandRadius;
+      if (d < best) best = d;
+    }
+    return best;
+  };
 
   /* ---- 1. region centres ------------------------------------------
    * Spaced at roughly an eighth of the world, so a region is a few screens
@@ -156,9 +212,9 @@ export function planWorld(seed: any, size: any) {
      * the count grow. */
     const ex = cx / FEATURE.elevation,
       ez = cz / FEATURE.elevation;
-    // Distance from the middle drives elevation, so the island reads as a
-    // massif ringed by shore rather than as scattered highlands.
-    const rim = Math.hypot(cx - half, cz - half) / half;
+    // Distance from nearest island centre drives elevation. Each island reads
+    // as a massif ringed by shore; ocean regions between islands stay flat.
+    const rim = nearIsland(cx, cz) / islandRadius;
     // The rim term sets the island silhouette; it must not also decide the
     // interior. At a 1.25 slope everything past two-thirds of the radius fell
     // under the shore threshold — and since area grows with radius, that was
@@ -344,10 +400,9 @@ export function planWorld(seed: any, size: any) {
    * drainage agree.
    */
   const nWander = makeNoise2D(seed + 45);
-  const RIM = size * ISLAND_R;
 
-  /** Regions far enough from the rim to be genuine inland features. */
-  const inland = regions.filter((r) => Math.hypot(r.center[0] - half, r.center[1] - half) < RIM * 0.74);
+  /** Regions far enough from any island rim to be genuine inland features. */
+  const inland = regions.filter((r) => nearIsland(r.center[0], r.center[1]) < islandRadius * 0.74);
   const pool = inland.length ? inland : regions;
 
   /**
@@ -371,16 +426,20 @@ export function planWorld(seed: any, size: any) {
     const pts = [[sx, sz]];
     let x = sx,
       z = sz;
-    // Start out heading away from the middle: the rim term dominates the
-    // elevation field, so that is downhill in the large.
-    let hx = x - half,
-      hz = z - half;
+    // Start out heading away from the nearest island centre: the rim term
+    // dominates the elevation field so that direction is downhill.
+    const [nearIx, nearIz] = islandCenters.reduce(
+      (best, c) => (Math.hypot(x - c[0], z - c[1]) < Math.hypot(x - best[0], z - best[1]) ? c : best),
+      islandCenters[0],
+    );
+    let hx = x - nearIx,
+      hz = z - nearIz;
     const h0 = Math.hypot(hx, hz) || 1;
     hx /= h0;
     hz /= h0;
 
     for (let i = 0; i < 600; i++) {
-      if (Math.hypot(x - half, z - half) > RIM * 0.99) break; // the sea
+      if (nearIsland(x, z) > islandRadius * 0.99) break; // the sea
       if (x < 3 || z < 3 || x > size - 4 || z > size - 4) break;
 
       if (join) {
@@ -630,6 +689,13 @@ export function planWorld(seed: any, size: any) {
     elevationAt,
     cellElev,
     inside,
+    /** Island centres and per-island radius — used by terrain to mask land/sea. */
+    islandCenters,
+    islandRadius,
+    stoneIslands,
+    steppingRadius,
+    bridgeChains,
+    nearIsland,
     /** Planned water: where the basins sit and how every channel runs.
      *  `lake` is the largest — the set-piece one terrain dishes out in full. */
     lake,

@@ -267,9 +267,13 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
   };
 
   /* ---- island outline --------------------------------------------
-   * A lobed rim rather than a circle. Outside it the world is seabed, so the
-   * island terminates in a plinth wall that vanishes into the haze.          */
-  const rimR = (x: any, z: any) => S * 0.427 + fbm2(nEdge, x * 0.011, z * 0.011, 3) * 15 * K;
+   * Multiple islands, each a lobed disc. Outside all of them the world is
+   * seabed. `nearDist` replaces the old single-centre distance.              */
+  const nearDist = plan
+    ? (x: number, z: number) => plan.nearIsland(x, z)
+    : (x: number, z: number) => Math.hypot(x - half, z - half);
+  const islandRadius: number = plan ? plan.islandRadius : S * 0.427;
+  const rimR = (x: any, z: any) => islandRadius + fbm2(nEdge, x * 0.011, z * 0.011, 3) * 15 * K;
 
   /* ================================================================
    * The water network
@@ -519,11 +523,9 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
       const i = z * S + x;
       let h = cellLevel[Math.floor(z / Q) * CW + Math.floor(x / Q)];
 
-      // Keep the outer band low so the plinth is a readable 9–12 block wall
-      // and no massif ever runs off the edge of the world.
-      const dx = x - half,
-        dz = z - half;
-      const r = Math.sqrt(dx * dx + dz * dz);
+      // Keep the outer band of each island low so the plinth is a readable
+      // 9–12 block wall and no massif ever runs off the island edge.
+      const r = nearDist(x, z);
       const R = rimR(x, z);
       if (r > R - 20 * K) h = Math.min(h, BASE + L);
       if (r > R - 9 * K) h = Math.min(h, BASE);
@@ -758,15 +760,13 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
     for (let x = 0; x < S; x++) {
       const i = z * S + x;
       if (!land[i]) continue;
-      const dx = x - half,
-        dz = z - half;
-      const r = Math.sqrt(dx * dx + dz * dz);
+      const r = nearDist(x, z);
       const R = rimR(x, z);
       const gap = R - r;
       if (gap > 14) continue;
       const coastal = fbm2(nEdge, x * 0.014 + 200, z * 0.014, 2);
       if (coastal < 0.14) continue; // most of the rim stays a plinth
-      const gapQ = Math.max(rimR(qc(x), qc(z)) - Math.hypot(qc(x) - half, qc(z) - half), 0);
+      const gapQ = Math.max(rimR(qc(x), qc(z)) - nearDist(qc(x), qc(z)), 0);
       H[i] = Math.min(H[i], SEA + Math.floor(gapQ / 6) * L);
       wetness[i] = Math.max(wetness[i], 1 - smoothstep(0, 9, gap));
       if (H[i] <= SEA) land[i] = 0;
