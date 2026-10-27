@@ -109,7 +109,7 @@ function buildBindings(rows: string[][]): string {
   return rows.map(([key, label]) => `<div class="binding"><kbd>${key}</kbd><span>${label}</span></div>`).join('');
 }
 
-export function createPause({ input, map }: any) {
+export function createPause({ input, map, onNewWorld }: any) {
   const style = document.createElement('style');
   style.textContent = CSS;
   document.head.appendChild(style);
@@ -127,6 +127,7 @@ export function createPause({ input, map }: any) {
       <nav>
         <button type="button" id="pause-resume"><span>Resume</span><kbd>Esc</kbd></button>
         <button type="button" id="pause-map"><span>Map</span><kbd>M</kbd></button>
+        <button type="button" id="pause-new-world"><span>Generate new world</span><span>🎲</span></button>
       </nav>
       <div class="controls">
         <h3>Controls</h3>
@@ -164,6 +165,10 @@ export function createPause({ input, map }: any) {
     _onPaletteChange?.(paletteSelect.value);
   });
 
+  root.querySelector('#pause-new-world')!.addEventListener('click', () => {
+    setOpen(false);
+    onNewWorld?.();
+  });
   resume!.addEventListener('click', () => setOpen(false));
   root.querySelector('#pause-map')!.addEventListener('click', () => {
     setOpen(false);

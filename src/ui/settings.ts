@@ -227,9 +227,10 @@ interface SettingsDeps {
     allPlanetUnis: Array<{ uPlanetRadius: { value: number } }>;
   };
   dayNight: DayNight;
+  seed: { currentWord: () => string; push(word: string): void; gen(): string };
 }
 
-export function createSettings({ rig, atmo, input, world, dayNight }: SettingsDeps) {
+export function createSettings({ rig, atmo, input, world, dayNight, seed }: SettingsDeps) {
   const style = document.createElement('style');
   style.textContent = CSS;
   document.head.appendChild(style);
@@ -243,6 +244,11 @@ export function createSettings({ rig, atmo, input, world, dayNight }: SettingsDe
         <span class="perf" id="set-fps">-- fps</span>
         <button class="icon" type="button" id="set-x" aria-label="Close developer controls">×</button>
       </header>
+      <div class="row">
+        <label for="set-seed">World seed</label>
+        <input id="set-seed" type="text" style="grid-column:1/-1;width:100%;box-sizing:border-box;padding:5px 8px;background:rgba(201,173,115,.08);border:1px solid rgba(201,173,115,.2);border-radius:6px;color:var(--ink);font-size:12px;" />
+      </div>
+      <div class="divider"></div>
       <div class="row">
         <label for="set-ink">Outline</label>
         <span class="val" id="set-ink-val"></span>
@@ -307,11 +313,27 @@ export function createSettings({ rig, atmo, input, world, dayNight }: SettingsDe
                step="${RANGES.daySpeed.step}" />
       </div>
       <div class="foot">
-        <button type="button" id="set-reset" aria-label="Reset settings">↺</button>
+        <button type="button" id="set-new-world">🎲 New world</button>
+        <button type="button" id="set-reset" aria-label="Reset settings" style="margin-left:auto;">↺</button>
       </div>
     </div>
   `;
   document.body.appendChild(root);
+
+  const seedEl = root.querySelector('#set-seed') as HTMLInputElement;
+  seedEl.value = seed.currentWord();
+
+  const applyNewSeed = (word: string) => {
+    const w = word.trim() || seed.gen();
+    seedEl.value = w;
+    seed.push(w);
+    location.reload();
+  };
+  seedEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') applyNewSeed(seedEl.value);
+    e.stopPropagation();
+  });
+  root.querySelector('#set-new-world')!.addEventListener('click', () => applyNewSeed(seed.gen()));
 
   const els = {
     ink: root.querySelector('#set-ink') as HTMLInputElement,

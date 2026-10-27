@@ -19,13 +19,22 @@ import { createMap } from './ui/map';
 import { createPause } from './ui/pause';
 import { createSettings } from './ui/settings';
 import { createHud } from './ui/hud';
-import { makeRng } from './core/rng';
+import { makeRng, genSeedWord, hashSeedWord } from './core/rng';
 import { createDroneMode } from './player/drone';
 import { createFlyMode } from './player/fly';
 import { detectGpuTier } from './render/gpu-tier';
 import { createTouchControls, isTouchDevice } from './ui/touch-controls';
 
-const SEED = 20260820;
+export let currentSeedWord = genSeedWord();
+const urlWord = new URLSearchParams(location.search).get('seed');
+if (urlWord) currentSeedWord = urlWord;
+const SEED = hashSeedWord(currentSeedWord);
+export function pushSeedUrl(word: string) {
+  const p = new URLSearchParams(location.search);
+  p.set('seed', word);
+  history.replaceState(null, '', '?' + p.toString());
+}
+pushSeedUrl(currentSeedWord);
 
 // Scratch vectors — reused every frame to avoid GC pressure.
 const _sunWorld = new THREE.Vector3();
@@ -153,9 +162,10 @@ async function start(): Promise<void> {
     input,
     world,
     dayNight,
+    seed: { currentWord: () => currentSeedWord, push: pushSeedUrl, gen: genSeedWord },
   });
   const hud = createHud({ dayNight, drone, camera: fpCam.camera });
-  const pause = createPause({ input, map });
+  const pause = createPause({ input, map, onNewWorld: () => { pushSeedUrl(genSeedWord()); location.reload(); } });
   pause.onPaletteChange((name) => {
     setVoxelPalette(name);
     // Water uniforms were cloned at material creation — push updated palette colours.
