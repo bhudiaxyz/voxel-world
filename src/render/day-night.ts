@@ -83,6 +83,8 @@ function lerpScalar(arr: number[], ia: { i: number; a: number }): number {
 export class DayNight {
   timeOfDay: number; // 0–1; 0=midnight, 0.25=sunrise, 0.5=noon, 0.75=sunset
   dayLengthSeconds: number; // default 1200
+  /** Wire this to world.meshes.material.userData.uniforms to get time-of-day voxel tints. */
+  voxelUniforms: Record<string, { value: any }> | null = null;
 
   private readonly atmo: AtmoLike;
   private readonly renderer: THREE.WebGLRenderer | null;
@@ -192,6 +194,33 @@ export class DayNight {
       if (!this.renderer.shadowMap.autoUpdate) {
         this.renderer.shadowMap.needsUpdate = true;
       }
+    }
+
+    // Push time-of-day tints to the voxel material.
+    if (this.voxelUniforms) {
+      const vu = this.voxelUniforms;
+      // Live sun direction
+      vu['uSunDir'].value.copy(this._sunDir);
+      // Sun intensity: scales diffuse boost with elevation
+      const elev = Math.max(0, this._sunDir.y);
+      vu['uSunAmbient'].value = 0.08 + elev * 0.18;
+      // Fill ambient: slightly higher at night to prevent total black (moon bounce)
+      vu['uFillAmbient'].value = 0.04 + (1 - elev) * 0.04;
+      // Sun tint: warm orange-gold at horizon, neutral white at noon
+      const horizonWarm = Math.pow(Math.max(0, 1 - elev * 2.5), 2);
+      lerpColor(PALETTE.sunColor, ia, this._col);
+      vu['uSunTint'].value.set(
+        1.0 + (this._col.r - 1.0) * horizonWarm * 0.6,
+        1.0 + (this._col.g - 1.0) * horizonWarm * 0.6,
+        1.0 + (this._col.b - 1.0) * horizonWarm * 0.6,
+      );
+      // Ambient tint: cool blue at night, neutral at day
+      const night = this.getNightFactor();
+      vu['uAmbientTint'].value.set(
+        1.0 - night * 0.08,
+        1.0 - night * 0.04,
+        1.0 + night * 0.12,
+      );
     }
   }
 }

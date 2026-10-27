@@ -1831,6 +1831,8 @@ const FRAG_DECL = /* glsl */ `
   uniform vec3  uSunDir;
   uniform float uSunAmbient;   // diffuse boost from sun on lit faces
   uniform float uFillAmbient;  // flat ambient lift for all faces
+  uniform vec3  uSunTint;      // warm tint on sun-facing surfaces
+  uniform vec3  uAmbientTint;  // cool tint on all surfaces (night blue shift)
 
 
   /**
@@ -1968,6 +1970,10 @@ const FRAG_BODY = /* glsl */ `
     faceShade += max(sunDot, 0.0) * uSunAmbient;
     faceShade += (1.0 - max(sunDot, 0.0)) * uFillAmbient;
     col *= faceShade;
+    // Sun tint on lit faces, ambient tint on all (night blue shift)
+    float sunWt = max(sunDot, 0.0) * uSunAmbient;
+    col *= mix(vec3(1.0), uSunTint, sunWt * 0.55);
+    col *= mix(vec3(1.0), uAmbientTint, 0.18);
 
     // --- height-based tint on side faces ----------------------------
     // Walls darken slightly near ground level — simulates moisture
@@ -2042,6 +2048,8 @@ export function makeVoxelMaterial() {
     uSunDir: { value: LIGHT.sunDir.clone() },
     uSunAmbient: { value: 0.14 },  // diffuse lift on sun-facing sides
     uFillAmbient: { value: 0.06 }, // flat lift on shadow sides
+    uSunTint: { value: new THREE.Vector3(1.0, 1.0, 1.0) },
+    uAmbientTint: { value: new THREE.Vector3(1.0, 1.0, 1.0) },
 
     /* --- waterline ---------------------------------------------------- */
     /** Signed depth field, handed over by setVoxelWaterline once the world exists. */

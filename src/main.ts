@@ -61,6 +61,7 @@ async function start(): Promise<void> {
   const water = createWater(world.size, waterDepth, tier);
   scene.add(water.mesh);
   setVoxelWaterline(world.meshes.material, waterDepth, world.size, DEPTH_RANGE);
+  dayNight.voxelUniforms = world.meshes.material.userData.uniforms;
 
   const particles = createParticles(world.size, makeRng(SEED ^ 0x1234));
   scene.add(particles.group);

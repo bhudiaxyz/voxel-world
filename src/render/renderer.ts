@@ -41,6 +41,7 @@ export function createRenderer(container: any, tier: GpuTier = 'high') {
   // getHex() applied the transfer twice and cleared to a near-white.
   // Start dark so the canvas doesn't flash sky-haze colour before the first frame renders.
   renderer.setClearColor(0x07070a, 1);
+  renderer.domElement.style.background = '#07070a';
   container.appendChild(renderer.domElement);
 
   (renderer as any).renderProfile = tier;
