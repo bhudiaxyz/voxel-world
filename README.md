@@ -16,7 +16,7 @@ Inspired by **Verdant** [https://github.com/xikhar/verdant] and **Petalfell** [h
 - **Ink edge rendering** — toon-style dark and light strokes at block boundaries, composited in display space after tone mapping. Toggle with E.
 - **Rich vegetation** — nine tree silhouette forms (oak, blossom, willow, spire, umbrella, broad, tall birch, layered pagoda, weeping cherry), ferns, moss, lichen, grass, and scattered mushrooms and crystals.
 - **Touch controls** — full nippleJS virtual joystick overlay with compass-aware minimap, auto-detected on load.
-- **GPU tiering** — four quality tiers (high / mid / low / very-low) tuned at startup from device cores, memory, and UA.
+- **GPU tiering** — five quality tiers (high / mobile-high / mid / low / very-low) tuned at startup from device cores, memory, texture-unit size, and UA. Flagship phones and iPads land on `mobile-high`; desktop discrete GPUs on `high`.
 - **Landmarks** — ancient structures appear on each continent: twisted spires, obelisks, monolith rings, tombstone fields, and floating biospheres. All marked on the map.
 - **Real wave geometry** — the water plane has true vertex displacement driven by the same analytic wave field as the surface normal, so crests cast light consistently.
 - **Seeded worlds** — the seed word is always visible in the URL (`?seed=word`). Share a URL to share an exact world; generate a new one from the pause menu.

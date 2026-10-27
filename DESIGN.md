@@ -165,27 +165,57 @@ Returns 0 during daytime (±30% of the cycle around noon), ramping to 1 at midni
 
 ### Detection
 
+Five tiers determined at startup from hardware signals. Signals used:
+
+- `navigator.hardwareConcurrency` — logical CPU cores.
+- `navigator.deviceMemory` — GB (absent in Firefox/Safari; falls back to a canvas timing probe: 20× `fillRect(512, 512)` — if it takes >15 ms the device is memory-bandwidth-constrained → 2 GB; otherwise 4 GB).
+- `MAX_TEXTURE_SIZE` from WebGL2 — integrated Intel/AMD caps at 8192; discrete and all Apple Silicon report 16384+. Discriminates desktop discrete from integrated without needing a GPU database.
+- UA mobile detection — `/Mobi|Android|iPad|iPhone|iPod/i` (iPad explicitly matched; it would otherwise route through the desktop path).
+- WebGL2 availability — absence is a strong very-low signal on 7-year-old devices.
+
+Detection order (first match wins):
+
 ```ts
-const mobile = /Mobi|Android|iPad|iPhone|iPod/i.test(navigator.userAgent);
-if (mobile && (cores <= 4 || mem <= 2)) return 'very-low';
-if (cores <= 4 || mem <= 2)            return 'low';
-if (mobile && cores >= 8 && mem >= 8)  return 'high';
-if (!mobile && cores >= 8 && mem >= 6) return 'high';
-return 'mid';
+// very-low: no WebGL2, or weak mobile
+if (mobile && (!hasWebGL2 || cores <= 4 || estimatedMem <= 2)) return 'very-low';
+// low: weak desktop
+if (cores <= 4 || estimatedMem <= 2) return 'low';
+// mobile-high: flagship phone/tablet (≥8 cores, ≥4 GB on mobile)
+if (mobile && cores >= 8 && estimatedMem >= 4) return 'mobile-high';
+// high: desktop discrete GPU (large texture units exclude integrated)
+if (!mobile && cores >= 8 && estimatedMem >= 6 && maxTexSize >= 16384) return 'high';
+// mid: everything else with ≥6 cores, ≥3 GB
+if (cores >= 6 && estimatedMem >= 3) return 'mid';
+return 'low';
 ```
 
-`deviceMemory` is not available in Firefox/Safari — defaults to 4 GB. iPad is explicitly matched (plain `/Mobi|Android/` missed it, routing iPads through the desktop path).
+Known device routing:
+
+| Device | Tier |
+| --- | --- |
+| Samsung Galaxy S22 Ultra (8-core, 12 GB) | mobile-high |
+| Apple iPad Pro M2 (8-core, Safari: probe→4 GB) | mobile-high |
+| Apple iPad Air M2 (8-core, 4 GB) | mobile-high |
+| Apple iPad Air A14 (6-core, 4 GB) | mid |
+| MacBook Air M2 (8-core, 8 GB, maxTex=16384) | high |
+| Intel UHD laptop (8-core, 16 GB, maxTex=8192) | mid |
+| 2019 mid-range phone (6-core, 3 GB) | mid |
+| Budget phone (4-core, 2 GB) | low (desktop) / very-low (mobile) |
+| 7-year-old phone (no WebGL2) | very-low |
 
 ### Settings table
 
-| Tier | DPR cap | Shadow (px) | Blur samples | Bloom | AO taps | DoF |
-| --- | --- | --- | --- | --- | --- | --- |
-| high | 2× | 3072 | 16 | ✓ | 8 | ✓ |
-| mid | 1.25× | 2048 | 8 | ✓ | 4 | ✓ |
-| low | 1× | 1024 | 4 | — | 4 | — |
-| very-low | 1× | 512 | 2 | — | 0 | — |
+| Tier | DPR cap | Shadow (px) | Blur samples | Bloom | AO taps | DoF | Crep. taps | Edge mask | Stream radius |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| high | 2× | 3072 | 12 | ✓ | 8 | ✓ | 8 | ✓ | 12 |
+| mobile-high | 1.5× | 2048 | 8 | ✓ | 4 | ✓ | 4 | — | 11 |
+| mid | 1.25× | 2048 | 8 | ✓ | 4 | ✓ | 4 | — | 11 |
+| low | 1× | 1024 | 4 | — | 0 | — | 0 | — | 8 |
+| very-low | 1× | 512 | 4 | — | 0 | — | 0 | — | 6 |
 
-On `very-low`, `renderer.shadowMap.autoUpdate = false`. `DayNight.update()` sets `renderer.shadowMap.needsUpdate = true` once per animation frame — correct cadence without re-rendering the shadow map multiple times per frame.
+`EdgeMaskPass` is disabled on all mobile tiers — it doubles draw calls for little visual gain on smaller screens. `dprCap` is applied as `min(window.devicePixelRatio, cap)` so it can only reduce the native DPR, never raise it.
+
+On `low` and `very-low`, `renderer.shadowMap.autoUpdate = false`. `DayNight.update()` sets `renderer.shadowMap.needsUpdate = true` once per animation frame — correct cadence without re-rendering the shadow map multiple times per frame, saving meaningful fill-rate on constrained hardware.
 
 ---
 
@@ -201,7 +231,7 @@ Runs per chunk in a worker. For each axis direction and each slice, merges adjac
 
 ### Chunk streaming
 
-`createWorldChunkStreamer()` in `voxel.ts`. Chunk size `CHUNK = 24`. Default stream radius 8 chunks (~192 blocks). Each frame, `streaming.update(playerPos, cameraPos)` enqueues new chunks within the radius and unloads those beyond `loadRadius + unloadPadding`.
+`createWorldChunkStreamer()` in `voxel.ts`. Chunk size `CHUNK = 16`. Default stream radius 12 chunks (~192 blocks). Each frame, `streaming.update(playerPos, cameraPos)` enqueues new chunks within the radius and unloads those beyond `loadRadius + unloadPadding`.
 
 ### LOD fade
 
@@ -246,6 +276,53 @@ Post-processing passes:
 ### River flow bake
 
 At the end of `generateTerrain()`, `rivFlow` (`Uint8Array`, one byte per column) is computed from the river distance field (`rivD`) and half-width (`rivHalf`). It is packed into the **G channel** of the water depth map (R = signed depth). The water shader reads it as `rivProx` to multiply wave speed and add bank foam tint.
+
+---
+
+## River system
+
+Rivers are planned in `planner.ts`, carved in `terrain.ts`, and rendered as voxel blocks above sea level.
+
+### Planning (`planner.ts`)
+
+`planWorld` builds `plan.rivers`: an array of `{ order: 0|1|2, points: [x,z][], source, tributary?, outflow? }`.
+
+- **Trunks (order 0)** — traced from the highest-elevation region nodes downslope to the coast. One per main island, traced by steepest-descent with FBM meander jitter. Tail-trimmed to exclude ocean-side points (`elevationAt < SHORE_ELEV = 0.15`).
+- **Tributaries (order 1)** — sourced from 50th-percentile elevation regions, up to `trunkCount × 5` total. Each joins the nearest existing channel within a snap radius of 18 region units.
+- **Streams (order 2)** — fine branches from lower mid-elevation regions, up to `min(trunkCount × 4, 32)` total. Join nearest channel within `REGION_SPACING × 8`.
+
+### Carving (`terrain.ts`)
+
+For each river channel point, a half-width `rivHalf[i]` is computed. Width by tier:
+
+- Trunk: `3.2 + t × 5.4` (t = 0 at source, 1 at mouth)
+- Tributary: `2.2 + t × 2.6`
+- Stream: `1.2 + t × 1.4`
+
+The carved channel bed is set to `SEA - sinkFraction × channelLength` for the wet reach (below `SEA + 7`); above that it is a dry ravine. `SEA = Math.floor(WATER.level) = 24`.
+
+### RIVER_WATER voxels (`terrain.ts`)
+
+Above sea level, river channels are filled with `RIVER_WATER` voxels (3 blocks above the carved bed) so the river is visible as a teal-blue channel rather than a dry ravine:
+
+```ts
+export const RIVER_WATER = registerBlock('RIVER_WATER', {
+  top: lin(0x4fa8bc), side: lin(0x3d97ae), bottom: lin(0x2e8899),
+  rough: 0.05, isWater: true,
+});
+```
+
+`isWater: true` is checked by `VoxelGrid.isSolid()` (returns false, keeping the block passable) and by `Controller` when probing for water surface level.
+
+Below sea level the water plane already covers the carved channel — no voxels needed.
+
+### Physics integration
+
+`Controller` scans up to 4 blocks above/below the player for any `isWater` block each physics tick. If found, `waterSurface = wy + 1` replaces `WATER.level` for all swimming calculations: `standDepth`, submersion, buoyancy rest, and step-reach. Walking into a river above sea level correctly triggers swimming physics.
+
+### Map rendering (`map.ts`)
+
+Rivers are drawn on the minimap in `bakeTerrain()` after the terrain image is written. Two-pass render per channel (glow then solid), sorted trunk→tributary→stream. Ocean clip: any point where `heights[hz*S+hx] <= SEA` lifts the pen. Styles: trunk 7 px glow / 3.2 px solid blue; tributary 4.5 / 2.0; stream 3 / 1.2.
 
 ---
 
