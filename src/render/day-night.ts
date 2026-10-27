@@ -107,6 +107,17 @@ export class DayNight {
     return Math.max(0, (d - 0.3) / 0.7);
   }
 
+  /**
+   * Update the noon (index 3) sky keyframes so the day cycle reflects the
+   * active palette. Call from onPaletteChange after setVoxelPalette().
+   */
+  applyNoonSky(sky: { zenith: number; horizon: number; haze: number }, sunColorHex: number): void {
+    PALETTE.zenith[3].set(sky.zenith);
+    PALETTE.horizon[3].set(sky.horizon);
+    PALETTE.haze[3].set(sky.haze);
+    PALETTE.sunColor[3].set(sunColorHex);
+  }
+
   /** Expose sun direction without allocating — callers must not mutate. */
   get sunDir(): THREE.Vector3 {
     return this._sunDir;

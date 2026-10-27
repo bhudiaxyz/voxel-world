@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { createRenderer } from './render/renderer';
-import { setVoxelPalette, WATER, SKY, LIGHT, GRADE } from './core/palette';
+import { setVoxelPalette, WATER, SKY, LIGHT, GRADE, VOXEL_PALETTES } from './core/palette';
 import { Atmosphere } from './render/lighting';
 import { FPCamera } from './render/fp-camera';
 import { createPostFX } from './render/postfx';
@@ -211,6 +211,27 @@ async function start(): Promise<void> {
       atmo.hazeColor.copy(SKY.haze).lerp(SKY.horizon, 0.35);
       if (atmo.scene?.fog?.color) atmo.scene.fog.color.copy(atmo.hazeColor);
     }
+
+    // Day-night noon keyframes — these override sky uniforms every frame, so
+    // they must be updated or the palette change has no lasting sky effect.
+    const pd = VOXEL_PALETTES[name];
+    if (pd) dayNight.applyNoonSky(pd.sky, pd.light.sunColor);
+
+    // Hemisphere light colours (intensity is driven by DayNight; colours are static)
+    if (atmo.hemi) {
+      atmo.hemi.color.copy(LIGHT.skyColor);
+      atmo.hemi.groundColor.copy(LIGHT.groundColor);
+    }
+
+    // Water sky-reflection uniforms (cloned at creation, not live)
+    const wmu = (water.material as any)?.uniforms;
+    if (wmu) {
+      wmu.uHorizon?.value.copy(SKY.horizon);
+      wmu.uSky?.value.copy(SKY.zenith);
+    }
+
+    // Petal particle colours (baked into vertex buffer at creation)
+    particles.recolorPetals();
 
     // Post-processing grade
     if (post.grade?.uniforms) {

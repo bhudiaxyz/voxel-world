@@ -138,9 +138,10 @@ export function createParticles(worldSize: any, rng: any, maxCount = 1110) {
   const group = new THREE.Group();
   group.name = 'particles';
   const layers: THREE.ShaderMaterial[] = [];
+  const petalMeshes: THREE.Mesh[] = [];
   const scale = maxCount / 1110;
 
-  const mk = (count: any, bounds: any, colors: any, sizeRange: any, fallRange: any, soft: any, blend: any) => {
+  const mk = (count: any, bounds: any, colors: any, sizeRange: any, fallRange: any, soft: any, blend: any, isPetal = false) => {
     count = Math.max(0, Math.round(count * scale));
     if (count === 0) return;
     const geo = makeQuadGeometry(count, bounds, rng, colors, sizeRange, fallRange);
@@ -168,6 +169,7 @@ export function createParticles(worldSize: any, rng: any, maxCount = 1110) {
     m.renderOrder = 20;
     group.add(m);
     layers.push(mat);
+    if (isPetal) petalMeshes.push(m);
     return mat;
   };
 
@@ -177,9 +179,9 @@ export function createParticles(worldSize: any, rng: any, maxCount = 1110) {
   // Counts are deliberately low. Petals are punctuation, not weather — the
   // first pass used ~3700 particles and read as confetti in a snowstorm.
   // hero petals — sparse, large, slow
-  mk(260, B(worldSize * 0.8, 44, worldSize * 0.8), PETAL_COLORS, [0.5, 1.05], [1.0, 2.1], 0.92, THREE.NormalBlending);
+  mk(260, B(worldSize * 0.8, 44, worldSize * 0.8), PETAL_COLORS, [0.5, 1.05], [1.0, 2.1], 0.92, THREE.NormalBlending, true);
   // mid-field petals, smaller and denser
-  mk(420, B(worldSize * 1.0, 50, worldSize * 1.0), PETAL_COLORS, [0.24, 0.5], [1.3, 2.6], 0.7, THREE.NormalBlending);
+  mk(420, B(worldSize * 1.0, 50, worldSize * 1.0), PETAL_COLORS, [0.24, 0.5], [1.3, 2.6], 0.7, THREE.NormalBlending, true);
   // glowing motes
   mk(300, B(worldSize * 0.8, 30, worldSize * 0.8), MOTE_COLORS, [0.18, 0.46], [0.1, 0.42], 0.3, THREE.AdditiveBlending);
   // near-camera pollen, fast parallax
@@ -193,6 +195,21 @@ export function createParticles(worldSize: any, rng: any, maxCount = 1110) {
       for (const m of layers) {
         m.uniforms.uTime.value += dt;
         m.uniforms.uOrigin.value.copy(camera.position);
+      }
+    },
+    /** Re-randomise petal aColor buffers from the current PETAL_COLORS (call after setVoxelPalette). */
+    recolorPetals() {
+      for (const mesh of petalMeshes) {
+        const attr = mesh.geometry.attributes['aColor'] as THREE.BufferAttribute;
+        const buf = attr.array as Float32Array;
+        const n = buf.length / 3;
+        for (let i = 0; i < n; i++) {
+          const c = PETAL_COLORS[Math.floor(Math.random() * PETAL_COLORS.length)];
+          buf[i * 3 + 0] = c.r;
+          buf[i * 3 + 1] = c.g;
+          buf[i * 3 + 2] = c.b;
+        }
+        attr.needsUpdate = true;
       }
     },
   };
