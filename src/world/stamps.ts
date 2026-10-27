@@ -676,6 +676,181 @@ function cliffOverlook(world: any, T: any, site: any, rng: any) {
   return { kind: 'overlook', at: [cx, cz] };
 }
 
+/* ================================================================== *
+ * Landmarks — ancient structures scattered across continents
+ * ================================================================== */
+
+/**
+ * TWISTED_SPIRE — a tall column that drifts off-centre as it rises.
+ *
+ *   requires   dry inland ground
+ *   generates  3×3 stone base · drifting 1×1 shaft 14-22 blocks · cap
+ */
+function twistedSpire(_world: any, T: any, site: any, rng: any) {
+  const cx = site.at[0] | 0, cz = site.at[1] | 0;
+  if (!T.dry(cx, cz) || T.claimed(cx, cz)) return null;
+  const baseY = T.top(cx, cz);
+
+  // PATH clearing radius 4
+  for (let dz = -4; dz <= 4; dz++)
+    for (let dx = -4; dx <= 4; dx++) {
+      if (dx * dx + dz * dz > 16) continue;
+      if (T.dry(cx + dx, cz + dz)) T.ground(cx + dx, cz + dz, T.top(cx + dx, cz + dz), BLOCKS.PATH.id);
+    }
+
+  // 3×3 STONE_WARM footing (2 courses)
+  for (let dy = 1; dy <= 2; dy++)
+    for (let dz = -1; dz <= 1; dz++)
+      for (let dx = -1; dx <= 1; dx++)
+        T.put(cx + dx, cz + dz, baseY + dy, BLOCKS.STONE_WARM.id);
+
+  // Twisted shaft: drifts 1 block in a cardinal each 4 levels
+  const totalH = 14 + rng.int(0, 8);
+  const dirs = [[1, 0], [0, 1], [-1, 0], [0, -1]];
+  let ox = 0, oz = 0;
+  for (let dy = 3; dy <= totalH; dy++) {
+    T.put(cx + ox, cz + oz, baseY + dy, BLOCKS.STONE_PALE.id);
+    if (dy % 4 === 2) {
+      const [ddx, ddz] = dirs[rng.int(0, 3)];
+      ox = Math.max(-2, Math.min(2, ox + ddx));
+      oz = Math.max(-2, Math.min(2, oz + ddz));
+    }
+  }
+  T.put(cx + ox, cz + oz, baseY + totalH + 1, BLOCKS.STONE_WARM.id);
+
+  T.reserve(cx, cz, 6);
+  return { kind: 'spire', at: [cx, cz] };
+}
+
+/**
+ * OBELISK — a tall narrow monolith with a wide base.
+ *
+ *   requires   dry inland ground
+ *   generates  3×3 STONE_WARM base · 1×1 STONE_PALE shaft 8-13 blocks · cap
+ */
+function obelisk(_world: any, T: any, site: any, rng: any) {
+  const cx = site.at[0] | 0, cz = site.at[1] | 0;
+  if (!T.dry(cx, cz) || T.claimed(cx, cz)) return null;
+  const baseY = T.top(cx, cz);
+
+  // PATH clearing
+  for (let dz = -4; dz <= 4; dz++)
+    for (let dx = -4; dx <= 4; dx++) {
+      if (dx * dx + dz * dz > 16) continue;
+      if (T.dry(cx + dx, cz + dz)) T.ground(cx + dx, cz + dz, T.top(cx + dx, cz + dz), BLOCKS.PATH.id);
+    }
+
+  // 3×3 STONE_WARM base (2 courses)
+  for (let dy = 1; dy <= 2; dy++)
+    for (let dz = -1; dz <= 1; dz++)
+      for (let dx = -1; dx <= 1; dx++)
+        T.put(cx + dx, cz + dz, baseY + dy, BLOCKS.STONE_WARM.id);
+
+  // 1×1 STONE_PALE shaft
+  const shaftH = 8 + rng.int(0, 5);
+  for (let dy = 3; dy <= shaftH; dy++)
+    T.put(cx, cz, baseY + dy, BLOCKS.STONE_PALE.id);
+  T.put(cx, cz, baseY + shaftH + 1, BLOCKS.STONE_WARM.id);
+
+  T.lantern(cx + 3, cz);
+  T.lantern(cx - 3, cz);
+
+  T.reserve(cx, cz, 5);
+  return { kind: 'obelisk', at: [cx, cz] };
+}
+
+/**
+ * MONOLITH_RING — standing stones in a circle, Stonehenge-style.
+ *
+ *   requires   dry inland ground
+ *   generates  7-8 STONE_PALE standing columns radius 10-13 · lintels · PATH floor
+ */
+function monolithRing(_world: any, T: any, site: any, rng: any) {
+  const cx = site.at[0] | 0, cz = site.at[1] | 0;
+  if (!T.dry(cx, cz) || T.claimed(cx, cz)) return null;
+  const count = 7 + rng.int(0, 1);
+  const ringR = 10 + rng.int(0, 3);
+
+  // PATH inside the ring
+  for (let dz = -(ringR + 2); dz <= ringR + 2; dz++)
+    for (let dx = -(ringR + 2); dx <= ringR + 2; dx++) {
+      if (dx * dx + dz * dz > (ringR + 2) * (ringR + 2)) continue;
+      if (T.dry(cx + dx, cz + dz)) T.ground(cx + dx, cz + dz, T.top(cx + dx, cz + dz), BLOCKS.PATH.id);
+    }
+
+  // Standing stones
+  for (let i = 0; i < count; i++) {
+    const a = (i / count) * Math.PI * 2;
+    const sx = Math.round(cx + Math.cos(a) * ringR);
+    const sz = Math.round(cz + Math.sin(a) * ringR);
+    if (!T.dry(sx, sz)) continue;
+    const sy = T.top(sx, sz);
+    const sh = 5 + rng.int(0, 3);
+    for (let dy = 1; dy <= sh; dy++)
+      T.put(sx, sz, sy + dy, BLOCKS.STONE_PALE.id);
+
+    // Lintel connecting every other pair
+    if (i % 2 === 0) {
+      const a2 = ((i + 1) / count) * Math.PI * 2;
+      const ex = Math.round(cx + Math.cos(a2) * ringR);
+      const ez = Math.round(cz + Math.sin(a2) * ringR);
+      if (!T.dry(ex, ez)) continue;
+      const lintelY = sy + sh + 1;
+      const steps = Math.max(Math.abs(ex - sx), Math.abs(ez - sz));
+      if (steps > 0 && steps < 8) {
+        for (let k = 0; k <= steps; k++) {
+          const lx = Math.round(sx + (ex - sx) * k / steps);
+          const lz = Math.round(sz + (ez - sz) * k / steps);
+          T.put(lx, lz, lintelY, BLOCKS.STONE_PALE.id);
+        }
+      }
+    }
+  }
+
+  T.reserve(cx, cz, ringR + 3);
+  return { kind: 'ring', at: [cx, cz] };
+}
+
+/**
+ * TOMBSTONE_FIELD — a scattering of ancient upright slabs.
+ *
+ *   requires   dry inland ground
+ *   generates  14-22 STONE/STONE_PALE columns 2-4 blocks tall in a radius-14 field
+ */
+function tombstoneField(_world: any, T: any, site: any, rng: any) {
+  const cx = site.at[0] | 0, cz = site.at[1] | 0;
+  if (!T.dry(cx, cz) || T.claimed(cx, cz)) return null;
+
+  // PATH clearing in the centre
+  for (let dz = -5; dz <= 5; dz++)
+    for (let dx = -5; dx <= 5; dx++) {
+      if (dx * dx + dz * dz > 25) continue;
+      if (T.dry(cx + dx, cz + dz)) T.ground(cx + dx, cz + dz, T.top(cx + dx, cz + dz), BLOCKS.PATH.id);
+    }
+
+  const count = 14 + rng.int(0, 8);
+  const fieldR = 14;
+  for (let i = 0; i < count; i++) {
+    const a = rng.range(0, Math.PI * 2);
+    const d = rng.range(2, fieldR);
+    const sx = Math.round(cx + Math.cos(a) * d);
+    const sz = Math.round(cz + Math.sin(a) * d);
+    if (!T.dry(sx, sz) || T.claimed(sx, sz)) continue;
+    const sy = T.top(sx, sz);
+    const sh = 2 + rng.int(0, 2);
+    for (let dy = 1; dy <= sh; dy++)
+      T.put(sx, sz, sy + dy, rng.chance(0.55) ? BLOCKS.STONE_PALE.id : BLOCKS.STONE.id);
+    // Random lean: add a cap block to one side at the top
+    if (rng.chance(0.35)) {
+      const lean = [[1, 0], [0, 1], [-1, 0], [0, -1]][rng.int(0, 3)];
+      T.put(sx + lean[0], sz + lean[1], sy + sh, BLOCKS.STONE.id);
+    }
+  }
+
+  T.reserve(cx, cz, fieldR + 2);
+  return { kind: 'tombs', at: [cx, cz] };
+}
+
 /* Ordered by preference within a kind: if the terrain does not support the
  * plan's first choice the site falls through to something it *does* support,
  * rather than being dropped or forced. */
@@ -737,5 +912,29 @@ export function buildStamps(world: any, rng: any) {
       }
     }
   }
+
+  // Landmark pass: one per continent, placed after scenic stamps so their
+  // claims don't compete with waterfall/grove quotas.
+  const LANDMARK_GRAMMARS: Record<string, (w: any, T: any, s: any, r: any) => any> = {
+    spire: twistedSpire,
+    obelisk,
+    ring: monolithRing,
+    tombs: tombstoneField,
+  };
+  for (const site of plan.landmarks || []) {
+    const [sx, sz] = site.at;
+    if (sx < 12 || sz < 12 || sx > S - 13 || sz > S - 13) continue;
+    (T as any).rng = makeRng(site.seed ^ 0x1d3a2c4b);
+    const grammar = LANDMARK_GRAMMARS[site.kind];
+    if (!grammar) continue;
+    const made = grammar(world, T, site, (T as any).rng);
+    if (made) {
+      T.claims.push(made.at);
+      made.score = 0;
+      made.planned = site.kind;
+      world.stamps.push(made);
+    }
+  }
+
   return world.stamps;
 }

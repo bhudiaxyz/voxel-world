@@ -738,6 +738,39 @@ export function planWorld(seed: any, size: any) {
   }
   scenic.sort((a, b) => b.score - a.score);
 
+  // ---- landmark sites — 2-3 per continent, elevated dry ground inland ----
+  const LANDMARK_KINDS = ['spire', 'obelisk', 'ring', 'tombs'];
+  const landmarks: Array<{ kind: string; at: [number, number]; seed: number }> = [];
+  for (let ci = 0; ci < continentCenters.length; ci++) {
+    const [icx, icz] = continentCenters[ci];
+    const lRng = makeRng((seed ^ (ci * 0x6c62272e + 0x1b873593)) >>> 0);
+    // Shuffle kinds so each continent gets a different random order
+    const kinds = [...LANDMARK_KINDS].sort(() => lRng.range(0, 1) - 0.5);
+    const perContinent = 2 + (lRng.range(0, 1) < 0.5 ? 1 : 0); // 2 or 3
+    // Spread landmarks across different angular sectors so they don't cluster
+    for (let li = 0; li < perContinent; li++) {
+      const sectorBase = (li / perContinent) * Math.PI * 2;
+      let best: { score: number; at: [number, number] } | null = null;
+      for (let attempt = 0; attempt < 20; attempt++) {
+        const a = sectorBase + lRng.range(0, (1 / perContinent) * Math.PI * 2);
+        const d = continentRadius * (0.22 + lRng.range(0, 1) * 0.46);
+        const lx = icx + Math.cos(a) * d;
+        const lz = icz + Math.sin(a) * d;
+        if (!inside(lx, lz)) continue;
+        const elev = elevationAt(lx, lz);
+        if (elev < 0.22) continue;
+        const score = elev + lRng.range(0, 1) * 0.08;
+        if (!best || score > best.score) best = { score, at: [Math.round(lx), Math.round(lz)] };
+      }
+      if (!best) continue;
+      landmarks.push({
+        kind: kinds[li % kinds.length],
+        at: best.at,
+        seed: (seed ^ ((ci * 4 + li + 1000) * 0x85ebca6b)) >>> 0,
+      });
+    }
+  }
+
   return {
     size,
     cellSize: CELL,
@@ -767,5 +800,7 @@ export function planWorld(seed: any, size: any) {
     regionSpacing: REGION_SPACING,
     /** Best-scoring scenes first. */
     scenic,
+    /** One landmark per continent: spire / obelisk / ring / tombs. */
+    landmarks,
   };
 }
