@@ -141,10 +141,14 @@ export function createDroneMode(grid: VoxelGrid): DroneMode {
 
       const gY = grid.surfaceY(camera.position.x, camera.position.z);
       const rawTargetY = gY + hoverAltitude;
-      const targetDelta = rawTargetY - smoothedTargetY;
-      // Ascend freely to clear rising terrain; cap descent so cliff drops don't plunge the drone.
       const maxDrop = DRONE.targetDescentRate * dt;
-      smoothedTargetY += Math.max(targetDelta, -maxDrop) * Math.min(1, dt * DRONE.heightSmoothRate);
+      if (rawTargetY > smoothedTargetY) {
+        // Rising terrain: lerp up smoothly so bumps don't jerk the drone.
+        smoothedTargetY += (rawTargetY - smoothedTargetY) * Math.min(1, dt * DRONE.heightSmoothRate);
+      } else {
+        // Dropping terrain: hard cap so cliff edges don't plunge the drone.
+        smoothedTargetY = Math.max(rawTargetY, smoothedTargetY - maxDrop);
+      }
 
       const error = smoothedTargetY - camera.position.y;
       const vertV = Math.max(-DRONE.vertVelMax, Math.min(DRONE.vertVelMax, error * DRONE.heightPGain));

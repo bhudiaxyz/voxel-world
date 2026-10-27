@@ -125,7 +125,7 @@ export class FPCamera {
     if (this.touchActive && this._touchWish.lengthSq() > 0) {
       return w.copy(this._touchWish);
     }
-    if (!this.isLocked || this.droneActive) return w;
+    if (!this.isLocked || this.droneActive || this.flyActive) return w;
     const fwd = -Math.sin(this.yaw);
     const rgt = Math.cos(this.yaw);
     if (this._keys.has('KeyW') || this._keys.has('ArrowUp')) {

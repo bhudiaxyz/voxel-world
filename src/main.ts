@@ -108,6 +108,11 @@ async function start(): Promise<void> {
         fpCam.flyActive = false;
         fpCam.yaw = fpCam.camera.rotation.y;
         fpCam.pitch = 0;
+        // Sync controller to the camera's ground position so walk resumes here.
+        controller.pos.x = fpCam.camera.position.x;
+        controller.pos.z = fpCam.camera.position.z;
+        controller.pos.y = world.grid.surfaceY(controller.pos.x, controller.pos.z);
+        controller.vel.set(0, 0, 0);
       } else {
         fly.enter(fpCam.camera);
         fpCam.flyActive = true;
@@ -185,6 +190,10 @@ async function start(): Promise<void> {
       fpCam.flyActive = false;
       fpCam.yaw = fpCam.camera.rotation.y;
       fpCam.pitch = 0;
+      controller.pos.x = fpCam.camera.position.x;
+      controller.pos.z = fpCam.camera.position.z;
+      controller.pos.y = world.grid.surfaceY(controller.pos.x, controller.pos.z);
+      controller.vel.set(0, 0, 0);
     } else if (!drone.active) {
       fly.enter(fpCam.camera);
       fpCam.flyActive = true;
