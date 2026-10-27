@@ -118,9 +118,11 @@ async function start(): Promise<void> {
         fpCam.flyActive = true;
       }
     }
-    // G: enter drone
-    if (e.code === 'KeyG' && !e.repeat && !drone.active && !fly.active) {
-      drone.enter(fpCam.camera);
+    // G: enter drone (works from fly mode too — skip rise, hold current altitude)
+    if (e.code === 'KeyG' && !e.repeat && !drone.active) {
+      const fromFly = fly.active;
+      if (fromFly) { fly.exit(); fpCam.flyActive = false; }
+      drone.enter(fpCam.camera, fromFly);
       fpCam.droneActive = true;
     }
     if (e.code === 'KeyE' && !e.repeat) {
@@ -200,8 +202,10 @@ async function start(): Promise<void> {
     }
   });
   touch.onDrone(() => {
-    if (!drone.active && !fly.active) {
-      drone.enter(fpCam.camera);
+    if (!drone.active) {
+      const fromFly = fly.active;
+      if (fromFly) { fly.exit(); fpCam.flyActive = false; }
+      drone.enter(fpCam.camera, fromFly);
       fpCam.droneActive = true;
     }
   });

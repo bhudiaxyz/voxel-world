@@ -11,17 +11,12 @@ const DRONE = {
   keyYawSpeed: 1.2,
   landingDescentRate: 90,  // m/s hover-height reduction while landing
   landingCompleteHeight: 2.5,
-  // Terrain-follow tuning:
-  //   heightSmoothRate — lerp rate for the ground-height target.
-  //     1.5 was too slow: at 18 m/s the smoothed target lagged ~20 blocks
-  //     behind steep terrain, so the drone floated far above valleys.
-  //     3.5 tracks terrace-scale features (3–6 blocks over a few seconds)
-  //     while still filtering individual voxel bumps.
-  heightSmoothRate: 3.5,
-  heightPGain: 8.0,   // proportional gain on altitude error
-  vertVelMax: 28.0,   // max vertical speed (m/s) — enough for steep slopes at cruise
-  // ponytail: fixed descent cap; lower if drone still drops too fast over cliffs
-  targetDescentRate: 6.0, // max m/s the terrain target can fall (ascent is uncapped)
+  heightPGain: 10.0,  // proportional gain on altitude error
+  vertVelMax: 36.0,   // max vertical speed (m/s)
+  // Descent only: smooth so flying off a cliff doesn't instantly plunge the drone.
+  // Ascent is never smoothed — lerping upward delays response and causes terrain clipping.
+  targetDescentRate: 8.0, // max m/s the terrain target can fall
+  lookAheadTime: 0.55,    // seconds ahead to probe for rising terrain
   pitchSmoothRate: 1.8,
 };
 
@@ -30,7 +25,7 @@ type State = 'idle' | 'rising' | 'cruising';
 export interface DroneMode {
   readonly active: boolean;
   readonly landing: boolean;
-  enter(camera: THREE.PerspectiveCamera): void;
+  enter(camera: THREE.PerspectiveCamera, skipRise?: boolean): void;
   beginLanding(): void;
   update(
     dt: number,
@@ -61,20 +56,26 @@ export function createDroneMode(grid: VoxelGrid): DroneMode {
       return isLanding;
     },
 
-    enter(camera: THREE.PerspectiveCamera): void {
-      state = 'rising';
+    enter(camera: THREE.PerspectiveCamera, skipRise = false): void {
       isLanding = false;
       yaw = camera.rotation.y;
       smoothedTargetY = camera.position.y;
       const groundY = grid.surfaceY(camera.position.x, camera.position.z);
-      // Scan upward to find the first clear block above the player's head,
-      // so the drone launches above trees, bridges, or overhangs.
-      const cx = Math.round(camera.position.x), cz = Math.round(camera.position.z);
-      let clearY = Math.ceil(camera.position.y) + 1;
-      const scanTop = clearY + 48;
-      while (clearY < scanTop && grid.isSolid(cx, clearY, cz)) clearY++;
-      const safeAltitude = (clearY + 4) - groundY; // 4 blocks of headroom above obstruction
-      hoverAltitude = Math.max(DRONE.enterLiftHeight, safeAltitude, camera.position.y - groundY);
+      if (skipRise) {
+        // Transition from fly — already airborne, hold current altitude.
+        hoverAltitude = camera.position.y - groundY;
+        state = 'cruising';
+      } else {
+        state = 'rising';
+        // Scan upward to find the first clear block above the player's head,
+        // so the drone launches above trees, bridges, or overhangs.
+        const cx = Math.round(camera.position.x), cz = Math.round(camera.position.z);
+        let clearY = Math.ceil(camera.position.y) + 1;
+        const scanTop = clearY + 48;
+        while (clearY < scanTop && grid.isSolid(cx, clearY, cz)) clearY++;
+        const safeAltitude = (clearY + 4) - groundY; // 4 blocks of headroom above obstruction
+        hoverAltitude = Math.max(DRONE.enterLiftHeight, safeAltitude, camera.position.y - groundY);
+      }
     },
 
     beginLanding(): void {
@@ -140,16 +141,40 @@ export function createDroneMode(grid: VoxelGrid): DroneMode {
       camera.position.z -= Math.cos(yaw) * currentSpeed * speedMult * dt;
 
       const gY = grid.surfaceY(camera.position.x, camera.position.z);
-      const rawTargetY = gY + hoverAltitude;
-      const maxDrop = DRONE.targetDescentRate * dt;
-      if (rawTargetY > smoothedTargetY) {
-        // Rising terrain: lerp up smoothly so bumps don't jerk the drone.
-        smoothedTargetY += (rawTargetY - smoothedTargetY) * Math.min(1, dt * DRONE.heightSmoothRate);
-      } else {
-        // Dropping terrain: hard cap so cliff edges don't plunge the drone.
-        smoothedTargetY = Math.max(rawTargetY, smoothedTargetY - maxDrop);
+
+      // Look ahead: only when actually moving, probe terrain ahead and use it
+      // only if it would require a climb (not if it's a distant mountain we're
+      // not heading toward — that would snap the target up on entry).
+      let rawTargetY = gY + hoverAltitude;
+      // Look-ahead: only useful when the drone is actually moving forward.
+      // Skip on the first frame after entry (speedMult==1 but dt*speed << lookDist)
+      // by checking that the look-ahead point is close enough to be imminent.
+      const actualSpeed = currentSpeed * speedMult;
+      if (actualSpeed > 0.5) {
+        const lookDist = Math.max(6, actualSpeed * DRONE.lookAheadTime);
+        const aheadSurface = grid.surfaceY(
+          camera.position.x - Math.sin(yaw) * lookDist,
+          camera.position.z - Math.cos(yaw) * lookDist,
+        );
+        const aheadTarget = aheadSurface + hoverAltitude;
+        // Only use look-ahead to raise the target, and only if the rise is
+        // modest (within 2× hoverAltitude) — prevents a distant cliff from
+        // snapping the drone up on mode-switch entry.
+        if (aheadTarget > rawTargetY && aheadTarget - rawTargetY < hoverAltitude * 2) {
+          rawTargetY = aheadTarget;
+        }
       }
 
+      // Ascent: snap the target immediately so rising terrain is never smoothed away.
+      // Descent: cap rate so flying off a cliff doesn't plunge the drone.
+      if (rawTargetY >= smoothedTargetY) {
+        smoothedTargetY = rawTargetY;
+      } else {
+        smoothedTargetY = Math.max(rawTargetY, smoothedTargetY - DRONE.targetDescentRate * dt);
+      }
+
+      // P-controller drives vertical velocity; camera smooths naturally via the
+      // gain — high error = fast climb, small error = gentle drift.
       const error = smoothedTargetY - camera.position.y;
       const vertV = Math.max(-DRONE.vertVelMax, Math.min(DRONE.vertVelMax, error * DRONE.heightPGain));
       camera.position.y += vertV * dt;

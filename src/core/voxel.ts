@@ -18,7 +18,7 @@ import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeome
 import { BLOCK_BY_ID, WATER, LIGHT } from './palette';
 import { PLANET_UNIFORMS_GLSL, PLANET_BEND_GLSL, planetUniformValues } from '../render/planet.glsl';
 
-export const CHUNK = 24;
+export const CHUNK = 16;
 export const DEFAULT_STREAM_RADIUS = 8;
 
 /**

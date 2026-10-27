@@ -44,16 +44,16 @@ export const WORLD = {
    * scale ceiling is the dense CPU voxel grid used by collision and planning.
    */
   size: 768,
-  height: 76,
+  height: 96,
   seaLevel: Math.floor(WATER.level), // 9
-  step: 3, // terrace height — one contour disc
+  step: 2, // terrace height — one contour disc (was 3: finer terraces = more detail)
   /**
    * Terrace edges snap to this lattice. The reference's shelves turn in long
    * straight runs and right angles, never in curves — a warped contour is a
    * smooth boundary, and quantising the field it is evaluated on is what turns
    * that boundary into masonry.
    */
-  edgeGrid: 6,
+  edgeGrid: 4,
 };
 
 /**
@@ -259,7 +259,7 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
   const discAt = (x0: any, z0: any, d: any) => {
     const x = Math.floor(x0 / Q) * Q + Q * 0.5;
     const z = Math.floor(z0 / Q) * Q + Q * 0.5;
-    const w = fbm2(nWarp, (x + d.o) * d.wFreq, (z + d.o) * d.wFreq, 3) * d.wAmp;
+    const w = fbm2(nWarp, (x + d.o) * d.wFreq, (z + d.o) * d.wFreq, 4) * d.wAmp;
     const dx = (x - d.cx) / d.ax,
       dz = (z - d.cz) / d.az;
     const dist = Math.sqrt(dx * dx + dz * dz) + w;
@@ -273,7 +273,7 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
     ? (x: number, z: number) => plan.nearIsland(x, z)
     : (x: number, z: number) => Math.hypot(x - half, z - half);
   const islandRadius: number = plan ? plan.islandRadius : S * 0.427;
-  const rimR = (x: any, z: any) => islandRadius + fbm2(nEdge, x * 0.011, z * 0.011, 3) * 15 * K;
+  const rimR = (x: any, z: any) => islandRadius + fbm2(nEdge, x * 0.011, z * 0.011, 4) * 15 * K;
 
   // Nearest main island biome index (0=tropical 1=temperate 2=arid 3=tundra)
   const nearestIslandBiome = (x: number, z: number): number => {
@@ -898,9 +898,9 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
       // A little high-frequency wobble is added to the *field*, not to the
       // decision, so region borders interlock by a block or two instead of
       // following a clean contour — soft edges, big shapes.
-      const jitter = fbm2(nFine, x * 0.13, z * 0.13, 2) * 0.1;
+      const jitter = fbm2(nFine, x * 0.13, z * 0.13, 3) * 0.1;
       const rockField =
-        fbm2(nRock, x * 0.0082, z * 0.0082, 3) +
+        fbm2(nRock, x * 0.0082, z * 0.0082, 4) +
         jitter +
         smoothstep(BASE + L * 4, BASE + L * 7, top) * 0.34 +
         smoothstep(3, 9, dropBelow(heights, S, x, z)) * 0.1;

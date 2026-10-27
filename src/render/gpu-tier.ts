@@ -57,11 +57,11 @@ export interface TierSettings {
 
 //                         dprCap  shadowRes  blurSamples  shadowExtent  cameraFar  bloom   aoTaps  dof    crep  edge   cloud  nightFull  aa       stream  waterSub  particles
 export const TIER_SETTINGS: Record<GpuTier, TierSettings> = {
-  high:         { dprCap: 2,    shadowRes: 3072, shadowBlurSamples: 12, shadowExtent: 120, cameraFar: 6000, bloom: true,  aoTaps: 8, dof: true,  crepuscularTaps: 8, edgeMask: true,  cloudShadow: true,  nightSkyFull: true,  aaQuality: 'smaa', streamRadius: 8, waterSubdivision: 64, particleCount: 1200 },
-  'mobile-high':{ dprCap: 1.5,  shadowRes: 2048, shadowBlurSamples: 8,  shadowExtent: 110, cameraFar: 3000, bloom: true,  aoTaps: 4, dof: true,  crepuscularTaps: 4, edgeMask: false, cloudShadow: true,  nightSkyFull: true,  aaQuality: 'smaa', streamRadius: 7, waterSubdivision: 32, particleCount: 700  },
-  mid:          { dprCap: 1.25, shadowRes: 2048, shadowBlurSamples: 8,  shadowExtent: 120, cameraFar: 3000, bloom: true,  aoTaps: 4, dof: true,  crepuscularTaps: 4, edgeMask: false, cloudShadow: true,  nightSkyFull: true,  aaQuality: 'smaa', streamRadius: 7, waterSubdivision: 32, particleCount: 600  },
-  low:          { dprCap: 1,    shadowRes: 1024, shadowBlurSamples: 4,  shadowExtent: 100, cameraFar: 1500, bloom: false, aoTaps: 0, dof: false, crepuscularTaps: 0, edgeMask: false, cloudShadow: false, nightSkyFull: false, aaQuality: 'fxaa', streamRadius: 5, waterSubdivision: 16, particleCount: 200  },
-  'very-low':   { dprCap: 1,    shadowRes: 512,  shadowBlurSamples: 4,  shadowExtent: 80,  cameraFar: 1200, bloom: false, aoTaps: 0, dof: false, crepuscularTaps: 0, edgeMask: false, cloudShadow: false, nightSkyFull: false, aaQuality: 'none', streamRadius: 4, waterSubdivision: 8,  particleCount: 0    },
+  high:         { dprCap: 2,    shadowRes: 3072, shadowBlurSamples: 12, shadowExtent: 120, cameraFar: 6000, bloom: true,  aoTaps: 8, dof: true,  crepuscularTaps: 8, edgeMask: true,  cloudShadow: true,  nightSkyFull: true,  aaQuality: 'smaa', streamRadius: 12, waterSubdivision: 64, particleCount: 1200 },
+  'mobile-high':{ dprCap: 1.5,  shadowRes: 2048, shadowBlurSamples: 8,  shadowExtent: 110, cameraFar: 3000, bloom: true,  aoTaps: 4, dof: true,  crepuscularTaps: 4, edgeMask: false, cloudShadow: true,  nightSkyFull: true,  aaQuality: 'smaa', streamRadius: 11, waterSubdivision: 32, particleCount: 700  },
+  mid:          { dprCap: 1.25, shadowRes: 2048, shadowBlurSamples: 8,  shadowExtent: 120, cameraFar: 3000, bloom: true,  aoTaps: 4, dof: true,  crepuscularTaps: 4, edgeMask: false, cloudShadow: true,  nightSkyFull: true,  aaQuality: 'smaa', streamRadius: 11, waterSubdivision: 32, particleCount: 600  },
+  low:          { dprCap: 1,    shadowRes: 1024, shadowBlurSamples: 4,  shadowExtent: 100, cameraFar: 1500, bloom: false, aoTaps: 0, dof: false, crepuscularTaps: 0, edgeMask: false, cloudShadow: false, nightSkyFull: false, aaQuality: 'fxaa', streamRadius: 8,  waterSubdivision: 16, particleCount: 200  },
+  'very-low':   { dprCap: 1,    shadowRes: 512,  shadowBlurSamples: 4,  shadowExtent: 80,  cameraFar: 1200, bloom: false, aoTaps: 0, dof: false, crepuscularTaps: 0, edgeMask: false, cloudShadow: false, nightSkyFull: false, aaQuality: 'none', streamRadius: 6,  waterSubdivision: 8,  particleCount: 0    },
 };
 
 /**
