@@ -195,6 +195,7 @@ async function start(): Promise<void> {
   });
   touch.onTimeBack(    () => { dayNight.timeOfDay = (dayNight.timeOfDay - 0.125 + 1) % 1; });
   touch.onTimeForward( () => { dayNight.timeOfDay = (dayNight.timeOfDay + 0.125) % 1; });
+  touch.onMap(() => map.toggle());
 
   // frame the spawn before the veil lifts
   fpCam.update(1 / 60, controller.pos, 0, true);

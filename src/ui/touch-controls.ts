@@ -45,6 +45,7 @@ export interface TouchControls {
   onEdgeToggle: (fn: () => void) => void;
   onTimeBack: (fn: () => void) => void;
   onTimeForward: (fn: () => void) => void;
+  onMap: (fn: () => void) => void;
   /** Call each frame with current mode state to show/hide contextual buttons. */
   update(droneActive: boolean, landing: boolean, flyActive: boolean): void;
   destroy(): void;
@@ -71,6 +72,7 @@ export function createTouchControls(fpCam: FPCamera, dom: HTMLElement): TouchCon
     onEdgeToggle: () => {},
     onTimeBack: () => {},
     onTimeForward: () => {},
+    onMap: () => {},
     update: () => {},
     destroy: () => {},
   };
@@ -98,6 +100,7 @@ export function createTouchControls(fpCam: FPCamera, dom: HTMLElement): TouchCon
     <button id="btn-edges"   aria-label="Toggle edges">⬡</button>
     <button id="btn-time-back"    aria-label="Step time back">◀</button>
     <button id="btn-time-forward" aria-label="Step time forward">▶</button>
+    <button id="btn-map"          aria-label="Toggle map">🗺</button>
   `;
   document.body.appendChild(btns);
 
@@ -271,6 +274,13 @@ export function createTouchControls(fpCam: FPCamera, dom: HTMLElement): TouchCon
     },
     onTimeForward(fn) {
       document.getElementById('btn-time-forward')!.addEventListener(
+        'touchend',
+        (e) => { e.stopPropagation(); fn(); },
+        { passive: true },
+      );
+    },
+    onMap(fn) {
+      document.getElementById('btn-map')!.addEventListener(
         'touchend',
         (e) => { e.stopPropagation(); fn(); },
         { passive: true },

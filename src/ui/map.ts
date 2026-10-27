@@ -253,9 +253,9 @@ export function createMap({ world, controller, input, fpCam }: any) {
     const mapX = airborne ? fpCam.camera.position.x : controller.pos.x;
     const mapZ = airborne ? fpCam.camera.position.z : controller.pos.z;
     const { cx: px, cy: pz } = proj.toCanvas(mapX, mapZ);
-    // Drone/fly forward = (-sin(rot.y), -cos(rot.y)) in XZ, so map heading = rot.y + π.
-    // Ground: controller.heading = atan2(vel.x, vel.z) already matches the arrow convention.
-    const h = airborne
+    // Camera yaw always reflects where the player is facing (walk, fly, drone).
+    // rot.y + π converts Three.js camera convention to map-north-up heading.
+    const h = fpCam
       ? fpCam.camera.rotation.y + Math.PI
       : (controller.heading ?? 0);
     const dx = Math.sin(h),
