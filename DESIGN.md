@@ -472,7 +472,7 @@ Red goes first (`uExtinction.r` highest), which is why deep water reads as blue-
 - Bank foam: `smoothstep` band near the shore blended toward `vec3(0.90, 0.92, 0.96)`
 - Subtle blue tint: `col * vec3(0.88, 0.95, 1.06) * rivProx * 0.28`
 
-Water plane subdivision: 64×64 on `high`, 32×32 on all other tiers.
+Water plane subdivision: 64×64 on `high`, 32×32 on `mobile-high`/`mid`/`low`, 4×4 on `very-low`.
 
 ---
 
@@ -636,19 +636,150 @@ The settings panel's seed input and the pause menu's **Generate new world** butt
 
 `src/core/palette.ts`
 
-`BLOCK_BY_ID` is a runtime array populated once at module load from the `BLOCKS` object. Each entry has `{ id, top: THREE.Color, side: THREE.Color, bottom: THREE.Color, pattern, fringe, rough, ... }`.
+`VOXEL_PALETTES` is the single source of truth for **all** environmental colours — block colours, sky, light, atmosphere, water, petals, and post-FX grade. There are no hardcoded palette-driven hex literals anywhere else in the codebase.
 
-Block colours are baked into vertex buffers at mesh-build time by the greedy mesher, which reads `BLOCK_BY_ID[id].top` etc. at that moment.
-
-**Palette switching** (`setVoxelPalette(name)`): mutates `BLOCK_BY_ID` entries in place. After calling it, the existing mesh buffers are stale — `world.streaming.invalidateAll()` triggers a remesh of all loaded chunks, and `map.invalidateTerrain()` forces the minimap to rebake on next draw.
-
-Water uniforms are cloned into the water `ShaderMaterial` at creation time, so `pause.ts` explicitly pushes updated palette colours to `water.planetUnis` after a palette change:
+### `VoxelPalette` interface
 
 ```ts
-wu.uShoal.value.copy(WATER.shoal);
-wu.uShallow.value.copy(WATER.shallow);
-wu.uDeep.value.copy(WATER.deep);
+interface VoxelPalette {
+  blocks: { GRASS_TOP, GRASS_SIDE, SOIL, SAND, STONE, STONE_PALE, STONE_WARM,
+            LEAF_ROUND, LEAF_SPIRE, LEAF_PALM, LEAF_BROAD, LEAF_WEEPING };
+  sky:    { zenith: number; horizon: number; haze: number; ground: number;
+            sunTint: number };
+  light:  { sunColor: number; skyColor: number; groundColor: number };
+  water:  { shoal: number; shallow: number; deep: number; extinction: THREE.Vector3 };
+  petals: number[];   // array of hex colours for petal particles
+  grade:  { lift: THREE.Color; gamma: THREE.Color; gain: THREE.Color;
+            saturation: number; bloom: { strength: number; radius: number; threshold: number } };
+}
 ```
+
+Five palettes are defined: **Autumn** (default), **Spring**, **Alpine**, **Desert**, **Alien**.
+
+### Initialisation pattern
+
+Palette-driven module exports (`GRASS_TOP`, `SKY`, `LIGHT`, `WATER`, `PETAL_COLORS`, `GRADE`, etc.) are initialised to zero/empty with a helper `z = () => new THREE.Color(0)`. The module ends with `setVoxelPalette('Autumn')` which mutates every export in place, so imports always see valid colours — even in a module loaded before the call would be placed in main.ts.
+
+Non-palette constants (PATH, PLANK, BEAM, TRUNK, CRYSTAL, CLOTH, ROOF, etc.) are hardcoded hex literals and are never modified by `setVoxelPalette`.
+
+### `setVoxelPalette(name)`
+
+Mutates in place:
+1. **Block colours** — `BLOCK_BY_ID` entries for all palette-driven block IDs.
+2. **`SKY`** — zenith, horizon, haze, ground, sunTint.
+3. **`LIGHT`** — sunColor, skyColor, groundColor.
+4. **`WATER`** — shoal, shallow, deep, extinction.
+5. **`PETAL_COLORS`** — spliced to the new palette's petal array.
+6. **`GRADE`** — lift/gamma/gain colours, saturation, bloom parameters.
+
+After calling it, existing mesh buffers are stale — `world.streaming.invalidateAll()` triggers a remesh of all loaded chunks.
+
+### Live palette switch propagation (`main.ts` `onPaletteChange`)
+
+A palette change must propagate beyond block colours because many subsystems clone palette colours into their own uniforms or buffers at construction time:
+
+```
+setVoxelPalette(name)
+  │
+  ├─ water.planetUnis — uShoal, uShallow, uDeep, uExtinction (cloned at creation)
+  ├─ atmo.sky material uniforms — uSkyZenith, uSkyHorizon, uSkyNadir, uSunGlow
+  ├─ atmo.scene.fog.color + atmo.hazeColor (separate cloned objects)
+  ├─ dayNight.applyNoonSky(sky, light.sunColor)  ← patches DayNight PALETTE[3] keyframes
+  ├─ atmo.hemi.color / groundColor  ← hemisphere light (set at construction only)
+  ├─ water.material uniforms — uHorizon, uSky (sky-reflection, cloned at creation)
+  ├─ post.grade uniforms — uLift, uGamma, uGain, uSaturation
+  ├─ post.bloom.strength / radius / threshold
+  ├─ particles.recolorPetals()  ← re-randomises aColor vertex buffer
+  ├─ world.streaming.invalidateAll()
+  └─ map.invalidateTerrain()
+```
+
+### DayNight noon keyframes
+
+`DayNight.update()` drives sky dome uniforms **every frame** from module-scoped `PALETTE` keyframe arrays (7 keyframes: midnight → predawn → sunrise → noon → sunset → dusk → midnight). Without patching the noon keyframe (index 3), any `onPaletteChange` sky update would be overwritten on the very next frame.
+
+`applyNoonSky(sky, sunColorHex)` patches only the noon entry:
+
+```ts
+applyNoonSky(sky: { zenith: number; horizon: number; haze: number }, sunColorHex: number): void {
+  PALETTE.zenith[3].set(sky.zenith);
+  PALETTE.horizon[3].set(sky.horizon);
+  PALETTE.haze[3].set(sky.haze);
+  PALETTE.sunColor[3].set(sunColorHex);
+}
+```
+
+### Petal recolouring
+
+Petal layers use an `aColor` `InstancedBufferAttribute` baked at geometry creation time. `particles.recolorPetals()` iterates the two petal mesh layers, replaces every colour triple in the buffer with a random sample from `PETAL_COLORS`, and sets `attr.needsUpdate = true`. The two petal `Mesh` objects are tracked in a `petalMeshes: THREE.Mesh[]` array inside `createParticles()`.
+
+---
+
+## Wind sway
+
+Leaf and shrub blocks sway in the breeze. The sway flag is packed into the `aData.y` vertex attribute alongside the block's pattern byte: `aData.y = pattern | (sway ? 8 : 0)`. The GLSL vertex shader checks bit 3 (`aData.y >= 8.0`) to detect swayable geometry.
+
+### Vertex shader
+
+```glsl
+if (aData.y >= 8.0) {
+  float heightT = clamp(transformed.y / 28.0, 0.0, 1.0);
+  float wave = sin(uTime * 1.4 + transformed.x * 0.3 + transformed.z * 0.21) * 0.045
+             + sin(uTime * 2.1 + transformed.z * 0.18)                        * 0.022;
+  transformed.x += wave * heightT * uWindStrength;
+  transformed.z += wave * 0.4 * heightT * uWindStrength;
+}
+```
+
+`heightT = transformed.y / 28.0` uses world Y after planet bend is partially applied, so the sway amplitude correctly grows from base to crown regardless of tree height. The previous version used `aData.w` (a baked per-vertex scalar that had been repurposed), which produced flat sway with no height-based amplification.
+
+### Controls
+
+`uWindStrength` is a user-settable uniform on `material.userData.uniforms` (key `_windBase` tracks the raw slider value). Wind is skipped entirely on the `very-low` tier. The guard `if (wu._windBase > 0)` correctly checks the scalar — the previous `if (wu.uWindStrength)` tested the uniform object itself (always truthy) and never skipped.
+
+---
+
+## Boot screen
+
+The loading overlay (`#boot` in `index.html`) shows a spinning CSS 3D voxel cube while the world generates.
+
+### Cube structure
+
+```html
+<div class="ls-emblem">
+  <div class="ls-cube">
+    <div class="ls-face ls-face--top"></div>
+    <div class="ls-face ls-face--bottom"></div>
+    <div class="ls-face ls-face--front"></div>
+    <div class="ls-face ls-face--back"></div>
+    <div class="ls-face ls-face--left"></div>
+    <div class="ls-face ls-face--right"></div>
+  </div>
+</div>
+```
+
+`.ls-cube` uses `transform-style: preserve-3d` with `perspective: 240px` on the parent. Each face is `translateZ(32px)` after the appropriate `rotateX/Y` so all six faces sit at ±32 px from centre. Face colours simulate ambient-occlusion shading: top (#d4922a brightest) → front/right (mid amber) → left/back (dark terracotta) → bottom (#4a1e02 darkest).
+
+`@keyframes ls-voxel` rotates the cube around Y on a −20° X tilt (`rotateX(-20deg) rotateY(0deg → 360deg)`) over 3.2 s, giving an isometric-style spin that reads as a voxel block from all angles.
+
+When the `.ready` class is added, `#boot.ready .ls-emblem { opacity: 0 }` fades the cube out over 0.5 s.
+
+---
+
+## Performance fixes
+
+Applied across the codebase:
+
+| # | File | Fix |
+| --- | --- | --- |
+| 1 | `gpu-tier.ts` | WebGL probe context released with `WEBGL_lose_context` after reading `MAX_TEXTURE_SIZE`, preventing the probe canvas from holding a GPU context indefinitely. |
+| 2 | `main.ts` | Wind guard corrected: `wu._windBase > 0` (scalar) instead of `if (wu.uWindStrength)` (always-truthy uniform object). |
+| 3 | `voxel.ts` | Wind sway height factor uses world Y (`transformed.y / 28.0`) instead of `aData.w`, giving correct crown-amplified sway. |
+| 4 | `day-night.ts` | `shadowMap.needsUpdate` guarded behind a sun-elevation delta threshold (>0.009 in Y). Shadows only re-render when the sun moves visibly, halving shadow cost on static scenes. |
+| 5 | `main.ts` | `atmo.followTarget()` skipped when the player is stationary — only called when `manualMovement`, `fly.active`, or `drone.active`. |
+| 6 | `main.ts` | `clock.update()` restored before `clock.getDelta()`. `THREE.Timer.getDelta()` returns the cached `_delta` field; it does **not** call `update()` internally. Removing it caused `rawDt = 0` every frame, freezing all physics. |
+| 7 | `gpu-tier.ts` | `very-low` water subdivision reduced from 8×8 to 4×4. |
+| 8 | `main.ts` | Wind calculation skipped entirely on `very-low` tier — the uniform object is never fetched. |
 
 ---
 
