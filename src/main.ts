@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { createRenderer } from './render/renderer';
-import { setVoxelPalette, WATER } from './core/palette';
+import { setVoxelPalette, WATER, SKY, LIGHT, GRADE } from './core/palette';
 import { Atmosphere } from './render/lighting';
 import { FPCamera } from './render/fp-camera';
 import { createPostFX } from './render/postfx';
@@ -190,11 +190,45 @@ async function start(): Promise<void> {
   const pause = createPause({ input, map, onNewWorld: () => { pushSeedUrl(genSeedWord()); location.reload(); } });
   pause.onPaletteChange((name) => {
     setVoxelPalette(name);
+
     // Water uniforms were cloned at material creation — push updated palette colours.
     const wu = water.planetUnis;
     wu.uShoal.value.copy(WATER.shoal);
     wu.uShallow.value.copy(WATER.shallow);
     wu.uDeep.value.copy(WATER.deep);
+
+    // Sky dome uniforms
+    if (atmo.sky?.material?.uniforms) {
+      const su = atmo.sky.material.uniforms;
+      if (su.uSkyZenith)  su.uSkyZenith.value.copy(SKY.zenith).lerp(SKY.haze, 0.3);
+      if (su.uSkyHorizon) su.uSkyHorizon.value.copy(SKY.horizon).lerp(SKY.haze, 0.22);
+      if (su.uSkyNadir)   su.uSkyNadir.value.copy(SKY.ground).lerp(SKY.haze, 0.45).multiplyScalar(0.94);
+      if (su.uSunGlow)    su.uSunGlow.value.copy(SKY.sunTint).multiplyScalar(0.16);
+    }
+
+    // Fog / haze (hazeColor drives scene fog)
+    if (atmo.hazeColor) {
+      atmo.hazeColor.copy(SKY.haze).lerp(SKY.horizon, 0.35);
+      if (atmo.scene?.fog?.color) atmo.scene.fog.color.copy(atmo.hazeColor);
+    }
+
+    // Post-processing grade
+    if (post.grade?.uniforms) {
+      const gu = post.grade.uniforms;
+      if (gu.uLift)     gu.uLift.value.copy(GRADE.lift);
+      if (gu.uGamma)    gu.uGamma.value.copy(GRADE.gamma);
+      if (gu.uGain)     gu.uGain.value.copy(GRADE.gain);
+      if (gu.uSat)      gu.uSat.value     = GRADE.saturation;
+      if (gu.uContrast) gu.uContrast.value = GRADE.contrast;
+      if (gu.uVignette) gu.uVignette.value = GRADE.vignette;
+      if (gu.toneMappingExposure) gu.toneMappingExposure.value = GRADE.exposure;
+    }
+    if (post.bloom) {
+      post.bloom.strength  = GRADE.bloom.strength;
+      post.bloom.radius    = GRADE.bloom.radius;
+      post.bloom.threshold = GRADE.bloom.threshold;
+    }
+
     world.streaming.invalidateAll();
     map.invalidateTerrain();
   });
@@ -267,6 +301,7 @@ async function start(): Promise<void> {
 
   function frame(): void {
     requestAnimationFrame(frame);
+    clock.update();
     const rawDt = clock.getDelta();
     const dt = Math.min(rawDt, 1 / 20);
 
