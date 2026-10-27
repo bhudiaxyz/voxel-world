@@ -82,7 +82,7 @@ export async function buildWorld(seed: number, onProgress: (p: number, s?: strin
    * scene should stand clear of one. Before vegetation, because the clearings
    * a scene reserves are the whole point of it, and the scatter pass would
    * cheerfully fill them in. */
-  onProgress(0.34, 'placing the landmarks');
+  onProgress(0.34, 'placing scenes and landmarks');
   buildStamps(world, world.rng);
   await yieldFrame();
 

@@ -239,22 +239,22 @@ const BIOME_FLORA = {
   },
   [BIOME.WETLAND]: {
     leaves: [BLOCKS.LEAF_MINT, BLOCKS.LEAF_CREAM, BLOCKS.LEAF_MINT],
-    forms: ['broad', 'bunch', 'round', 'umbrella', 'weeping', 'tall'],
+    forms: ['mangrove', 'broad', 'bunch', 'round', 'umbrella', 'weeping', 'tall', 'mangrove'],
     scale: [0.26, 0.78],
     density: 0.75,
     bushes: [BUSH_DUSK, BUSH_MAUVE, BUSH_CREAM],
   },
   [BIOME.HIGHLAND]: {
     leaves: [BLOCKS.LEAF_LILAC, BLOCKS.LEAF_MINT],
-    forms: ['spire', 'nub', 'spire', 'layered'],
+    forms: ['spire', 'nub', 'spire', 'layered', 'dead', 'dead'],
     scale: [0.14, 0.46],
     density: 0.28,
     bushes: [SCRUB, SCRUB, BUSH_DUSK],
   },
   [BIOME.SHORE]: {
     leaves: [BLOCKS.LEAF_CREAM, BLOCKS.LEAF_BLUSH],
-    forms: ['bunch', 'round', 'nub', 'umbrella', 'layered', 'weeping'],
-    scale: [0.16, 0.6],
+    forms: ['palm', 'palm', 'bunch', 'round', 'nub', 'umbrella', 'layered', 'weeping', 'dead'],
+    scale: [0.16, 0.7],
     density: 0.22,
     bushes: [BUSH_CREAM, SCRUB],
   },
@@ -315,9 +315,9 @@ function buildTrunk(
 }
 
 function pickForm(scale: number, rng: any) {
-  if (scale > 0.72) return rng.pick(['stack', 'round', 'twin', 'bunch', 'broad', 'umbrella', 'weeping', 'layered', 'stack', 'round']);
-  if (scale > 0.46) return rng.pick(['round', 'bunch', 'spire', 'twin', 'stack', 'umbrella', 'tall', 'layered']);
-  if (scale > 0.26) return rng.pick(['round', 'bunch', 'spire', 'nub', 'tall', 'layered']);
+  if (scale > 0.72) return rng.pick(['stack', 'round', 'twin', 'bunch', 'broad', 'umbrella', 'weeping', 'layered', 'stack', 'round', 'palm']);
+  if (scale > 0.46) return rng.pick(['round', 'bunch', 'spire', 'twin', 'stack', 'umbrella', 'tall', 'layered', 'mangrove']);
+  if (scale > 0.26) return rng.pick(['round', 'bunch', 'spire', 'nub', 'tall', 'layered', 'dead']);
   return 'nub';
 }
 
@@ -344,12 +344,15 @@ export function plantTree(grid: any, x: number, y: number, z: number, rng: any, 
 
   // Form-specific trunk height: spire/umbrella = taller trunk, broad = shorter.
   const bare =
-    form === 'spire'   ? Math.max(3, Math.round(3 + scale * 5)) :
-    form === 'umbrella'? Math.max(3, Math.round(3 + scale * 3.5)) :
-    form === 'broad'   ? Math.max(1, Math.round(1 + scale * 2)) :
-    form === 'tall'    ? Math.max(6, Math.round(6 + scale * 9)) :
-    form === 'layered' ? Math.max(3, Math.round(3 + scale * 4)) :
-    form === 'weeping' ? Math.max(2, Math.round(2 + scale * 3)) :
+    form === 'spire'    ? Math.max(3, Math.round(3 + scale * 5)) :
+    form === 'umbrella' ? Math.max(3, Math.round(3 + scale * 3.5)) :
+    form === 'broad'    ? Math.max(1, Math.round(1 + scale * 2)) :
+    form === 'tall'     ? Math.max(6, Math.round(6 + scale * 9)) :
+    form === 'layered'  ? Math.max(3, Math.round(3 + scale * 4)) :
+    form === 'weeping'  ? Math.max(2, Math.round(2 + scale * 3)) :
+    form === 'palm'     ? Math.max(5, Math.round(5 + scale * 7)) :
+    form === 'dead'     ? Math.max(3, Math.round(3 + scale * 5)) :
+    form === 'mangrove' ? Math.max(1, Math.round(1 + scale * 2)) :
     Math.max(2, Math.round(2.5 + scale * 3.5));
 
   const canopyY = y + bare;
@@ -543,6 +546,45 @@ export function plantTree(grid: any, x: number, y: number, z: number, rng: any, 
         fillBox(dx, 3, dz, 2, 1, 2, lightId);
       } else {
         fillBox(0, 0, 0, 4, 1, 3, leaf.id);
+        fillBox(dx, 1, dz, 2, 1, 2, lightId);
+      }
+      break;
+    }
+    case 'palm': {
+      // Coastal palm — tall bare trunk, flat radiating frond disc at the top.
+      const frondW = large ? 9 : unit === 2 ? 7 : 5;
+      fillBox(0, 0, 0, frondW, 1, frondW, leaf.id);
+      fillBox(3 * dx, 0, dz, 2, 2, 2, leaf.id);
+      fillBox(-2 * dx, 0, 2 * dz, 2, 2, 2, leaf.id);
+      fillBox(dx, 1, -dz, Math.ceil(frondW / 2), 1, Math.ceil(frondW / 2), lightId);
+      break;
+    }
+    case 'dead': {
+      // Dead bleached tree — bare trunk, short stub branches, no leaf canopy.
+      const stubLen = large ? 3 : 2;
+      fillBox(2 * dx, 0, 0, stubLen, 1, 1, trunkBlock.id);
+      fillBox(0, 1, 2 * dz, 1, 1, stubLen, trunkBlock.id);
+      if (large) fillBox(-dx, 2, -dz, 2, 1, 1, trunkBlock.id);
+      break;
+    }
+    case 'mangrove': {
+      // Wetland mangrove — exposed stilt roots near base, broad low crown.
+      // Stilt root struts fanning out at y+1
+      for (const [rx, rz] of [[2 * dx, 0], [0, 2 * dz], [-dx, dz], [dx, -dz]] as [number, number][]) {
+        grid.set(cx + rx, y + 1, cz + rz, trunkBlock.id);
+      }
+      // Broad low crown
+      if (large) {
+        fillBox(0, 0, 0, 5, 1, 5, leaf.id);
+        fillBox(3 * dx, 0, dz, 2, 2, 2, leaf.id);
+        fillBox(-2 * dx, 0, -2 * dz, 2, 1, 3, leaf.id);
+        fillBox(dx, 1, -dz, 3, 1, 3, lightId);
+      } else if (unit === 2) {
+        fillBox(0, 0, 0, 4, 1, 4, leaf.id);
+        fillBox(2 * dx, 0, dz, 2, 1, 2, leaf.id);
+        fillBox(dx, 1, 0, 3, 1, 3, lightId);
+      } else {
+        fillBox(0, 0, 0, 3, 1, 3, leaf.id);
         fillBox(dx, 1, dz, 2, 1, 2, lightId);
       }
       break;

@@ -6,36 +6,152 @@ Developer reference. For user-facing documentation see [README.md](README.md).
 
 ## Source layout
 
-| Path | Contents |
-| --- | --- |
-| `src/main.ts` | Entry point: scene setup, game loop (`frame()`), input wiring (keyboard, touch, drone/fly mode transitions), `window.__game` debug handle |
-| `src/core/palette.ts` | Art bible — all colours, `BLOCK_BY_ID` array, `setVoxelPalette()`, `GRADE`/`SKY`/`LIGHT`/`WATER`/`FOG` constants |
-| `src/core/voxel.ts` | `VoxelGrid` (dense `Uint8Array`), greedy mesher, chunk streamer, LOD fade, `CHUNK = 24`, `EDGE_LAYER` |
-| `src/core/rng.ts` | Seeded PRNG, 2D/3D noise, FBM helpers used by terrain and vegetation |
-| `src/world/terrain.ts` | Heightfield generator (contour-disc terracing, river carving, biome fields), river flow bake |
-| `src/world/vegetation.ts` | `plantTree()` (9 silhouette forms), `plantBush()`, ferns, moss, lichen, grass, mushrooms, crystals |
-| `src/world/water.ts` | `makeDepthMap()` (RG texture), `createWater()` (wave shader, Beer-Lambert absorption) |
-| `src/world/planner.ts` | World planner: island centres, stepping-stone placement, bridge chains, biome fields |
-| `src/world/props.ts` | Bridges, rocks, and other static props placed from terrain data |
-| `src/world/stamps.ts` | Scene stamps: `buildStamps()`, scenic grammars (waterfall, crossing, pond, grove, overlook), landmark grammars (twistedSpire, obelisk, monolithRing, tombstoneField, floatingBiosphere) |
-| `src/render/renderer.ts` | Three.js WebGLRenderer setup, shadow map config per tier |
-| `src/render/lighting.ts` | `Atmosphere` class: sun/hemi/fill lights, sky dome mesh, `skyUniformValues()` |
-| `src/render/sky.ts` | Shared GLSL: `SKY_UNIFORMS_GLSL`, `SKY_FN_GLSL` (`skyRadiance`, `nightSkyAddons`, `_aurora`) |
-| `src/render/day-night.ts` | `DayNight` class: keyframe palette animation, `getNightFactor()`, aurora and star uniforms |
-| `src/render/postfx.ts` | `createPostFX()`: full post-processing chain — SceneDepth → EdgeMask → Atmosphere → Bloom → Crepuscular → Grade → SMAA |
-| `src/render/planet.glsl.ts` | `PLANET_BEND_GLSL` vertex shader snippet, `updatePlanetUniforms()` |
-| `src/render/fp-camera.ts` | `FPCamera`: pointer lock, key/mouse state, `drainDroneAltDelta()`, touch state (`_joyX/Y`, `touchAltAxis`) |
-| `src/render/gpu-tier.ts` | `detectGpuTier()`, `TIER_SETTINGS` table |
-| `src/player/controller.ts` | `Controller`: AABB physics, stepping, swimming, sprint |
-| `src/player/drone.ts` | `createDroneMode()`: P-controller terrain-follow, landing state machine |
-| `src/player/fly.ts` | `createFlyMode()`: free-flight with terrain floor |
-| `src/player/character.ts` | Third-person character mesh and animation state |
-| `src/player/dog.ts` | Dog AI: pathfinding to player, sit/stand commands |
-| `src/player/pathfinding.ts` | A* grid pathfinder, path navigator |
-| `src/ui/touch-controls.ts` | `createTouchControls()`: nippleJS joystick, swipe-to-look, button wiring |
-| `src/ui/map.ts` | Minimap: `bakeTerrain()` reads `BLOCK_BY_ID`, `invalidateTerrain()` forces rebake |
-| `src/ui/hud.ts`, `pause.ts`, `settings.ts`, `bubbles.ts` | HUD overlays and menus |
-| `src/fx/particles.ts` | Billboarded particle system (leaves, dust) |
+```text
+src/
+├── main.ts                  ← entry point: scene setup, game loop (frame()), input wiring, window.__game debug handle
+│
+├── core/
+│   ├── palette.ts           ← art bible: all colours, BLOCK_BY_ID, setVoxelPalette(), GRADE/SKY/LIGHT/WATER/FOG constants
+│   ├── voxel.ts             ← VoxelGrid (dense Uint8Array), greedy mesher, chunk streamer, LOD fade, CHUNK=16, EDGE_LAYER
+│   └── rng.ts               ← seeded PRNG, 2D/3D noise, FBM helpers
+│
+├── world/
+│   ├── planner.ts           ← planWorld(): island layout, stepping stones, bridge chains, biome fields, river routing
+│   ├── terrain.ts           ← generateTerrain(): contour-disc terracing, river carving, voxel fill, RIVER_WATER blocks
+│   ├── water.ts             ← makeDepthMap() (RG texture), createWater() (wave shader, Beer-Lambert absorption)
+│   ├── vegetation.ts        ← plantTree() (9 silhouette forms), plantBush(), ferns, moss, lichen, grass, mushrooms, crystals
+│   ├── props.ts             ← bridges, rocks, and other static props placed from terrain data
+│   └── stamps.ts            ← buildStamps(): scenic grammars (waterfall, crossing, pond, grove, overlook), landmark grammars
+│
+├── render/
+│   ├── renderer.ts          ← WebGLRenderer setup, shadow map config per tier
+│   ├── lighting.ts          ← Atmosphere: sun/hemi/fill lights, sky dome mesh, skyUniformValues()
+│   ├── sky.ts               ← shared GLSL: SKY_UNIFORMS_GLSL, SKY_FN_GLSL (skyRadiance, nightSkyAddons, _aurora)
+│   ├── day-night.ts         ← DayNight: keyframe palette animation, getNightFactor(), aurora and star uniforms
+│   ├── postfx.ts            ← createPostFX(): SceneDepth → EdgeMask → Atmosphere → Bloom → Crepuscular → Grade → SMAA
+│   ├── planet.glsl.ts       ← PLANET_BEND_GLSL vertex snippet, updatePlanetUniforms()
+│   ├── fp-camera.ts         ← FPCamera: pointer lock, key/mouse state, drainDroneAltDelta(), touch state
+│   └── gpu-tier.ts          ← detectGpuTier(), TIER_SETTINGS table (high/mobile-high/mid/low/very-low)
+│
+├── player/
+│   ├── controller.ts        ← Controller: AABB physics, stepping, swimming, sprint
+│   ├── drone.ts             ← createDroneMode(): P-controller terrain-follow, landing state machine
+│   ├── fly.ts               ← createFlyMode(): free-flight with terrain floor
+│   ├── character.ts         ← third-person character mesh and animation state
+│   ├── dog.ts               ← dog AI: pathfinding to player, sit/stand commands
+│   └── pathfinding.ts       ← A* grid pathfinder, path navigator
+│
+├── ui/
+│   ├── map.ts               ← minimap: bakeTerrain(), river network (glow+solid passes, ocean-clipped), invalidateTerrain()
+│   ├── touch-controls.ts    ← createTouchControls(): nippleJS joystick, swipe-to-look, button wiring
+│   ├── hud.ts               ← heads-up display overlays
+│   ├── pause.ts             ← pause menu, generate-new-world button
+│   ├── settings.ts          ← settings panel (planet radius, day speed, load radius, shadow res, bloom, seed)
+│   └── bubbles.ts           ← speech bubble system
+│
+└── fx/
+    └── particles.ts         ← billboarded particle system (leaves, dust)
+```
+
+---
+
+## Coordinate system & world constants
+
+Three.js default axes apply throughout: **Y is up**, +X is east, +Z is south. All physics, voxel addressing, and noise sampling use this space directly — no axis remapping anywhere in the codebase.
+
+| Constant | Value | Meaning |
+| --- | --- | --- |
+| `WORLD.size` | 512 | World XZ extent in voxels (configurable via `size` param) |
+| `WORLD.height` | 96 | Maximum Y in voxels |
+| `WORLD.step` | 3 | One terrace step height in voxels |
+| `WATER.level` | 24.35 | Water plane Y (fractional keeps plane above the top shore face) |
+| `SEA` | 24 | `Math.floor(WATER.level)` — integer sea level used for voxel comparisons |
+| `CHUNK` | 16 | Chunk edge length in voxels; chunks are `16×96×16` |
+
+**Voxel addressing** — flat array, row-major XZY: `index = x + sx * (z + sz * y)`. Column height cache uses `height[z * sx + x]` (ZX row-major) so a Z-outer loop over the heightfield is cache-friendly.
+
+**Chunk coordinates** — `cx = Math.floor(x / CHUNK)`, clamped to grid. The chunk streamer works in chunk-coordinate space; world-space positions are converted on enqueue.
+
+**Noise space** — all noise calls pass raw world-space `(x, z)` coordinates scaled by a frequency constant at the call site (e.g. `noise2(x * 0.003, z * 0.003)`), so the noise domain stays human-readable: 1 noise unit ≈ 333 world voxels at that frequency.
+
+---
+
+## Procedural generation pipeline
+
+World generation runs once per seed, fully synchronous inside a web worker handoff. The pipeline is strictly ordered — each stage reads from the previous stage's output and writes its own:
+
+```
+hashSeedWord(word)
+  └─► planWorld(seed, size)           → WorldPlan  (island centres, biome regions, river paths)
+        └─► generateTerrain(plan)     → VoxelGrid + heightfield + rivD/rivHalf/rivFlow
+              ├─► buildStructures()   → bridge voxels written into grid
+              ├─► buildStamps()       → scenic + landmark voxels written into grid
+              └─► scatterVegetation() → tree + detail voxels written into grid
+                    └─► chunk streamer meshes chunks on demand as player moves
+```
+
+`WorldPlan` is the contract between planner and all downstream consumers. Terrain, props, stamps, vegetation, and the minimap all read from it — none re-derives island or river geometry independently. This is what makes a seed deterministic: fix the plan, everything downstream is fixed.
+
+---
+
+## Noise & procedural patterns
+
+### Noise primitives (`src/core/rng.ts`)
+
+All world generation uses a single seeded PRNG and two noise families:
+
+- **`noise2(x, z)`** — value noise: hash two integer cell corners, bilinear interpolation. Fast; used for high-frequency variation (vegetation density, rock scatter, biome detail).
+- **`noise3(x, y, z)`** — 3D value noise; used for cloud shadow, aurora structure, and any effect that needs to vary with height.
+- **`fbm2(x, z, octaves)`** — fractional Brownian motion: sums `octaves` layers of `noise2` with halving amplitude and doubling frequency. The standard terrain macro-shape tool. Each extra octave adds fine detail without changing the large-scale shape.
+- **`rng.range(lo, hi)`** — uniform float from the seeded PRNG; used wherever a non-spatial random number is needed (tree form selection, stamp placement jitter, bridge offset).
+
+### Domain warping
+
+Coastlines and disc boundaries are shaped by **domain-warped noise**: before sampling the island mask, the input coordinates are offset by another noise evaluation:
+
+```ts
+const wx = x + fbm2(x * 0.004, z * 0.004) * warpAmt;
+const wz = z + fbm2(x * 0.004 + 5.2, z * 0.004 + 1.3) * warpAmt;
+const onIsland = dist(wx, wz, centre) < islandRadius;
+```
+
+The two FBM calls use different offsets (the `+ 5.2`, `+ 1.3`) so they produce uncorrelated warp fields for X and Z. Without the offset they would return the same value and warp diagonally rather than in all directions.
+
+### Contour disc terracing
+
+Rather than smoothly interpolating a heightfield and stepping it post-hoc (which produces terraces of unequal width), each terrace level is baked in directly as a **contour disc**: a domain-warped circle that contributes exactly `WORLD.step = 3` blocks of elevation. The height at any point is:
+
+```ts
+height = SEA + discsBelow(x, z) * WORLD.step;
+```
+
+where `discsBelow` counts how many disc radii the point falls inside. Inside a disc the field is exactly constant — flatness is free, no smoothing needed. Cliffs form naturally at disc boundaries. The FBM warp of each disc radius is what makes the boundaries look organic rather than circular.
+
+### Biome field
+
+Biome assignment is a **threshold on a large-scale noise field** — not Voronoi, not a distance-to-centre function. A single `fbm2` sample at very low frequency (`0.002`) is compared against fixed thresholds to assign `MEADOW`, `ROCK`, `SAND`, or `SHORE`. This gives smooth biome boundaries that follow the terrain's natural ridges rather than cutting across them.
+
+### River meander
+
+River paths are computed by steepest-descent flow through the region graph, then **FBM-displaced laterally** to add meander:
+
+```ts
+const meander = fbm2(t * 8.0, seed) * meanderAmt;
+px += perpX * meander;
+pz += perpZ * meander;
+```
+
+`t` is normalised path position (0 = source, 1 = mouth). Meander amplitude grows with `t` so rivers are straighter in the mountains and wider/more sinuous near the coast — matching how real rivers behave.
+
+### No-texture philosophy
+
+Block colours are baked into vertex buffers at mesh-build time by the greedy mesher. The fragment shader reads only `vColor` — no texture lookups, no UV coordinates. This means:
+
+- **Zero texture memory** — the entire world fits in vertex buffers.
+- **Palette switching is instant** — `setVoxelPalette()` mutates `BLOCK_BY_ID` in place, then `invalidateAll()` rebuilds vertex buffers on next stream tick. No texture upload needed.
+- **Greedy meshing is maximal** — adjacent faces of the same block always share vertex colour exactly, so they can always be merged. A texture atlas would break this (UVs prevent merging faces that span tile boundaries).
+
+Per-vertex AO (4 corner taps per quad) is baked at the same time as colour, so ambient shadow is free at runtime.
 
 ---
 

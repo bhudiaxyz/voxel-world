@@ -759,6 +759,7 @@ export function planWorld(seed: any, size: any) {
     else if (onRiver) kind = 'crossing';
     else if (onLake || r.moisture > 0.62) kind = 'pond';
     else if (r.elevation > 0.66 && relief > 0.12) kind = 'overlook';
+    else if (r.elevation > 0.3 && r.moisture < 0.45 && !onRiver && !onLake) kind = 'hotspring';
     else kind = 'grove';
 
     r.importance = score;
@@ -780,7 +781,7 @@ export function planWorld(seed: any, size: any) {
   scenic.sort((a, b) => b.score - a.score);
 
   // ---- landmark sites — 2-3 per continent, elevated dry ground inland ----
-  const LANDMARK_KINDS = ['spire', 'obelisk', 'ring', 'tombs', 'biosphere'];
+  const LANDMARK_KINDS = ['spire', 'obelisk', 'ring', 'tombs', 'biosphere', 'well', 'arch'];
   const landmarks: Array<{ kind: string; at: [number, number]; seed: number }> = [];
   for (let ci = 0; ci < continentCenters.length; ci++) {
     const [icx, icz] = continentCenters[ci];

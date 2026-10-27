@@ -35,6 +35,9 @@ const KIND: Record<string, { fill: string; ring: string; label: string; icon?: s
   ring:      { fill: 'rgba(180,165,138,0.85)', ring: 'rgba(72,60,42,0.92)',   label: 'Monolith Ring',    icon: '🗿',  landmark: true },
   tombs:     { fill: 'rgba(160,150,138,0.82)', ring: 'rgba(64,58,50,0.92)',   label: 'Tombstone Field',  icon: '🪦',  landmark: true },
   biosphere: { fill: 'rgba(130,185,170,0.88)', ring: 'rgba(50,100,88,0.92)',  label: 'Floating Biosphere', icon: '🌍', landmark: true },
+  well:      { fill: 'rgba(190,178,155,0.88)', ring: 'rgba(78,66,44,0.92)',   label: 'Ancient Well',       icon: '🪣',  landmark: true },
+  arch:      { fill: 'rgba(200,185,158,0.88)', ring: 'rgba(84,70,46,0.92)',   label: 'Ruined Arch',        icon: '🏛️',  landmark: true },
+  hotspring: { fill: 'rgba(100,192,178,0.82)', ring: 'rgba(40,110,98,0.90)',  label: 'Hot Spring',         icon: '♨️' },
 };
 
 const CSS = `

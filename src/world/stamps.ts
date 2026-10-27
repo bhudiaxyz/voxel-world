@@ -30,7 +30,7 @@
 import { BLOCKS, WATER } from '../core/palette';
 import { makeRng } from '../core/rng';
 import { plantTree } from './vegetation';
-import { CASCADE } from './terrain';
+import { CASCADE, RIVER_WATER } from './terrain';
 
 /**
  * How many scenes the map gets, per 256x256 blocks of it.
@@ -61,7 +61,7 @@ const MIN_SEPARATION = 34;
  * overruling the score, which is the entire reason the score is only allowed
  * to *rank* rather than to decide.
  */
-const QUOTA = { waterfall: 2, crossing: 2, pond: 2, overlook: 2, grove: 3 };
+const QUOTA = { waterfall: 2, crossing: 2, pond: 2, overlook: 2, grove: 3, hotspring: 2 };
 /** How far from the region centre a grammar may hunt for its feature. */
 const SEARCH_R = 30;
 
@@ -910,6 +910,143 @@ function floatingBiosphere(_world: any, T: any, site: any, rng: any) {
   return { kind: 'biosphere', at: [cx, cz] };
 }
 
+/**
+ * ANCIENT_WELL — a stone-rimmed well with a simple crossbeam, surrounded by worn path.
+ *
+ *   requires   dry inland ground
+ *   generates  stone rim 3x3, STONE_PALE cap, WOOD crossbeam, PATH clearing radius 5
+ */
+function ancientWell(_world: any, T: any, site: any, rng: any) {
+  const cx = site.at[0] | 0, cz = site.at[1] | 0;
+  if (!T.dry(cx, cz) || T.claimed(cx, cz)) return null;
+  const baseY = T.top(cx, cz);
+
+  // Path clearing
+  for (let dz = -5; dz <= 5; dz++)
+    for (let dx = -5; dx <= 5; dx++) {
+      if (dx * dx + dz * dz > 25) continue;
+      if (T.dry(cx + dx, cz + dz)) T.ground(cx + dx, cz + dz, T.top(cx + dx, cz + dz), BLOCKS.PATH.id);
+    }
+
+  // Stone rim — 3x3 ring, hollow centre
+  for (let dz = -1; dz <= 1; dz++)
+    for (let dx = -1; dx <= 1; dx++) {
+      if (dx === 0 && dz === 0) continue;
+      T.put(cx + dx, cz + dz, baseY + 1, BLOCKS.STONE.id);
+      T.put(cx + dx, cz + dz, baseY + 2, BLOCKS.STONE_PALE.id);
+    }
+
+  // Crossbeam over the opening
+  const beamBlock = rng.chance(0.6) ? BLOCKS.STONE_WARM.id : BLOCKS.STONE_PALE.id;
+  T.put(cx - 1, cz, baseY + 3, beamBlock);
+  T.put(cx,     cz, baseY + 3, beamBlock);
+  T.put(cx + 1, cz, baseY + 3, beamBlock);
+
+  // A few scattered worn stones nearby
+  for (let i = 0; i < 4 + rng.int(0, 3); i++) {
+    const a = rng.range(0, Math.PI * 2);
+    const d = rng.range(3, 6);
+    const sx = Math.round(cx + Math.cos(a) * d);
+    const sz = Math.round(cz + Math.sin(a) * d);
+    if (T.dry(sx, sz)) T.put(sx, sz, T.top(sx, sz) + 1, BLOCKS.STONE_PALE.id);
+  }
+
+  T.reserve(cx, cz, 8);
+  return { kind: 'well', at: [cx, cz] };
+}
+
+/**
+ * RUINED_ARCH — two stone pillars with a fractured lintel, a relic of a forgotten gate.
+ *
+ *   requires   dry inland ground, minimum height relief
+ *   generates  2 pillars 5-7 blocks tall, partial lintel, rubble scatter
+ */
+function ruinedArch(_world: any, T: any, site: any, rng: any) {
+  const cx = site.at[0] | 0, cz = site.at[1] | 0;
+  if (!T.dry(cx, cz) || T.claimed(cx, cz)) return null;
+  const baseY = T.top(cx, cz);
+
+  const span = 3 + rng.int(0, 2);     // half-gap from centre to each pillar
+  const pillarH = 5 + rng.int(0, 2);
+
+  // Two pillars on the X axis
+  for (const side of [-span, span]) {
+    const px = cx + side, pz = cz;
+    const py = T.top(px, pz);
+    for (let dy = 1; dy <= pillarH; dy++)
+      T.put(px, pz, py + dy, dy % 3 === 0 ? BLOCKS.STONE_PALE.id : BLOCKS.STONE.id);
+  }
+
+  // Partial lintel — missing 1-2 centre blocks to look broken
+  const lintelY = baseY + pillarH + 1;
+  const missing = new Set<number>();
+  const missCt = 1 + rng.int(0, 1);
+  for (let m = 0; m < missCt; m++) missing.add(rng.int(1, span * 2 - 1));
+  for (let i = 0; i <= span * 2; i++) {
+    if (missing.has(i)) continue;
+    T.put(cx - span + i, cz, lintelY, BLOCKS.STONE_PALE.id);
+  }
+
+  // Rubble scatter around the base
+  for (let i = 0; i < 6 + rng.int(0, 4); i++) {
+    const a = rng.range(0, Math.PI * 2);
+    const d = rng.range(1, span + 3);
+    const rx = Math.round(cx + Math.cos(a) * d);
+    const rz = Math.round(cz + Math.sin(a) * d);
+    if (T.dry(rx, rz)) T.put(rx, rz, T.top(rx, rz) + 1, rng.chance(0.5) ? BLOCKS.STONE.id : BLOCKS.STONE_PALE.id);
+  }
+
+  T.reserve(cx, cz, span + 6);
+  return { kind: 'arch', at: [cx, cz] };
+}
+
+/**
+ * HOT_SPRING — a shallow warm pool of teal water ringed by pale boulders and steam-moss.
+ *
+ *   requires   dry inland ground (not ocean, not river)
+ *   generates  oval RIVER_WATER pool 5-7 wide, stone/pale ring, leaf-moss scatter
+ */
+function hotSpring(_world: any, T: any, site: any, rng: any) {
+  const cx = site.at[0] | 0, cz = site.at[1] | 0;
+  if (!T.dry(cx, cz) || T.claimed(cx, cz)) return null;
+  const baseY = T.top(cx, cz);
+
+  const rx = 3 + rng.int(0, 1), rz = 2 + rng.int(0, 2);
+
+  // Dig shallow basin and fill with warm river water (1 block deep)
+  for (let dz = -rz; dz <= rz; dz++)
+    for (let dx = -rx; dx <= rx; dx++) {
+      if ((dx / rx) ** 2 + (dz / rz) ** 2 > 1.0) continue;
+      T.ground(cx + dx, cz + dz, baseY, BLOCKS.STONE_WARM.id);   // floor
+      T.put(cx + dx, cz + dz, baseY + 1, RIVER_WATER.id);         // warm pool
+    }
+
+  // Boulder rim
+  const boulderAngleStep = (Math.PI * 2) / (8 + rng.int(0, 4));
+  for (let a = 0; a < Math.PI * 2; a += boulderAngleStep) {
+    const bx = Math.round(cx + Math.cos(a) * (rx + 1));
+    const bz = Math.round(cz + Math.sin(a) * (rz + 1));
+    if (!T.dry(bx, bz)) continue;
+    const by = T.top(bx, bz);
+    T.put(bx, bz, by + 1, rng.chance(0.55) ? BLOCKS.STONE_WARM.id : BLOCKS.STONE_PALE.id);
+    if (rng.chance(0.35)) T.put(bx, bz, by + 2, BLOCKS.STONE_PALE.id);
+  }
+
+  // Leaf-moss scatter just outside the rim
+  const MOSSY = [BLOCKS.LEAF_MINT, BLOCKS.LEAF_CREAM];
+  for (let i = 0; i < 8 + rng.int(0, 5); i++) {
+    const a = rng.range(0, Math.PI * 2);
+    const d = rng.range(rx + 1, rx + 4);
+    const sx = Math.round(cx + Math.cos(a) * d);
+    const sz = Math.round(cz + Math.sin(a) * d);
+    if (!T.dry(sx, sz)) continue;
+    T.put(sx, sz, T.top(sx, sz) + 1, rng.pick(MOSSY).id);
+  }
+
+  T.reserve(cx, cz, rx + 6);
+  return { kind: 'hotspring', at: [cx, cz] };
+}
+
 /* Ordered by preference within a kind: if the terrain does not support the
  * plan's first choice the site falls through to something it *does* support,
  * rather than being dropped or forced. */
@@ -918,6 +1055,9 @@ stoneCrossing.kind = 'crossing';
 lilyPond.kind = 'pond';
 blossomGrove.kind = 'grove';
 cliffOverlook.kind = 'overlook';
+hotSpring.kind = 'hotspring';
+ancientWell.kind = 'well';
+ruinedArch.kind = 'arch';
 
 const GRAMMARS = {
   waterfall: [waterfallGarden, stoneCrossing, cliffOverlook, blossomGrove],
@@ -925,6 +1065,7 @@ const GRAMMARS = {
   pond: [lilyPond, stoneCrossing, blossomGrove],
   overlook: [cliffOverlook, blossomGrove],
   grove: [blossomGrove, lilyPond],
+  hotspring: [hotSpring, cliffOverlook, blossomGrove],
 };
 
 /**
@@ -980,6 +1121,8 @@ export function buildStamps(world: any, rng: any) {
     ring: monolithRing,
     tombs: tombstoneField,
     biosphere: floatingBiosphere,
+    well: ancientWell,
+    arch: ruinedArch,
   };
   for (const site of plan.landmarks || []) {
     const [sx, sz] = site.at;
