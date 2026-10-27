@@ -187,8 +187,9 @@ async function start(): Promise<void> {
     seed: { currentWord: () => currentSeedWord, push: pushSeedUrl, gen: genSeedWord },
   });
   const hud = createHud({ dayNight, drone, camera: fpCam.camera });
+  hud.onSettingsClick(() => { if (!settings.open) settings.toggle(); });
   const pause = createPause({ input, map, onNewWorld: () => { pushSeedUrl(genSeedWord()); location.reload(); } });
-  pause.onPaletteChange((name) => {
+  settings.onPaletteChange((name) => {
     setVoxelPalette(name);
 
     // Water uniforms were cloned at material creation — push updated palette colours.
@@ -459,6 +460,7 @@ async function start(): Promise<void> {
       bootEl.addEventListener(
         'click',
         () => {
+          hud.showSettingsBtn();
           bootEl.classList.add('dismissed');
           bootEl.addEventListener('transitionend', () => bootEl.classList.add('gone'), {
             once: true,

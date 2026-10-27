@@ -1,5 +1,5 @@
 /**
- * Developer rendering controls — tilde / backquote.
+ * Settings panel — gear button or tilde / backquote.
  *
  * Live controls for outline scale, zoom limits, atmosphere, and world
  * streaming. Values persist in localStorage and apply immediately.
@@ -9,6 +9,7 @@ import { DEFAULT_STREAM_RADIUS } from '../core/voxel';
 import { DEFAULT_SHADOW_RESOLUTION } from '../render/lighting';
 import { PLANET_RADIUS_DEFAULT } from '../render/planet.glsl';
 import type { DayNight } from '../render/day-night';
+import { VOXEL_PALETTES, activePaletteName } from '../core/palette';
 
 const STORE_KEY = 'VoxelWorld.settings';
 const SETTINGS_VERSION = 2;
@@ -102,6 +103,21 @@ const CSS = `
 #settings .toggle:checked { background:rgba(201,173,115,.32); }
 #settings .toggle:checked::after { transform:translateX(15px); background:var(--gold); }
 #settings .divider { height:1px; margin:2px 0 16px; background:var(--line); }
+#settings .palette-row {
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  margin-bottom:16px;
+}
+#settings .palette-row label {
+  font-size:12px; font-weight:500; color:var(--ink-soft); white-space:nowrap;
+}
+#settings .palette-row select {
+  flex:1; height:34px; padding:0 10px;
+  border:1px solid rgba(201,173,115,.18); border-radius:8px;
+  background:rgba(30,28,35,.72); color:var(--ink-soft);
+  font:600 11px/1 Inter, ui-sans-serif, system-ui, sans-serif;
+  letter-spacing:.06em; cursor:pointer; appearance:none;
+}
+#settings .palette-row select:focus { outline:none; border-color:var(--gold); }
 #settings .foot { display:flex; justify-content:flex-start; align-items:center;
                   margin-top:2px; padding-top:16px; border-top:1px solid var(--line); }
 #settings button {
@@ -243,11 +259,11 @@ export function createSettings({ rig, atmo, input, world, dayNight, seed }: Sett
   const root = document.createElement('div');
   root.id = 'settings';
   root.innerHTML = `
-    <div class="panel" role="dialog" aria-label="Developer controls">
+    <div class="panel" role="dialog" aria-label="Settings">
       <header>
-        <h2>Developer</h2>
+        <h2>Settings</h2>
         <span class="perf" id="set-fps">-- fps</span>
-        <button class="icon" type="button" id="set-x" aria-label="Close developer controls">×</button>
+        <button class="icon" type="button" id="set-x" aria-label="Close settings">×</button>
       </header>
       <div class="row">
         <label for="set-seed">World seed</label>
@@ -324,6 +340,10 @@ export function createSettings({ rig, atmo, input, world, dayNight, seed }: Sett
                min="${RANGES.windStrength.min}" max="${RANGES.windStrength.max}"
                step="${RANGES.windStrength.step}" />
       </div>
+      <div class="palette-row">
+        <label for="set-palette">Palette</label>
+        <select id="set-palette"></select>
+      </div>
       <div class="foot">
         <button type="button" id="set-new-world">🎲 New world</button>
         <button type="button" id="set-reset" aria-label="Reset settings" style="margin-left:auto;">↺</button>
@@ -346,6 +366,17 @@ export function createSettings({ rig, atmo, input, world, dayNight, seed }: Sett
     e.stopPropagation();
   });
   root.querySelector('#set-new-world')!.addEventListener('click', () => applyNewSeed(seed.gen()));
+
+  const paletteSelect = root.querySelector('#set-palette') as HTMLSelectElement;
+  for (const [k, p] of Object.entries(VOXEL_PALETTES)) {
+    const opt = document.createElement('option');
+    opt.value = k;
+    opt.textContent = (p as { label: string }).label;
+    if (k === activePaletteName) opt.selected = true;
+    paletteSelect.appendChild(opt);
+  }
+  let _onPaletteChange: ((name: string) => void) | null = null;
+  paletteSelect.addEventListener('change', () => _onPaletteChange?.(paletteSelect.value));
 
   const els = {
     ink: root.querySelector('#set-ink') as HTMLInputElement,
@@ -503,11 +534,7 @@ export function createSettings({ rig, atmo, input, world, dayNight, seed }: Sett
 
   addEventListener('keydown', (e: KeyboardEvent) => {
     if (e.repeat) return;
-    if (e.code === 'Backquote') {
-      if (!open && input.paused) return;
-      e.preventDefault();
-      setOpen(!open);
-    } else if (e.code === 'Escape' && open) {
+    if (e.code === 'Escape' && open) {
       setOpen(false);
     }
   });
@@ -519,6 +546,8 @@ export function createSettings({ rig, atmo, input, world, dayNight, seed }: Sett
     get open() {
       return open;
     },
+    toggle: () => setOpen(!open),
+    onPaletteChange(cb: (name: string) => void) { _onPaletteChange = cb; },
     values,
     update() {
       if (!open) return;

@@ -58,6 +58,21 @@ const CSS = `
   letter-spacing:.09em; font-variant-numeric:tabular-nums; opacity:.82;
   color:var(--ink-soft);
 }
+#hud .settings-btn {
+  position:absolute; top:max(14px, env(safe-area-inset-top));
+  right:max(14px, env(safe-area-inset-right));
+  pointer-events:none; width:38px; height:38px;
+  opacity:0; transition:opacity .4s ease, background .14s ease, border-color .14s ease, color .14s ease;
+  border:1px solid var(--line); border-radius:10px;
+  background:rgba(20,19,24,.72); backdrop-filter:blur(14px) saturate(1.08);
+  box-shadow:var(--hud-shadow); color:var(--ink-soft);
+  font-size:18px; cursor:pointer; display:grid; place-items:center;
+  -webkit-tap-highlight-color:transparent;
+}
+#hud .settings-btn.visible { opacity:.82; pointer-events:auto; }
+#hud .settings-btn:hover, #hud .settings-btn:focus-visible {
+  outline:none; background:rgba(42,39,48,.88); border-color:var(--gold); color:var(--gold);
+}
 @media (max-width:640px), (pointer:coarse) {
   #hud .shortcuts { display:none; }
 }
@@ -78,6 +93,7 @@ export function createHud({ dayNight, drone, camera }: HudDeps) {
   root.id = 'hud';
   root.innerHTML = `
     <div class="place show" id="hud-place">VoxelWorld</div>
+    <button class="settings-btn" id="hud-settings" type="button" aria-label="Settings">⚙</button>
     <div class="shortcuts" id="hud-shortcuts">
       <span class="shortcut"><kbd>Y</kbd>Sit</span>
       <span class="shortcut"><kbd>M</kbd>Map</span>
@@ -92,6 +108,7 @@ export function createHud({ dayNight, drone, camera }: HudDeps) {
 
   const place = root.querySelector('#hud-place') as HTMLElement;
   const shortcuts = root.querySelector('#hud-shortcuts') as HTMLElement;
+  const settingsBtn = root.querySelector('#hud-settings') as HTMLButtonElement;
   const timeEl = root.querySelector('#hud-time') as HTMLElement;
   const droneEl = root.querySelector('#hud-drone') as HTMLElement;
 
@@ -99,6 +116,8 @@ export function createHud({ dayNight, drone, camera }: HudDeps) {
   setTimeout(() => shortcuts.classList.add('show'), 900);
 
   return {
+    onSettingsClick(cb: () => void) { settingsBtn.addEventListener('click', cb); },
+    showSettingsBtn() { settingsBtn.classList.add('visible'); },
     update() {
       // Time of day — always visible
       const tod = dayNight.timeOfDay;
