@@ -5,6 +5,8 @@ const FLY = {
   speed: 20,
   sprintSpeed: 60,
   floorClearance: 1.75, // eye height above terrain floor
+  // ponytail: fixed descent cap; lower if floor still drops too fast over cliffs
+  floorDescentRate: 8.0, // max m/s the floor constraint can fall
 };
 
 export interface FlyMode {
@@ -30,6 +32,7 @@ export interface FlyMode {
 
 export function createFlyMode(grid: VoxelGrid): FlyMode {
   let active = false;
+  let smoothedFloor = 0;
 
   return {
     get active() {
@@ -40,6 +43,13 @@ export function createFlyMode(grid: VoxelGrid): FlyMode {
       active = true;
       camera.rotation.order = 'YXZ';
       camera.rotation.z = 0;
+      // Scan upward to clear any objects directly above the player before entering fly mode.
+      const cx = Math.round(camera.position.x), cz = Math.round(camera.position.z);
+      let clearY = Math.ceil(camera.position.y) + 1;
+      const scanTop = clearY + 48;
+      while (clearY < scanTop && grid.isSolid(cx, clearY, cz)) clearY++;
+      if (clearY > camera.position.y + 1) camera.position.y = clearY + 2;
+      smoothedFloor = grid.surfaceY(camera.position.x, camera.position.z) + FLY.floorClearance;
     },
 
     exit() {
@@ -83,9 +93,12 @@ export function createFlyMode(grid: VoxelGrid): FlyMode {
       camera.position.z += dz * speed * dt;
       camera.position.y += altDelta * dt;
 
-      // Terrain floor constraint — cannot fly below ground
-      const floor = grid.surfaceY(camera.position.x, camera.position.z) + FLY.floorClearance;
-      if (camera.position.y < floor) camera.position.y = floor;
+      // Terrain floor: smooth downward so cliffs don't snap the floor away beneath the player.
+      // Ascent is uncapped — rising terrain must be respected immediately.
+      const rawFloor = grid.surfaceY(camera.position.x, camera.position.z) + FLY.floorClearance;
+      const maxDrop = FLY.floorDescentRate * dt;
+      smoothedFloor = Math.max(rawFloor, smoothedFloor - maxDrop);
+      if (camera.position.y < smoothedFloor) camera.position.y = smoothedFloor;
     },
   };
 }

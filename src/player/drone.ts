@@ -20,6 +20,8 @@ const DRONE = {
   heightSmoothRate: 3.5,
   heightPGain: 4.0,   // proportional gain on altitude error
   vertVelMax: 14.0,   // max vertical speed (m/s) — enough for steep slopes at cruise
+  // ponytail: fixed descent cap; lower if drone still drops too fast over cliffs
+  targetDescentRate: 6.0, // max m/s the terrain target can fall (ascent is uncapped)
   pitchSmoothRate: 1.8,
 };
 
@@ -65,7 +67,14 @@ export function createDroneMode(grid: VoxelGrid): DroneMode {
       yaw = camera.rotation.y;
       smoothedTargetY = camera.position.y;
       const groundY = grid.surfaceY(camera.position.x, camera.position.z);
-      hoverAltitude = Math.max(DRONE.enterLiftHeight, camera.position.y - groundY);
+      // Scan upward to find the first clear block above the player's head,
+      // so the drone launches above trees, bridges, or overhangs.
+      const cx = Math.round(camera.position.x), cz = Math.round(camera.position.z);
+      let clearY = Math.ceil(camera.position.y) + 1;
+      const scanTop = clearY + 48;
+      while (clearY < scanTop && grid.isSolid(cx, clearY, cz)) clearY++;
+      const safeAltitude = (clearY + 4) - groundY; // 4 blocks of headroom above obstruction
+      hoverAltitude = Math.max(DRONE.enterLiftHeight, safeAltitude, camera.position.y - groundY);
     },
 
     beginLanding(): void {
@@ -132,7 +141,10 @@ export function createDroneMode(grid: VoxelGrid): DroneMode {
 
       const gY = grid.surfaceY(camera.position.x, camera.position.z);
       const rawTargetY = gY + hoverAltitude;
-      smoothedTargetY += (rawTargetY - smoothedTargetY) * Math.min(1, dt * DRONE.heightSmoothRate);
+      const targetDelta = rawTargetY - smoothedTargetY;
+      // Ascend freely to clear rising terrain; cap descent so cliff drops don't plunge the drone.
+      const maxDrop = DRONE.targetDescentRate * dt;
+      smoothedTargetY += Math.max(targetDelta, -maxDrop) * Math.min(1, dt * DRONE.heightSmoothRate);
 
       const error = smoothedTargetY - camera.position.y;
       const vertV = Math.max(-DRONE.vertVelMax, Math.min(DRONE.vertVelMax, error * DRONE.heightPGain));
