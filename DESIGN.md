@@ -15,6 +15,7 @@ Developer reference. For user-facing documentation see [README.md](README.md).
 | `src/world/terrain.ts` | Heightfield generator (contour-disc terracing, river carving, biome fields), river flow bake |
 | `src/world/vegetation.ts` | `plantTree()`, `plantBush()` (4 silhouette forms), ferns, moss, lichen, grass |
 | `src/world/water.ts` | `makeDepthMap()` (RG texture), `createWater()` (wave shader, Beer-Lambert absorption) |
+| `src/world/planner.ts` | World planner: island centres, stepping-stone placement, bridge chains, biome fields |
 | `src/world/props.ts` | Bridges, rocks, and other static props placed from terrain data |
 | `src/render/renderer.ts` | Three.js WebGLRenderer setup, shadow map config per tier |
 | `src/render/lighting.ts` | `Atmosphere` class: sun/hemi/fill lights, sky dome mesh, `skyUniformValues()` |
@@ -145,6 +146,16 @@ return Math.max(0, (d - 0.3) / 0.7);
 
 Returns 0 during daytime (±30% of the cycle around noon), ramping to 1 at midnight. Used to gate stars, aurora visibility, and `uNight` in the sky shader.
 
+### Voxel time-of-day tints
+
+`DayNight.voxelUniforms` (set to `world.meshes.material.userData.uniforms` in `main.ts`) receives live per-frame pushes:
+
+- `uSunDir` — live sun direction vector.
+- `uSunAmbient` — `0.08 + elev * 0.18` (scales diffuse contribution with sun elevation).
+- `uFillAmbient` — slightly higher at night (`0.04 + (1 - elev) * 0.04`) to simulate moon bounce and prevent total black.
+- `uSunTint` — warm orange-gold at the horizon, neutral white at noon. Driven by `horizonWarm = pow(max(0, 1 - elev * 2.5), 2)` and the keyframed sun colour.
+- `uAmbientTint` — cool blue at night (`r -0.08 * night, g -0.04 * night, b +0.12 * night`), neutral at day.
+
 ---
 
 ## GPU tiering
@@ -194,6 +205,28 @@ Runs per chunk in a worker. For each axis direction and each slice, merges adjac
 ### LOD fade
 
 Freshly loaded chunks fade in over ~0.5 s via a `uLodAlpha` uniform and Bayer 4×4 ordered dither in the fragment shader. The update loop only iterates `fadingMeshes` (a `Set`) — O(fading), not O(all loaded chunks). Meshes remove themselves from the set when `lodAlpha` reaches 1.
+
+---
+
+## World planner
+
+`src/world/planner.ts` — `planWorld(seed, size)` runs before terrain generation and returns a `WorldPlan` that terrain, props, and the map all read from.
+
+### Island layout
+
+3–5 main islands are scattered by dart throwing with minimum separation (`islandMinSep = islandRadius * 2.2`) and a margin from the world boundary. Between each pair of main islands, 1–2 stepping-stone islands are placed at interpolated positions with a perpendicular jitter, giving organic rather than straight chains.
+
+```
+islandRadius    = size * 0.21   (per-island radius)
+steppingRadius  = islandRadius * 0.35
+islandMinSep    = islandRadius * 2.2
+```
+
+`plan.islandCenters` and `plan.stoneIslands` are the authority on where land is — every downstream consumer (terrain mask, bridge placement, minimap) derives from them rather than hard-coding a coastline fraction.
+
+### Bridge chains
+
+`bridgeChains` is an array of waypoint lists: `[mainA, ...stones, mainB]`. `props.ts` walks each chain and places a wooden arch bridge between consecutive waypoints, landing on the nearest solid ground at each end.
 
 ---
 
@@ -346,6 +379,43 @@ drainDroneAltDelta(dt = 0): number {
 ```
 
 Returns **m/s rate** (not a delta). The drone/fly caller does `hoverAltitude += result * dt`. Scroll wheel accumulates a raw position delta (`_droneAltDelta -= e.deltaY * 0.02`); dividing by `dt` converts it back to a rate so `rate * dt` restores the original per-frame offset. Mouse Y movement is intentionally **not** wired to altitude — any upward mouse drift would cause continuous climb.
+
+---
+
+## Minimap
+
+`src/ui/map.ts`
+
+`bakeTerrain()` iterates every column, reads `BLOCK_BY_ID[id].top` for the highest solid block, and writes an RGBA pixel. Water columns use the water palette colours. The canvas is redrawn on player move; `invalidateTerrain()` forces a full rebake (called after palette switches).
+
+### Player arrow
+
+The heading arrow always reflects where the camera is facing — `fpCam.camera.rotation.y + Math.PI` converts Three.js camera convention (forward = -Z) to map-north-up heading regardless of walk, fly, or drone mode. Previously the arrow switched source between `fpCam` and `controller.heading`, causing it to snap when entering drone mode; it now reads camera yaw unconditionally.
+
+### Compass labels
+
+N/E/S/W labels are drawn at fixed canvas-edge positions each frame, rotated opposite to the player heading so the correct compass point always faces up.
+
+### Touch
+
+On touch devices the map button wires to the same `map.toggle()` as the M key. Touch tap-outside-panel closes the map.
+
+---
+
+## Seed & URL
+
+`src/core/rng.ts` — `genSeedWord()` generates a random human-readable word from a fixed word list. `hashSeedWord(word)` hashes it to a 32-bit integer for use as the noise seed.
+
+On startup (`main.ts`):
+
+1. `currentSeedWord` is generated randomly.
+2. If `?seed=<word>` is present in the URL, it overrides the generated word.
+3. `hashSeedWord(currentSeedWord)` → `SEED` (used for all world generation).
+4. `pushSeedUrl(currentSeedWord)` writes `?seed=<word>` to the URL immediately so the seed is always visible, even on first load.
+
+`pushSeedUrl(word)` uses `history.replaceState` (not `pushState`) so the browser back button is not cluttered.
+
+The settings panel's seed input and the pause menu's **Generate new world** button both call `pushSeedUrl(newWord)` then `location.reload()`, which re-enters the startup path with the new seed in the URL.
 
 ---
 

@@ -1,24 +1,23 @@
 # Voxel World
 
-A first-person explorer for a procedurally generated spherical voxel world (Three.js + TypeScript + Vite). Walk, drone, or fly across the planet, exploring terraced terrain, rivers, blossom trees, bridges, a companion dog, and a real-time day/night cycle with animated aurora. Walk the curved surface of the island on a tiny planet — the world bends away from you at the horizon.
+A first-person explorer for a procedurally generated spherical voxel world (Three.js + TypeScript + Vite). Walk, drone, or fly across an archipelago of continents connected by bridges, exploring terraced terrain, rivers, blossom trees, a companion dog, and a real-time day/night cycle with animated aurora. The world bends away from you at the horizon — a Mario-Galaxy-style curve applied entirely on the GPU.
 
 Inspired by **Verdant** [https://github.com/xikhar/verdant] and **Petalfell** [https://github.com/xikhar/voxel-game-original], along with aspects of **Beyond Fable** [https://github.com/xikhar/beyond-fable].
 
 ## Highlights
 
-- **Curved planet** — GPU vertex bending gives the island a Mario-Galaxy-style curvature. Physics stay flat; only the visuals curve.
-- **Day/night cycle** — a 20-minute day with seven keyframed sky palettes. Watch the sun rise through orange haze, reach a pale noon, and set again.
-- **Night sky** — procedural stars, a Milky Way with Great Rift dust lane, emission nebulae, and a moon disc. Fades out near sunrise.
-- **Aurora** — animated curtain aurora appears at deep night: flickering vertical rays, sweeping pulse waves, slow breathing intensity, and colour that shifts from green through cyan to magenta and ghostly white at peaks.
+- **Archipelago worldgen** — 3–5 main continents scattered across the ocean, connected by chains of stepping-stone islands and arched wooden bridges. Each seed produces a distinct layout.
+- **Curved planet** — GPU vertex bending gives the world a sphere-like horizon. Physics stay flat; only the visuals curve.
+- **Day/night cycle** — a 20-minute day with seven keyframed sky palettes and time-of-day tints pushed live to the voxel material. Watch the sun rise through orange haze, reach a pale noon, and set again.
+- **Night sky** — procedural stars, a Milky Way with Great Rift dust lane, emission nebulae, and a moon disc.
+- **Aurora** — animated curtain aurora at deep night: flickering vertical rays, sweeping pulse waves, and colour that shifts from green through cyan to magenta and ghostly white at peaks.
 - **Volumetric-style atmosphere** — sunrise/sunset limb glow, crepuscular rays (eight-tap radial blur), and animated cloud cover.
-- **Fly mode** — press F to enter free-flight. WASD moves in any direction; Space/C ascend and descend. You can climb as high as you like to view the planet from orbit, but you cannot fly below the terrain. Press F again to land.
-- **Drone mode** — press G to take off. The drone always flies forward; A/D steer. The drone terrain-follows smoothly, gradually adjusting altitude to match the ground contours. Ascend and descend with Space/C or scroll. Press L to land; pulling up cancels the landing.
-- **Ink edge rendering** — a custom analytic line pass draws toon-style dark and light strokes at block boundaries, composited in display space after tone mapping so outlines never bloom or saturate. Toggle with E.
-- **LOD fade** — distant chunks dissolve in with a Bayer 4×4 ordered dither rather than popping.
-- **Rich vegetation** — ferns, red ferns, thick moss, pale lichen on cliff faces, tall shrubs, grass tufts, willow trees, and spire trees join the existing oaks and blossoms. Bushes generate in four silhouette forms: mound, spread, tall, and cluster.
-- **Touch controls** — full nippleJS virtual joystick overlay on phones and tablets. Left stick moves, right-half swipe looks, dedicated buttons for jump, ascend/descend, sprint, drone, land, edge toggle, and time stepping. Adapts automatically on load.
-- **GPU tiering** — detects device capability at startup (cores + memory + UA) and adjusts DPR cap, shadow resolution, bloom, AO taps, and blur samples across four tiers (high / mid / low / very-low). Tested against Samsung Galaxy S22 Ultra, Apple iPad, and budget devices up to seven years old.
-- **TypeScript** — the entire codebase is strict-mode TypeScript.
+- **Fly and drone modes** — free-flight (F) or terrain-following drone (G) with P-controller altitude hold and smooth landing state machine.
+- **Ink edge rendering** — toon-style dark and light strokes at block boundaries, composited in display space after tone mapping. Toggle with E.
+- **Rich vegetation** — oaks, blossoms, willows, spire trees, ferns, moss, lichen, grass, and bushes in four silhouette forms.
+- **Touch controls** — full nippleJS virtual joystick overlay with compass-aware minimap, auto-detected on load.
+- **GPU tiering** — four quality tiers (high / mid / low / very-low) tuned at startup from device cores, memory, and UA.
+- **Seeded worlds** — the seed word is always visible in the URL (`?seed=word`). Share a URL to share an exact world; generate a new one from the pause menu.
 
 For architecture and implementation details, see [DESIGN.md](DESIGN.md).
 
@@ -90,6 +89,9 @@ The settings panel (`` ` ``) exposes:
 | Load radius | — | How many chunks stream around the player |
 | Shadow resolution | — | Shadow map quality |
 | Bloom | — | Post-process bloom intensity |
+| World seed | text | The seed word for the current world |
+
+The pause menu (Esc) also has a **Generate new world** button that picks a random seed, writes it to the URL, and reloads.
 
 ## Dependencies
 
