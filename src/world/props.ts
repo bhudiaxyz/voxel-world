@@ -143,19 +143,20 @@ export function placeLantern(grid: any, x: any, y: any, z: any) {
 }
 
 /**
- * A sea bridge between two island centres, landing at low-elevation shore.
+ * A sea bridge between two continent/island centres, landing at low-elevation shore.
  *
- * Key differences from a river bridge:
- *  - Scans outward from each centre to find the LOWEST land crossing point
- *    (beach/grassland level) rather than stopping at the first land hit.
- *    This keeps landings near the sand rather than on cliffs.
- *  - Deck height is fixed just above sea level (SEA + 3) so the whole span
- *    sits low and reads as a causeway.
- *  - At each land end the deck ramps down to ground level over several steps
- *    so the bridge is continuous — no floating section, no buried section.
- *  - Stone piers extend to seabed over open water.
+ * Three architecture styles are supported:
+ *  - 'trestle'    Plank deck, timber piers every 5 blocks, wood railing.
+ *                 Best for short spans.
+ *  - 'arch'       Stone-warm arch with peak ~20% of water span above deck,
+ *                 stone parapets. Best for medium spans.
+ *  - 'suspension' Two tall beam pylons near each shore, catenary of
+ *                 PLANK_PALE cables drooping to mid-span. Best for long spans.
+ *
+ * All styles share the same shore-finding logic and ramp-to-ground landing.
  */
-export function buildSeaBridge(world: any, ax: number, az: number, bx: number, bz: number) {
+export function buildSeaBridge(world: any, ax: number, az: number, bx: number, bz: number,
+                               style: 'trestle' | 'arch' | 'suspension' = 'trestle') {
   const { grid, heights, size: S } = world;
   const SEA = Math.floor(WATER.level);
   const BEACH = SEA + 5; // maximum landing height — stay at beach/grassland level
@@ -235,33 +236,123 @@ export function buildSeaBridge(world: any, ax: number, az: number, bx: number, b
         for (let j = -halfW; j <= halfW; j++) put(j, y, BLOCKS.BEAM.id);
     }
 
-    // Railings (skip inside ramp on land so they don't stick up through terrain)
-    if (!isLand || rampFrac > 0.5) {
-      for (const side of [-halfW - 1, halfW + 1]) {
-        put(side, thisY, BLOCKS.BEAM.id);
-        if (i % 4 === 0) put(side, thisY + 1, BLOCKS.BEAM.id);
-        put(side, thisY + 2, BLOCKS.PLANK_PALE.id);
-      }
-    }
+    const showRail = !isLand || rampFrac > 0.5;
 
-    // Stone piers down to seabed every 5 blocks over water
-    if (!isLand && i % 5 === 0) {
-      for (let y = thisY - 1; y > 0; y--) {
-        if (grid.isSolid(xi, y, zi)) break;
-        put(0, y, y > SEA - 2 ? BLOCKS.BEAM.id : BLOCKS.STONE.id);
+    if (style === 'trestle') {
+      // Timber railing: dark beam uprights every 4 blocks, pale capping rail
+      if (showRail) {
+        for (const side of [-halfW - 1, halfW + 1]) {
+          put(side, thisY, BLOCKS.BEAM.id);
+          if (i % 4 === 0) put(side, thisY + 1, BLOCKS.BEAM.id);
+          put(side, thisY + 2, BLOCKS.PLANK_PALE.id);
+        }
+      }
+      // Timber piers down to seabed every 5 blocks over water
+      if (!isLand && i % 5 === 0) {
+        for (let y = thisY - 1; y > 0; y--) {
+          if (grid.isSolid(xi, y, zi)) break;
+          put(0, y, y > SEA - 2 ? BLOCKS.BEAM.id : BLOCKS.STONE.id);
+        }
+      }
+
+    } else if (style === 'arch') {
+      // Stone parapet: solid stone_warm wall 2 blocks tall on each side
+      if (showRail) {
+        for (const side of [-halfW - 1, halfW + 1]) {
+          put(side, thisY,     BLOCKS.STONE_WARM.id);
+          put(side, thisY + 1, BLOCKS.STONE_WARM.id);
+        }
+      }
+      // Stone arch: parabolic column of STONE_WARM below the deck over water.
+      // Column height = archH * (1 - (2t-1)²) where t = 0..1 along water span.
+      if (!isLand) {
+        const waterSpan = endI - startI;
+        const archH = Math.max(4, Math.round(waterSpan * 0.18));
+        const t = (i - startI) / Math.max(1, waterSpan);
+        const colHeight = Math.round(archH * (1 - Math.pow(2 * t - 1, 2)));
+        for (let y = thisY - 1; y >= thisY - colHeight; y--) {
+          if (grid.isSolid(xi, y, zi)) break;
+          put(0, y, y > SEA - 2 ? BLOCKS.STONE_WARM.id : BLOCKS.STONE.id);
+        }
+      }
+
+    } else {
+      // suspension: minimal railing — just pale capping rail, no uprights
+      if (showRail) {
+        for (const side of [-halfW - 1, halfW + 1]) {
+          put(side, thisY + 1, BLOCKS.PLANK_PALE.id);
+        }
       }
     }
   }
 
-  // Lanterns at quarter-points and mid-span (water section only)
-  for (const frac of [0.25, 0.5, 0.75]) {
-    const i = Math.round(startI + (endI - startI) * frac);
-    if (colH(i) > SEA) continue; // skip if over land
-    const wx = ax + ux * i, wz = az + uz * i;
-    const x = clamp(Math.round(wx + rpx * (halfW + 1)), 0, S - 1);
-    const z = clamp(Math.round(wz + rpz * (halfW + 1)), 0, S - 1);
-    grid.set(x, deckY + 3, z, BLOCKS.BEAM.id);
-    grid.set(x, deckY + 4, z, BLOCKS.LANTERN.id);
+  // ---- Style-specific post-pass (pylons, cables, lanterns) ----
+
+  const waterSpan = endI - startI;
+
+  if (style === 'trestle') {
+    // Lanterns at quarter-points and mid-span (water section only)
+    for (const frac of [0.25, 0.5, 0.75]) {
+      const i = Math.round(startI + waterSpan * frac);
+      if (colH(i) > SEA) continue;
+      const wx = ax + ux * i, wz = az + uz * i;
+      const x = clamp(Math.round(wx + rpx * (halfW + 1)), 0, S - 1);
+      const z = clamp(Math.round(wz + rpz * (halfW + 1)), 0, S - 1);
+      grid.set(x, deckY + 3, z, BLOCKS.BEAM.id);
+      grid.set(x, deckY + 4, z, BLOCKS.LANTERN.id);
+    }
+
+  } else if (style === 'arch') {
+    // Lanterns on top of parapets at quarter-points
+    for (const frac of [0.25, 0.75]) {
+      const i = Math.round(startI + waterSpan * frac);
+      if (colH(i) > SEA) continue;
+      const wx = ax + ux * i, wz = az + uz * i;
+      for (const side of [-halfW - 1, halfW + 1]) {
+        const x = clamp(Math.round(wx + rpx * side), 0, S - 1);
+        const z = clamp(Math.round(wz + rpz * side), 0, S - 1);
+        grid.set(x, deckY + 2, z, BLOCKS.BEAM.id);
+        grid.set(x, deckY + 3, z, BLOCKS.LANTERN.id);
+      }
+    }
+
+  } else {
+    // Suspension: two pylons ~15% of waterSpan from each shore
+    const pylonH = Math.max(6, Math.round(waterSpan * 0.15));
+    const pylonOffsets = [
+      Math.round(startI + waterSpan * 0.15),
+      Math.round(startI + waterSpan * 0.85),
+    ];
+    for (const pi of pylonOffsets) {
+      const wx = ax + ux * pi, wz = az + uz * pi;
+      for (const side of [-halfW - 1, halfW + 1]) {
+        const px = clamp(Math.round(wx + rpx * side), 0, S - 1);
+        const pz = clamp(Math.round(wz + rpz * side), 0, S - 1);
+        const baseY = deckY;
+        for (let y = baseY; y <= baseY + pylonH; y++) grid.set(px, y, pz, BLOCKS.BEAM.id);
+        // lantern cap
+        grid.set(px, baseY + pylonH + 1, pz, BLOCKS.LANTERN.id);
+      }
+    }
+
+    // Catenary cables: PLANK_PALE from each pylon top drooping to mid-span.
+    // y(t) = pylonTopY - pylonH * 4*t*(1-t)  where t goes pylon→midspan (0→1).
+    const pylonTopY = deckY + pylonH;
+    const midI = Math.round((startI + endI) / 2);
+    for (const [pylonI, dir] of [[pylonOffsets[0], 1], [pylonOffsets[1], -1]] as [number,number][]) {
+      const steps = Math.abs(midI - pylonI);
+      for (let s = 0; s <= steps; s++) {
+        const t = s / Math.max(1, steps);
+        const cableI = pylonI + dir * s;
+        const cableY = Math.round(pylonTopY - pylonH * 4 * t * (1 - t));
+        const wx = ax + ux * cableI, wz = az + uz * cableI;
+        for (const side of [-halfW - 1, halfW + 1]) {
+          const cx2 = clamp(Math.round(wx + rpx * side), 0, S - 1);
+          const cz2 = clamp(Math.round(wz + rpz * side), 0, S - 1);
+          grid.set(cx2, cableY, cz2, BLOCKS.PLANK_PALE.id);
+        }
+      }
+    }
   }
 
   return {
@@ -323,7 +414,11 @@ export function buildStructures(world: any, rng: any) {
     for (const chain of plan.bridgeChains as [number, number][][]) {
       for (let k = 0; k < chain.length - 1; k++) {
         const [ax, az] = chain[k], [bx, bz] = chain[k + 1];
-        const sb = buildSeaBridge(world, ax, az, bx, bz);
+        const spanLen = Math.hypot(bx - ax, bz - az);
+        // ponytail: fixed thresholds; tune if world scale changes
+        const bridgeStyle: 'trestle' | 'arch' | 'suspension' =
+          spanLen < 120 ? 'trestle' : spanLen < 220 ? 'arch' : 'suspension';
+        const sb = buildSeaBridge(world, ax, az, bx, bz, bridgeStyle);
         if (sb) {
           props.bridges.push(sb);
           const dx = Math.sign(sb.far[0] - sb.near[0]), dz = Math.sign(sb.far[1] - sb.near[1]);

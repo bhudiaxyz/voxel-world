@@ -25,7 +25,7 @@ import { createFlyMode } from './player/fly';
 import { detectGpuTier } from './render/gpu-tier';
 import { createTouchControls, isTouchDevice } from './ui/touch-controls';
 
-export let currentSeedWord = genSeedWord();
+export let currentSeedWord = 'LusaliBenoruLezagi';
 const urlWord = new URLSearchParams(location.search).get('seed');
 if (urlWord) currentSeedWord = urlWord;
 const SEED = hashSeedWord(currentSeedWord);

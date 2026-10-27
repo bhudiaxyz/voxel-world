@@ -277,10 +277,10 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
 
   // Nearest main island biome index (0=tropical 1=temperate 2=arid 3=tundra)
   const nearestIslandBiome = (x: number, z: number): number => {
-    if (!plan?.islandCenters?.length) return 1;
+    if (!plan?.continentCenters?.length) return 1;
     let bestDist = Infinity, bestIdx = 0;
-    for (let i = 0; i < plan.islandCenters.length; i++) {
-      const [ix, iz] = plan.islandCenters[i];
+    for (let i = 0; i < plan.continentCenters.length; i++) {
+      const [ix, iz] = plan.continentCenters[i];
       const d = Math.hypot(x - ix, z - iz);
       if (d < bestDist) { bestDist = d; bestIdx = i; }
     }

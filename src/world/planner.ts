@@ -60,11 +60,12 @@ const FEATURE = { elevation: 210, temperature: 320, moisture: 300, magic: 250 };
  *
  * Multiple islands are scattered across the world; each one has this radius.
  * Terrain perturbs the rim with noise. Every downstream decision that needs to
- * know where land ends derives it from `plan.islandCenters` + this constant so
+ * know where land ends derives it from `plan.continentCenters` + this constant so
  * the two never drift apart.
  */
 export const ISLAND_R = 0.427; // kept for any external consumers
-export const ISLAND_RADIUS_FRAC = 0.21; // per-island radius as fraction of world size
+export const CONTINENT_RADIUS_FRAC = 0.18; // radius of main continents as fraction of world size
+export const ISLAND_RADIUS_FRAC    = 0.08; // radius of stepping/scatter islands as fraction of world size
 
 /**
  * Poisson-disc by dart throwing.
@@ -134,33 +135,47 @@ export function planWorld(seed: any, size: any) {
   const nMagic = makeNoise2D(seed + 43);
   const nEdge = makeNoise2D(seed + 44);
 
-  const islandRadius = size * ISLAND_RADIUS_FRAC;
+  const continentRadius = size * CONTINENT_RADIUS_FRAC;
 
-  /* ---- 0. island centres ------------------------------------------
-   * Scatter 3–5 main islands across the world. Minimum separation keeps them
-   * distinct; the margin keeps every island fully inside the map boundary. */
-  const islandCenters: [number, number][] = [];
-  const islandCount = clamp(2 + Math.round(rng.range(0, 2)), 3, 5);
-  const islandMargin = islandRadius * 1.1;
-  const islandMinSep = islandRadius * 2.2;
-  for (let attempts = 0; attempts < 200 && islandCenters.length < islandCount; attempts++) {
-    const ix = rng.range(islandMargin, size - islandMargin);
-    const iz = rng.range(islandMargin, size - islandMargin);
-    if (islandCenters.some(([ex, ez]) => Math.hypot(ix - ex, iz - ez) < islandMinSep)) continue;
-    islandCenters.push([ix, iz]);
+  /* ---- 0. continent centres ------------------------------------------
+   * Stratified placement: divide the map into a cols×rows grid, one cell per
+   * continent, then pick a random point inside each cell. This guarantees even
+   * coverage — no clustering, no large empty quadrants — while the per-cell
+   * jitter keeps every world looking different. */
+  const continentCenters: [number, number][] = [];
+  const islandCount = clamp(4 + Math.round(rng.range(0, 4)), 4, 8);
+  const islandMargin = continentRadius * 1.1;
+  // Choose grid dimensions closest to square for the requested count
+  const gridCols = Math.round(Math.sqrt(islandCount));
+  const gridRows = Math.ceil(islandCount / gridCols);
+  const cellW = (size - islandMargin * 2) / gridCols;
+  const cellH = (size - islandMargin * 2) / gridRows;
+  // Shuffle cell indices so continent order (and thus biome assignment) varies
+  const cellIndices = Array.from({ length: gridCols * gridRows }, (_, i) => i)
+    .sort(() => rng.range(0, 1) - 0.5);
+  for (let n = 0; n < islandCount; n++) {
+    const cell = cellIndices[n];
+    const col  = cell % gridCols;
+    const row  = Math.floor(cell / gridCols);
+    // Random point within the inner 60% of the cell to avoid edge-hugging
+    const jitterX = cellW * (0.2 + rng.range(0, 1) * 0.6);
+    const jitterZ = cellH * (0.2 + rng.range(0, 1) * 0.6);
+    const ix = islandMargin + col * cellW + jitterX;
+    const iz = islandMargin + row * cellH + jitterZ;
+    continentCenters.push([ix, iz]);
   }
 
   // 0=tropical  1=temperate  2=arid  3=tundra — each island gets one, assigned
   // by a seeded hash so the same world seed always produces the same palette.
   // We ensure variety: if there are 4+ islands, all four biomes appear.
   const ISLAND_BIOME_TYPES = ['tropical', 'temperate', 'arid', 'tundra'] as const;
-  const islandBiomes: number[] = islandCenters.map((_, idx) => {
+  const islandBiomes: number[] = continentCenters.map((_, idx) => {
     // Simple seeded hash: mix seed with index
     const h = Math.abs((seed ^ (idx * 0x9e3779b9)) >>> 0);
     return h % ISLAND_BIOME_TYPES.length;
   });
   // Guarantee all four biomes appear when there are enough islands
-  if (islandCenters.length >= 4) {
+  if (continentCenters.length >= 4) {
     const present = new Set(islandBiomes);
     let slot = 0;
     for (let b = 0; b < 4; b++) {
@@ -174,26 +189,26 @@ export function planWorld(seed: any, size: any) {
 
   /* ---- 0b. stepping-stone islands ---------------------------------
    * Place 1–2 small intermediate islands along the line between each pair of
-   * main islands. Stored separately so terrain can mask them at their own
-   * (smaller) radius while bridge-building can find the chain of hops. */
-  const steppingRadius = islandRadius * 0.35;
+   * continents. Each stone gets its own seeded radius (0.45–0.70 × islandRadius)
+   * so they vary in size rather than all being the same small disc. */
   /** Per bridge pair: ordered waypoints [mainA, ...stones, mainB] as centers */
   const bridgeChains: Array<[number, number][]> = [];
 
-  const stoneIslands: [number, number][] = []; // small islands only
-  for (let a = 0; a < islandCenters.length; a++) {
-    for (let b = a + 1; b < islandCenters.length; b++) {
-      const [ax, az] = islandCenters[a], [bx, bz] = islandCenters[b];
+  const stoneIslands: [number, number, number][] = []; // [x, z, radius]
+  for (let a = 0; a < continentCenters.length; a++) {
+    for (let b = a + 1; b < continentCenters.length; b++) {
+      const [ax, az] = continentCenters[a], [bx, bz] = continentCenters[b];
       const dist = Math.hypot(bx - ax, bz - az);
-      const nStones = dist > islandRadius * 3.5 ? 2 : 1;
+      const nStones = dist > continentRadius * 3.5 ? 2 : 1;
       const chain: [number, number][] = [[ax, az]];
       for (let k = 1; k <= nStones; k++) {
         const t = k / (nStones + 1);
         const perpX = -(bz - az) / dist, perpZ = (bx - ax) / dist;
-        const jitter = (rng.range(0, 1) - 0.5) * islandRadius * 0.4;
-        const sx = clamp(ax + (bx - ax) * t + perpX * jitter, steppingRadius * 1.5, size - steppingRadius * 1.5);
-        const sz = clamp(az + (bz - az) * t + perpZ * jitter, steppingRadius * 1.5, size - steppingRadius * 1.5);
-        stoneIslands.push([sx, sz]);
+        const jitter = (rng.range(0, 1) - 0.5) * continentRadius * 0.4;
+        const stoneR = continentRadius * (0.40 + rng.range(0, 1) * 0.25); // 0.40–0.65
+        const sx = clamp(ax + (bx - ax) * t + perpX * jitter, stoneR * 1.5, size - stoneR * 1.5);
+        const sz = clamp(az + (bz - az) * t + perpZ * jitter, stoneR * 1.5, size - stoneR * 1.5);
+        stoneIslands.push([sx, sz, stoneR]);
         chain.push([sx, sz]);
       }
       chain.push([bx, bz]);
@@ -201,14 +216,34 @@ export function planWorld(seed: any, size: any) {
     }
   }
 
+  /* ---- 0c. nearshore scatter islands ------------------------------------
+   * 2–4 small islands clustered near each continent and each stepping stone.
+   * Placed at a random angle and distance just beyond the parent's rim so they
+   * read as an archipelago fringe rather than isolated specks. */
+  const allParents: [number, number, number][] = [
+    ...continentCenters.map(([x, z]): [number, number, number] => [x, z, continentRadius]),
+    ...stoneIslands,
+  ];
+  for (const [px, pz, pr] of allParents) {
+    const count = 2 + Math.floor(rng.range(0, 1) * 3); // 2–4
+    for (let n = 0; n < count; n++) {
+      const angle = rng.range(0, 1) * Math.PI * 2;
+      const gap   = pr * (1.05 + rng.range(0, 1) * 0.35); // just outside rim
+      const nr    = continentRadius * (0.20 + rng.range(0, 1) * 0.28); // 0.20–0.48 of continent radius
+      const nx2   = clamp(px + Math.cos(angle) * gap, nr * 1.2, size - nr * 1.2);
+      const nz2   = clamp(pz + Math.sin(angle) * gap, nr * 1.2, size - nr * 1.2);
+      stoneIslands.push([nx2, nz2, nr]);
+    }
+  }
+
   /** Distance from (x,z) to the nearest island (main or stone), normalised to
-   *  islandRadius so terrain's single threshold still works.  */
+   *  continentRadius so terrain's single threshold still works.  */
   const nearIsland = (x: number, z: number) => {
-    // Main islands: raw distance
-    let best = islandCenters.reduce((mn, [ix, iz]) => Math.min(mn, Math.hypot(x - ix, z - iz)), Infinity);
-    // Stepping stones: shift so that steppingRadius maps to islandRadius
-    for (const [sx, sz] of stoneIslands) {
-      const d = Math.hypot(x - sx, z - sz) - steppingRadius + islandRadius;
+    // Main continents: raw distance
+    let best = continentCenters.reduce((mn, [ix, iz]) => Math.min(mn, Math.hypot(x - ix, z - iz)), Infinity);
+    // Stepping/scatter islands: shift so that each stone's own radius maps to continentRadius
+    for (const [sx, sz, sr] of stoneIslands) {
+      const d = Math.hypot(x - sx, z - sz) - sr + continentRadius;
       if (d < best) best = d;
     }
     return best;
@@ -236,7 +271,7 @@ export function planWorld(seed: any, size: any) {
       ez = cz / FEATURE.elevation;
     // Distance from nearest island centre drives elevation. Each island reads
     // as a massif ringed by shore; ocean regions between islands stay flat.
-    const rim = nearIsland(cx, cz) / islandRadius;
+    const rim = nearIsland(cx, cz) / continentRadius;
     // The rim term sets the island silhouette; it must not also decide the
     // interior. At a 1.25 slope everything past two-thirds of the radius fell
     // under the shore threshold — and since area grows with radius, that was
@@ -327,8 +362,8 @@ export function planWorld(seed: any, size: any) {
         wz = (cz + 0.5) * CELL;
       // rimFrac: 0 at island centre, 1 at shore/beyond — drives extra warp
       let minIslandDist = Infinity;
-      for (const [ix, iz] of islandCenters) minIslandDist = Math.min(minIslandDist, Math.hypot(wx - ix, wz - iz));
-      const rimFrac = clamp((minIslandDist - islandRadius * 0.4) / (islandRadius * 0.6), 0, 1);
+      for (const [ix, iz] of continentCenters) minIslandDist = Math.min(minIslandDist, Math.hypot(wx - ix, wz - iz));
+      const rimFrac = clamp((minIslandDist - continentRadius * 0.4) / (continentRadius * 0.6), 0, 1);
       const WARP = WARP_BASE * (1.0 + rimFrac * 0.8);
       const qx = wx + fbm2(nEdge, wx * 0.006, wz * 0.006, 3) * WARP;
       const qz = wz + fbm2(nEdge, wx * 0.006 + 19, wz * 0.006 + 7, 3) * WARP;
@@ -428,7 +463,7 @@ export function planWorld(seed: any, size: any) {
   const nWander = makeNoise2D(seed + 45);
 
   /** Regions far enough from any island rim to be genuine inland features. */
-  const inland = regions.filter((r) => nearIsland(r.center[0], r.center[1]) < islandRadius * 0.74);
+  const inland = regions.filter((r) => nearIsland(r.center[0], r.center[1]) < continentRadius * 0.74);
   const pool = inland.length ? inland : regions;
 
   /**
@@ -454,9 +489,9 @@ export function planWorld(seed: any, size: any) {
       z = sz;
     // Start out heading away from the nearest island centre: the rim term
     // dominates the elevation field so that direction is downhill.
-    const [nearIx, nearIz] = islandCenters.reduce(
+    const [nearIx, nearIz] = continentCenters.reduce(
       (best, c) => (Math.hypot(x - c[0], z - c[1]) < Math.hypot(x - best[0], z - best[1]) ? c : best),
-      islandCenters[0],
+      continentCenters[0],
     );
     let hx = x - nearIx,
       hz = z - nearIz;
@@ -465,7 +500,7 @@ export function planWorld(seed: any, size: any) {
     hz /= h0;
 
     for (let i = 0; i < 600; i++) {
-      if (nearIsland(x, z) > islandRadius * 0.99) break; // the sea
+      if (nearIsland(x, z) > continentRadius * 0.99) break; // the sea
       if (x < 3 || z < 3 || x > size - 4 || z > size - 4) break;
 
       if (join) {
@@ -716,11 +751,10 @@ export function planWorld(seed: any, size: any) {
     cellElev,
     inside,
     /** Island centres and per-island radius — used by terrain to mask land/sea. */
-    islandCenters,
+    continentCenters,
     islandBiomes,
-    islandRadius,
+    continentRadius,
     stoneIslands,
-    steppingRadius,
     bridgeChains,
     nearIsland,
     /** Planned water: where the basins sit and how every channel runs.
