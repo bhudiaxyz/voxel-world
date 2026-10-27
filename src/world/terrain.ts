@@ -53,7 +53,7 @@ export const WORLD = {
    * smooth boundary, and quantising the field it is evaluated on is what turns
    * that boundary into masonry.
    */
-  edgeGrid: 4,
+  edgeGrid: 2,
 };
 
 /**
@@ -101,7 +101,7 @@ export function generateTerrain(seed = 20260820, plan: any = null, onProgress: (
 
   const half = S / 2;
   /** Terrace steps between the lowest and highest planned region. */
-  const MACRO_RELIEF = 11;
+  const MACRO_RELIEF = 12;
   /**
    * Feature scale — **fixed**, not proportional to the world.
    *
@@ -204,11 +204,11 @@ export function generateTerrain(seed = 20260820, plan: any = null, onProgress: (
       const fz = (gz + 0.5) / GX + rng.bell() * 0.075;
       if (fx < 0.1 || fx > 0.9 || fz < 0.1 || fz > 0.9) continue;
       const sign = rng.chance(0.34) ? -1 : 1;
-      push(fx * S, fz * S, rng.range(8.5, 17) * K, 971 * (gx * 7 + gz + 3), {
+      push(fx * S, fz * S, rng.range(14, 28) * K, 971 * (gx * 7 + gz + 3), {
         sign,
-        wAmp: rng.range(4.5, 8.5) * K,
-        ax: rng.range(0.7, 1.35),
-        az: rng.range(0.7, 1.35),
+        wAmp: rng.range(8, 14) * K,
+        ax: rng.range(0.65, 1.5),
+        az: rng.range(0.65, 1.5),
       });
     }
   }
@@ -538,6 +538,9 @@ export function generateTerrain(seed = 20260820, plan: any = null, onProgress: (
       const bz = clamp(Math.floor(wz / DB), 0, dbw - 1);
       const bucket = discBuckets[bz * dbw + bx];
       for (let k = 0; k < bucket.length; k++) sum += discAt(wx, wz, bucket[k]);
+      // Gentle rolling hills: low-frequency FBM nudges the rounding threshold so
+      // flat plateaus develop gradual undulations rather than staying pancake-flat.
+      sum += fbm2(nFine, wx * 0.018, wz * 0.018, 3) * 1.6;
       cellLevel[cz * CW + cx] = BASE + L * Math.round(sum);
     }
   }
@@ -571,25 +574,18 @@ export function generateTerrain(seed = 20260820, plan: any = null, onProgress: (
   H = despeckle(H, S, land, 16);
 
   /* ---- deliberate cliff ledges -------------------------------------
-   * Where two contours stacked into a 6+ block wall, break it with a shelf at
-   * the midpoint — but only in long contiguous runs, chosen by a low-frequency
-   * field, so the result reads as designed masonry rather than as noise.     */
+   * Only split very tall cliffs (4+ steps) — shorter drops are kept as-is so
+   * hillside sudden drops and dramatic cliff faces can exist.               */
   const ledged = Int16Array.from(H);
-  for (let pass = 0; pass < 2; pass++) {
-    for (let z = 1; z < S - 1; z++) {
-      for (let x = 1; x < S - 1; x++) {
-        const i = z * S + x;
-        if (!land[i]) continue;
-        const rise = riseAbove(ledged, S, x, z);
-        if (rise < 2 * L) continue;
-        // Sampled on the terrace lattice. Per column this cut ledges with
-        // ragged one-block edges wherever the field wandered across its
-        // threshold — the ledges are meant to be masonry, so they have to
-        // start and stop on the same grid as everything else.
-        const n = fbm2(nLedge, qc(x) * 0.035, qc(z) * 0.035, 2);
-        if (n < 0.1) continue;
-        ledged[i] = ledged[i] + L;
-      }
+  for (let z = 1; z < S - 1; z++) {
+    for (let x = 1; x < S - 1; x++) {
+      const i = z * S + x;
+      if (!land[i]) continue;
+      const rise = riseAbove(ledged, S, x, z);
+      if (rise < 3 * L) continue;
+      const n = fbm2(nLedge, qc(x) * 0.035, qc(z) * 0.035, 2);
+      if (n < 0.1) continue;
+      ledged[i] = ledged[i] + L;
     }
   }
   H = despeckle(ledged, S, land, 12);
