@@ -7,6 +7,8 @@ const FLY = {
   floorClearance: 1.75, // eye height above terrain floor
   // ponytail: fixed descent cap; lower if floor still drops too fast over cliffs
   floorDescentRate: 8.0, // max m/s the floor constraint can fall
+  lookAheadDist: 6,     // blocks ahead to probe for obstacles
+  autoClimbRate: 14,    // max m/s upward push when obstacle is ahead
 };
 
 export interface FlyMode {
@@ -99,6 +101,18 @@ export function createFlyMode(grid: VoxelGrid): FlyMode {
       const maxDrop = FLY.floorDescentRate * dt;
       smoothedFloor = Math.max(rawFloor, smoothedFloor - maxDrop);
       if (camera.position.y < smoothedFloor) camera.position.y = smoothedFloor;
+
+      // Auto-climb: if moving horizontally and the path ahead is blocked, push upward.
+      const moveLen = Math.sqrt(dx * dx + dz * dz);
+      if (moveLen > 0.01) {
+        const probeX = camera.position.x + (dx / moveLen) * FLY.lookAheadDist;
+        const probeZ = camera.position.z + (dz / moveLen) * FLY.lookAheadDist;
+        const aheadSurface = grid.surfaceY(probeX, probeZ) + FLY.floorClearance;
+        const clearanceNeeded = aheadSurface - camera.position.y;
+        if (clearanceNeeded > 0) {
+          camera.position.y += Math.min(clearanceNeeded, FLY.autoClimbRate * dt);
+        }
+      }
     },
   };
 }

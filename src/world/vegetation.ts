@@ -1268,7 +1268,10 @@ function buildGroundDetail(world: any, rng: any, occupied?: Uint8Array) {
           if (nx >= 0 && nz >= 0 && nx < S && nz < S) nearLandmark[nz * S + nx] = 1;
         }
     }
-    const crystalCols = [BLOCKS.LEAF_LILAC.top, BLOCKS.LEAF_ROSE.top, BLOCKS.LEAF_MINT.top, BLOCKS.LEAF_BLUSH.top];
+    // HDR-boosted copies: bloom threshold is 1.25 linear — scale palette colours
+    // ~2× so the crystals exceed it and pick up a bloom halo.
+    const crystalCols = [BLOCKS.LEAF_LILAC.top, BLOCKS.LEAF_ROSE.top, BLOCKS.LEAF_MINT.top, BLOCKS.LEAF_BLUSH.top]
+      .map(c => c.clone().multiplyScalar(2.2));
     for (let z = 2; z < S - 2; z++) {
       for (let x = 2; x < S - 2; x++) {
         const i = z * S + x;
