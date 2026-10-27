@@ -851,6 +851,65 @@ function tombstoneField(_world: any, T: any, site: any, rng: any) {
   return { kind: 'tombs', at: [cx, cz] };
 }
 
+/**
+ * FLOATING_BIOSPHERE — a small island of earth and stone that hangs in the air
+ * above the terrain, with stalactite drips below and a tree or crystal cluster on top.
+ *
+ *   requires   dry inland ground
+ *   generates  ovoid voxel body 20-32 blocks above terrain · stalactites · cap tree
+ */
+function floatingBiosphere(_world: any, T: any, site: any, rng: any) {
+  const cx = site.at[0] | 0, cz = site.at[1] | 0;
+  if (!T.dry(cx, cz) || T.claimed(cx, cz)) return null;
+  const baseY = T.top(cx, cz);
+  const floatY = baseY + 20 + rng.int(0, 12);
+  const rx = 5 + rng.int(0, 3), rz = rx;
+  const ry = 3;
+
+  // Ovoid body — grass cap on the very top, soil below, warm stone core
+  for (let dy = -ry; dy <= ry; dy++) {
+    for (let dz = -rz; dz <= rz; dz++) {
+      for (let dx = -rx; dx <= rx; dx++) {
+        const q = (dx / rx) ** 2 + (dy / ry) ** 2 + (dz / rz) ** 2;
+        if (q > 1.0) continue;
+        const qTop = (dx / rx) ** 2 + ((dy + 1) / ry) ** 2 + (dz / rz) ** 2;
+        const isTop = qTop > 1.0;
+        let id: number;
+        if (isTop && dy > 0) id = BLOCKS.LEAF_CREAM.id;       // turf cap
+        else if (isTop) id = BLOCKS.STONE_PALE.id;             // pale underside
+        else if (dy > 0) id = BLOCKS.SOIL.id;                  // soil layer
+        else id = BLOCKS.STONE_WARM.id;                        // warm stone core
+        T.put(cx + dx, cz + dz, floatY + dy, id);
+      }
+    }
+  }
+
+  // Stalactite drips hanging below
+  for (let k = 0; k < 8; k++) {
+    const a = rng.range(0, Math.PI * 2);
+    const d = rng.range(1, rx - 1);
+    const sx = cx + Math.round(Math.cos(a) * d);
+    const sz = cz + Math.round(Math.sin(a) * d);
+    const len = rng.int(3, 9);
+    for (let dy = 1; dy <= len; dy++) {
+      const id = dy <= 2 ? BLOCKS.STONE_WARM.id : (dy <= 5 ? BLOCKS.STONE_PALE.id : BLOCKS.STONE.id);
+      T.put(sx, sz, floatY - ry - dy, id);
+    }
+  }
+
+  // A small tree on the flat top surface
+  const topY = floatY + ry + 1;
+  const leaf = rng.pick(LEAVES);
+  const form = rng.pick(['nub', 'round', 'spire', 'round']);
+  // plant directly into the floating grid — put a soil block as base then tree
+  T.put(cx, cz, topY, BLOCKS.SOIL.id);
+  const t = plantTree(T.grid, cx, topY + 1, cz, (T as any).rng, { scale: 0.35, leaf, form });
+  _world.stampTrees.push(t);
+
+  T.reserve(cx, cz, rx + 3);
+  return { kind: 'biosphere', at: [cx, cz] };
+}
+
 /* Ordered by preference within a kind: if the terrain does not support the
  * plan's first choice the site falls through to something it *does* support,
  * rather than being dropped or forced. */
@@ -920,6 +979,7 @@ export function buildStamps(world: any, rng: any) {
     obelisk,
     ring: monolithRing,
     tombs: tombstoneField,
+    biosphere: floatingBiosphere,
   };
   for (const site of plan.landmarks || []) {
     const [sx, sz] = site.at;

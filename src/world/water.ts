@@ -71,6 +71,37 @@ export function makeDepthMap(world: any) {
   return tex;
 }
 
+// Shared noise + analytic wave field — injected into both vertex and fragment
+// shaders so displaced geometry and surface normals always agree.
+const WAVE_GLSL = /* glsl */ `
+  float h21(vec2 p){ p = fract(p*vec2(123.34,456.21)); p += dot(p,p+45.32); return fract(p.x*p.y); }
+  float n2(vec2 p){
+    vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
+    return mix(mix(h21(i), h21(i+vec2(1,0)), f.x), mix(h21(i+vec2(0,1)), h21(i+vec2(1,1)), f.x), f.y);
+  }
+  // Returns height in .x, partial derivatives (slope) in .yz.
+  // Amplitudes are 3× the original fragment-only values so vertex
+  // displacement is visible from the default play camera.
+  vec3 waveField(vec2 p, float t) {
+    vec3 acc = vec3(0.0);
+    vec2 d0 = normalize(vec2( 1.00,  0.34));
+    vec2 d1 = normalize(vec2(-0.42,  1.00));
+    vec2 d2 = normalize(vec2( 0.83, -0.72));
+    vec2 d3 = normalize(vec2(-0.91, -0.55));
+    float k0 = 0.34, k1 = 0.51, k2 = 1.07, k3 = 1.93;
+    float a0 = 0.21,  a1 = 0.14,  a2 = 0.06,  a3 = 0.025;
+    float s0 = 0.62, s1 = 0.83, s2 = 1.34, s3 = 2.05;
+    float ph0 = dot(d0, p)*k0 + t*s0;
+    float ph1 = dot(d1, p)*k1 + t*s1;
+    float ph2 = dot(d2, p)*k2 + t*s2;
+    float ph3 = dot(d3, p)*k3 + t*s3;
+    acc.x  = a0*sin(ph0) + a1*sin(ph1) + a2*sin(ph2) + a3*sin(ph3);
+    acc.yz = a0*k0*cos(ph0)*d0 + a1*k1*cos(ph1)*d1
+           + a2*k2*cos(ph2)*d2 + a3*k3*cos(ph3)*d3;
+    return acc;
+  }
+`;
+
 export function createWater(size: any, depthMap: any, tier: string = 'high', waterSubdivision?: number) {
   const sub = waterSubdivision ?? (tier === 'high' ? 64 : 32);
   const geo = new THREE.PlaneGeometry(size * 1.9, size * 1.9, sub, sub);
@@ -112,11 +143,18 @@ export function createWater(size: any, depthMap: any, tier: string = 'high', wat
       #include <fog_pars_vertex>
       ${PLANET_UNIFORMS_GLSL}
       ${PLANET_BEND_GLSL}
+      ${WAVE_GLSL}
+      uniform float uTime;
       varying vec3 vWorld;
       void main() {
         vec4 wp = modelMatrix * vec4(position, 1.0);
         vWorld = wp.xyz;
-        vec3 wNrm = vec3(0.0, 1.0, 0.0);
+        // Displace Y by the analytic wave height so geometry has real depth.
+        vec3 wave = waveField(vWorld.xz, uTime);
+        vWorld.y += wave.x;
+        // Pass the analytic surface normal to planet-bend so the bend axis
+        // stays consistent with the displaced surface.
+        vec3 wNrm = normalize(vec3(-wave.y, 1.0, -wave.z));
         applyPlanetBend(vWorld, wNrm);
         vec4 mvPosition = viewMatrix * vec4(vWorld, 1.0);
         gl_Position = projectionMatrix * mvPosition;
@@ -134,45 +172,7 @@ export function createWater(size: any, depthMap: any, tier: string = 'high', wat
       uniform sampler2D uDepthMap;
       varying vec3 vWorld;
 
-      float h21(vec2 p){ p = fract(p*vec2(123.34,456.21)); p += dot(p,p+45.32); return fract(p.x*p.y); }
-      float n2(vec2 p){
-        vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
-        return mix(mix(h21(i), h21(i+vec2(1,0)), f.x), mix(h21(i+vec2(0,1)), h21(i+vec2(1,1)), f.x), f.y);
-      }
-
-      /**
-       * The wave field and its slope in one pass.
-       *
-       * Returns height in .x and the two partial derivatives in .yz. Taking
-       * the derivative analytically rather than by finite differences is what
-       * keeps the normal exact at any distance: a difference-based normal is
-       * only as good as its sample spacing, and this plane is nearly two
-       * hundred units across with no tessellation to hide the error.
-       */
-      vec3 waveField(vec2 p, float t) {
-        vec3 acc = vec3(0.0);
-
-        // Four crossing trains, deliberately non-harmonic so the pattern never
-        // visibly repeats within the basin.
-        vec2 d0 = normalize(vec2( 1.00,  0.34));
-        vec2 d1 = normalize(vec2(-0.42,  1.00));
-        vec2 d2 = normalize(vec2( 0.83, -0.72));
-        vec2 d3 = normalize(vec2(-0.91, -0.55));
-
-        float k0 = 0.34, k1 = 0.51, k2 = 1.07, k3 = 1.93;
-        float a0 = 0.070, a1 = 0.048, a2 = 0.020, a3 = 0.009;
-        float s0 = 0.62, s1 = 0.83, s2 = 1.34, s3 = 2.05;
-
-        float ph0 = dot(d0, p) * k0 + t * s0;
-        float ph1 = dot(d1, p) * k1 + t * s1;
-        float ph2 = dot(d2, p) * k2 + t * s2;
-        float ph3 = dot(d3, p) * k3 + t * s3;
-
-        acc.x  = a0*sin(ph0) + a1*sin(ph1) + a2*sin(ph2) + a3*sin(ph3);
-        acc.yz = a0*k0*cos(ph0)*d0 + a1*k1*cos(ph1)*d1
-               + a2*k2*cos(ph2)*d2 + a3*k3*cos(ph3)*d3;
-        return acc;
-      }
+      ${WAVE_GLSL}
 
       /**
        * A caustic web: thin interlocking filaments of focused light.

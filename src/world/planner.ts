@@ -739,7 +739,7 @@ export function planWorld(seed: any, size: any) {
   scenic.sort((a, b) => b.score - a.score);
 
   // ---- landmark sites — 2-3 per continent, elevated dry ground inland ----
-  const LANDMARK_KINDS = ['spire', 'obelisk', 'ring', 'tombs'];
+  const LANDMARK_KINDS = ['spire', 'obelisk', 'ring', 'tombs', 'biosphere'];
   const landmarks: Array<{ kind: string; at: [number, number]; seed: number }> = [];
   for (let ci = 0; ci < continentCenters.length; ci++) {
     const [icx, icz] = continentCenters[ci];

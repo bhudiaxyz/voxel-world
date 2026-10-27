@@ -13,10 +13,11 @@ Developer reference. For user-facing documentation see [README.md](README.md).
 | `src/core/voxel.ts` | `VoxelGrid` (dense `Uint8Array`), greedy mesher, chunk streamer, LOD fade, `CHUNK = 24`, `EDGE_LAYER` |
 | `src/core/rng.ts` | Seeded PRNG, 2D/3D noise, FBM helpers used by terrain and vegetation |
 | `src/world/terrain.ts` | Heightfield generator (contour-disc terracing, river carving, biome fields), river flow bake |
-| `src/world/vegetation.ts` | `plantTree()`, `plantBush()` (4 silhouette forms), ferns, moss, lichen, grass |
+| `src/world/vegetation.ts` | `plantTree()` (9 silhouette forms), `plantBush()`, ferns, moss, lichen, grass, mushrooms, crystals |
 | `src/world/water.ts` | `makeDepthMap()` (RG texture), `createWater()` (wave shader, Beer-Lambert absorption) |
 | `src/world/planner.ts` | World planner: island centres, stepping-stone placement, bridge chains, biome fields |
 | `src/world/props.ts` | Bridges, rocks, and other static props placed from terrain data |
+| `src/world/stamps.ts` | Scene stamps: `buildStamps()`, scenic grammars (waterfall, crossing, pond, grove, overlook), landmark grammars (twistedSpire, obelisk, monolithRing, tombstoneField, floatingBiosphere) |
 | `src/render/renderer.ts` | Three.js WebGLRenderer setup, shadow map config per tier |
 | `src/render/lighting.ts` | `Atmosphere` class: sun/hemi/fill lights, sky dome mesh, `skyUniformValues()` |
 | `src/render/sky.ts` | Shared GLSL: `SKY_UNIFORMS_GLSL`, `SKY_FN_GLSL` (`skyRadiance`, `nightSkyAddons`, `_aurora`) |
@@ -436,3 +437,79 @@ wu.uShoal.value.copy(WATER.shoal);
 wu.uShallow.value.copy(WATER.shallow);
 wu.uDeep.value.copy(WATER.deep);
 ```
+
+---
+
+## Scene stamps
+
+`src/world/stamps.ts` — `buildStamps(world, rng)` runs after props (so stamps can see bridges) and before vegetation (so the scatter pass respects cleared areas).
+
+### Scenic grammars
+
+Each grammar re-validates the terrain before building. A site whose conditions are not met downgrades to the next grammar in the preference list rather than building on wrong terrain.
+
+| Grammar | Requires | Generates |
+| --- | --- | --- |
+| `waterfallGarden` | 6+ block cliff with water at foot | Cascade, plunge pool, spray rocks, viewing deck, framing trees, lanterns, reeds |
+| `stoneCrossing` | River node with dry banks | Stepping stones, plank jetty, framing trees, reeds |
+| `lilyPond` | Level clearing near waterline | Excavated basin, sand rim, lily pads, leaning tree |
+| `blossomGrove` | Level open ground | Torii gate, swept floor, great tree, secondary ring, lanterns |
+| `cliffOverlook` | Level ground with 7+ block drop | Paved terrace, parapet, bench, lanterns, one tree |
+
+Separation: `MIN_SEPARATION = 34` blocks between any two scene centres. Quotas (`QUOTA`) cap each kind per 256×256 area so one type does not dominate.
+
+### Landmark grammars
+
+One pass per continent after scenic stamps. Five kinds, one per continent slot, shuffled per seed. Each landmark reserves its footprint against the vegetation scatter pass.
+
+| Grammar | Generates |
+| --- | --- |
+| `twistedSpire` | 3×3 warm-stone base, 14–22 block drifting pale-stone shaft (shifts 1 block each 4 levels, max ±2), cap block |
+| `obelisk` | 3×3 base, 8–13 block straight shaft, lanterns on either side |
+| `monolithRing` | 7–8 standing stones at radius 10–13, every-other lintel, PATH floor |
+| `tombstoneField` | 14–22 scattered upright slabs 2–4 blocks tall, random lean caps |
+| `floatingBiosphere` | Ovoid voxel body floating 20–32 blocks above terrain (grass cap → soil → warm-stone core), 8 stalactite drips below, small tree on top |
+
+The floating biosphere uses `T.put()` at `floatY + dy` offsets, bypassing the heightfield entirely. Stalactite length tapers from `STONE_WARM` (tip) through `STONE_PALE` to `STONE` (base).
+
+---
+
+## Vegetation detail
+
+`src/world/vegetation.ts` — `plantTree()` supports nine silhouette forms:
+
+| Form | Silhouette |
+| --- | --- |
+| `round` | Classic round crown |
+| `stack` | Tiered stacking |
+| `twin` | Two-lobed top |
+| `bunch` | Tight cluster |
+| `nub` | Small compact cap |
+| `spire` | Tall narrow cone |
+| `umbrella` | Flat wide canopy |
+| `broad` | Low spreading crown |
+| `tall` | Birch/poplar — very tall bare trunk, small airy crown |
+| `layered` | Pagoda/cedar — 2–4 tiered horizontal discs with gaps |
+| `weeping` | Weeping cherry — wide drooping skirt, lifted central crown |
+
+`pickForm(scale, rng)` selects a form based on tree scale. `BIOME_FLORA` per-biome tables bias toward biome-appropriate forms (e.g. `SAKURA` biome doubles the weight of `weeping`).
+
+### Ground detail: mushrooms and crystals
+
+`buildGroundDetail()` scatters sub-voxel geometry using the `DetailField` (`F.tuft`, `F.box`, `F.petal`, `F.fern`) into a single animated mesh.
+
+**Mushrooms** appear in forested, damp spots (`wetness > 0.08`, grove noise `> 0.05`). Each cluster is 1–3 mushrooms: a thin `F.tuft` stem + a flat `F.box` cap (4× wider than tall). Probability doubles within 1 block of a tree base (`occupied` array from the tree scatter pass).
+
+**Crystals** appear near landmarks (within radius 14) and at elevated rocky ground (`top > sea + 8`). Each cluster is 1–4 narrow-tall `F.box` shards: width 0.07–0.12, height 0.32–0.68, with a 50 % chance of a smaller satellite shard offset by 0.16 blocks. Colors: lilac (amethyst), rose, mint (aquamarine), blush. The `world.stamps` array is read inside `buildGroundDetail` — it is populated by `buildStamps` which runs before vegetation.
+
+---
+
+## Water vertex displacement
+
+`src/world/water.ts` shares a `WAVE_GLSL` constant between vertex and fragment shaders. This constant defines:
+
+- `h21(p)` — cheap hash
+- `n2(p)` — value noise
+- `waveField(p, t) → vec3(height, dNx, dNz)` — sum of four directional sin waves
+
+The vertex shader displaces `vWorld.y += wave.x` before applying planet bend, so the water mesh has true geometric crests (~0.4 blocks peak-to-trough at the default amplitudes). The fragment shader evaluates the same `waveField` for the analytic surface normal `(−dNx, 1, −dNz)`, guaranteeing the lighting normal matches the displaced geometry exactly. Sharing the constant is what enforces this — a separate definition would let amplitudes drift.

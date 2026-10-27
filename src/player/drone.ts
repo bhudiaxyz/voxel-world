@@ -18,8 +18,8 @@ const DRONE = {
   //     3.5 tracks terrace-scale features (3–6 blocks over a few seconds)
   //     while still filtering individual voxel bumps.
   heightSmoothRate: 3.5,
-  heightPGain: 4.0,   // proportional gain on altitude error
-  vertVelMax: 14.0,   // max vertical speed (m/s) — enough for steep slopes at cruise
+  heightPGain: 8.0,   // proportional gain on altitude error
+  vertVelMax: 28.0,   // max vertical speed (m/s) — enough for steep slopes at cruise
   // ponytail: fixed descent cap; lower if drone still drops too fast over cliffs
   targetDescentRate: 6.0, // max m/s the terrain target can fall (ascent is uncapped)
   pitchSmoothRate: 1.8,

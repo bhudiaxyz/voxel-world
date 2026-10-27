@@ -225,35 +225,35 @@ const CANOPY_BANDS = [
 const BIOME_FLORA = {
   [BIOME.SAKURA]: {
     leaves: [BLOCKS.LEAF_PINK, BLOCKS.LEAF_BLUSH, BLOCKS.LEAF_ROSE, BLOCKS.LEAF_PINK],
-    forms: ['stack', 'round', 'broad', 'twin'],
+    forms: ['stack', 'round', 'broad', 'twin', 'weeping', 'weeping', 'tall'],
     scale: [0.42, 1.0],
     density: 1.65,
     bushes: [BUSH_ROSE, BUSH_ROSE, BUSH_MAUVE, BUSH_CREAM],
   },
   [BIOME.MEADOW]: {
     leaves: [BLOCKS.LEAF_CREAM, BLOCKS.LEAF_BLUSH, BLOCKS.LEAF_LILAC],
-    forms: ['round', 'bunch', 'twin', 'stack', 'umbrella'],
+    forms: ['round', 'bunch', 'twin', 'stack', 'umbrella', 'tall', 'layered'],
     scale: [0.2, 0.92],
     density: 0.55,
     bushes: [BUSH_CREAM, BUSH_ROSE, BUSH_MAUVE],
   },
   [BIOME.WETLAND]: {
     leaves: [BLOCKS.LEAF_MINT, BLOCKS.LEAF_CREAM, BLOCKS.LEAF_MINT],
-    forms: ['broad', 'bunch', 'round', 'umbrella'],
+    forms: ['broad', 'bunch', 'round', 'umbrella', 'weeping', 'tall'],
     scale: [0.26, 0.78],
     density: 0.75,
     bushes: [BUSH_DUSK, BUSH_MAUVE, BUSH_CREAM],
   },
   [BIOME.HIGHLAND]: {
     leaves: [BLOCKS.LEAF_LILAC, BLOCKS.LEAF_MINT],
-    forms: ['spire', 'nub', 'spire'],
+    forms: ['spire', 'nub', 'spire', 'layered'],
     scale: [0.14, 0.46],
     density: 0.28,
     bushes: [SCRUB, SCRUB, BUSH_DUSK],
   },
   [BIOME.SHORE]: {
     leaves: [BLOCKS.LEAF_CREAM, BLOCKS.LEAF_BLUSH],
-    forms: ['bunch', 'round', 'nub', 'umbrella'],
+    forms: ['bunch', 'round', 'nub', 'umbrella', 'layered', 'weeping'],
     scale: [0.16, 0.6],
     density: 0.22,
     bushes: [BUSH_CREAM, SCRUB],
@@ -315,9 +315,9 @@ function buildTrunk(
 }
 
 function pickForm(scale: number, rng: any) {
-  if (scale > 0.72) return rng.pick(['stack', 'round', 'twin', 'bunch', 'broad', 'umbrella', 'stack', 'round']);
-  if (scale > 0.46) return rng.pick(['round', 'bunch', 'spire', 'twin', 'stack', 'umbrella']);
-  if (scale > 0.26) return rng.pick(['round', 'bunch', 'spire', 'nub']);
+  if (scale > 0.72) return rng.pick(['stack', 'round', 'twin', 'bunch', 'broad', 'umbrella', 'weeping', 'layered', 'stack', 'round']);
+  if (scale > 0.46) return rng.pick(['round', 'bunch', 'spire', 'twin', 'stack', 'umbrella', 'tall', 'layered']);
+  if (scale > 0.26) return rng.pick(['round', 'bunch', 'spire', 'nub', 'tall', 'layered']);
   return 'nub';
 }
 
@@ -344,9 +344,12 @@ export function plantTree(grid: any, x: number, y: number, z: number, rng: any, 
 
   // Form-specific trunk height: spire/umbrella = taller trunk, broad = shorter.
   const bare =
-    form === 'spire' ? Math.max(3, Math.round(3 + scale * 5)) :
-    form === 'umbrella' ? Math.max(3, Math.round(3 + scale * 3.5)) :
-    form === 'broad' ? Math.max(1, Math.round(1 + scale * 2)) :
+    form === 'spire'   ? Math.max(3, Math.round(3 + scale * 5)) :
+    form === 'umbrella'? Math.max(3, Math.round(3 + scale * 3.5)) :
+    form === 'broad'   ? Math.max(1, Math.round(1 + scale * 2)) :
+    form === 'tall'    ? Math.max(6, Math.round(6 + scale * 9)) :
+    form === 'layered' ? Math.max(3, Math.round(3 + scale * 4)) :
+    form === 'weeping' ? Math.max(2, Math.round(2 + scale * 3)) :
     Math.max(2, Math.round(2.5 + scale * 3.5));
 
   const canopyY = y + bare;
@@ -496,6 +499,52 @@ export function plantTree(grid: any, x: number, y: number, z: number, rng: any, 
       fillBox(dx * 2, 0, dz, Math.ceil(w / 2), 1, Math.ceil(w / 3), leaf.id);
       fillBox(-dx, 1, -dz, Math.ceil(w / 2), 1, Math.ceil(w / 2), lightId);
       if (unit === 2) fillBox(dx, 2, dz, 2, 1, 2, lightId);
+      break;
+    }
+    case 'tall': {
+      // Birch/poplar: very tall bare trunk, small airy crown.
+      if (large) {
+        fillBox(0, 0, 0, 3, 2, 3, leaf.id);
+        fillBox(dx * 2, 1, dz, 2, 2, 2, lightId);
+        fillBox(0, 3, 0, 2, 1, 2, lightId);
+      } else if (unit === 2) {
+        fillBox(0, 0, 0, 3, 2, 3, leaf.id);
+        fillBox(dx, 2, dz, 2, 1, 2, lightId);
+      } else {
+        fillBox(0, 0, 0, 2, 1, 2, leaf.id);
+        fillBox(dx, 1, dz, 1, 1, 1, lightId);
+      }
+      break;
+    }
+    case 'layered': {
+      // Tiered horizontal discs: pagoda / cedar silhouette.
+      const tiers = large ? 4 : unit === 2 ? 3 : 2;
+      const baseW = large ? 7 : unit === 2 ? 5 : 3;
+      const gap = unit === 2 ? 3 : 2;
+      for (let t = 0; t < tiers; t++) {
+        const w = Math.max(1, baseW - t * 2);
+        const oy = t * gap;
+        fillBox(t & 1 ? dx : 0, oy, t & 1 ? dz : 0, w, 1, w, t === 0 ? leaf.id : lightId);
+      }
+      break;
+    }
+    case 'weeping': {
+      // Wide drooping skirt with a lifted central crown — weeping cherry.
+      if (large) {
+        fillBox(0, 0, 0, 7, 1, 7, leaf.id);
+        fillBox(3 * dx, 0, dz, 3, 2, 2, leaf.id);
+        fillBox(-2 * dx, 0, 3 * dz, 2, 2, 3, leaf.id);
+        fillBox(0, 2, 0, 4, 2, 4, lightId);
+        fillBox(dx, 4, dz, 2, 1, 2, lightId);
+      } else if (unit === 2) {
+        fillBox(0, 0, 0, 5, 1, 5, leaf.id);
+        fillBox(2 * dx, 0, dz, 2, 2, 2, leaf.id);
+        fillBox(0, 2, 0, 3, 2, 3, lightId);
+        fillBox(dx, 3, dz, 2, 1, 2, lightId);
+      } else {
+        fillBox(0, 0, 0, 4, 1, 3, leaf.id);
+        fillBox(dx, 1, dz, 2, 1, 2, lightId);
+      }
       break;
     }
     case 'stack':
@@ -982,7 +1031,7 @@ export function scatterVegetation(world: any, rng: any) {
   // Ground blossom belongs in this layer as individual paper-like petals,
   // not as metre-wide replacement turf blocks.
   world.trees = trees;
-  world.decorations.push(buildGroundDetail(world, rng));
+  world.decorations.push(buildGroundDetail(world, rng, occupied));
 
   world.occupied = occupied;
   return trees;
@@ -997,7 +1046,7 @@ export function scatterVegetation(world: any, rng: any) {
  * clutter up close. Everything here is meant to be countable.
  * ================================================================== */
 
-function buildGroundDetail(world: any, rng: any) {
+function buildGroundDetail(world: any, rng: any, occupied?: Uint8Array) {
   const { grid, heights, wetness, size: S } = world;
   const F = new DetailField();
   // Read from the palette, never restated. This was a literal 9.35 — correct
@@ -1163,6 +1212,90 @@ function buildGroundDetail(world: any, rng: any) {
           rng.range(0.22, 0.4),
           SCRUB.top,
         );
+      }
+    }
+  }
+
+  /* --- mushrooms in forested, damp spots ----------------------------- */
+  {
+    const mushroomCaps = [BLOCKS.LEAF_ROSE.top, BLOCKS.LEAF_BLUSH.top, BLOCKS.LEAF_CREAM.top, BLOCKS.LEAF_LILAC.top];
+    const stemCol = BLOCKS.STONE_PALE.top;
+    for (let z = 2; z < S - 2; z++) {
+      for (let x = 2; x < S - 2; x++) {
+        const i = z * S + x;
+        const top = heights[i];
+        const id = grid.get(x, top, z);
+        if (!GRASS_IDS.has(id)) continue;
+        if (grid.isSolid(x, top + 1, z)) continue;
+        if (wetness[i] < 0.08) continue;
+        // Only in forested areas
+        const g = fbm2(N_GROVE, x * 0.0115, z * 0.0115, 3);
+        if (g < 0.05) continue;
+        // More likely near a tree base
+        const nearTree = occupied && (
+          occupied[(z - 1) * S + x] || occupied[(z + 1) * S + x] ||
+          occupied[z * S + x - 1] || occupied[z * S + x + 1]
+        );
+        if (!rng.chance(nearTree ? 0.055 : 0.018)) continue;
+
+        const fx = x + 0.5, fz = z + 0.5, y = top + 1;
+        const n = rng.int(1, 3);
+        const capCol = rng.pick(mushroomCaps);
+        for (let k = 0; k < n; k++) {
+          const ox = rng.range(-0.28, 0.28), oz = rng.range(-0.28, 0.28);
+          const stemH = rng.range(0.16, 0.3);
+          const capW = rng.range(0.26, 0.44);
+          // stem — same narrow tuft style as flowers
+          F.tuft(fx + ox, y - 0.03, fz + oz, 0.06, stemH, stemCol, stemCol, rng() * 6.28, 0, 0, 0);
+          // cap — flat box sitting on tip of stem
+          F.box(fx + ox, y - 0.03 + stemH, fz + oz, capW, capW * 0.3, capW, capCol, 0.9, rng() * 6.28);
+        }
+      }
+    }
+  }
+
+  /* --- crystals: narrow glowing shards, near landmarks and on high ground -- */
+  {
+    // Precompute a set of "near landmark" grid cells (within radius 14)
+    const LANDMARK_R = 14;
+    const nearLandmark = new Uint8Array(S * S);
+    for (const stamp of world.stamps || []) {
+      const lx = stamp.at[0] | 0, lz = stamp.at[1] | 0;
+      for (let dz = -LANDMARK_R; dz <= LANDMARK_R; dz++)
+        for (let dx = -LANDMARK_R; dx <= LANDMARK_R; dx++) {
+          if (dx * dx + dz * dz > LANDMARK_R * LANDMARK_R) continue;
+          const nx = lx + dx, nz = lz + dz;
+          if (nx >= 0 && nz >= 0 && nx < S && nz < S) nearLandmark[nz * S + nx] = 1;
+        }
+    }
+    const crystalCols = [BLOCKS.LEAF_LILAC.top, BLOCKS.LEAF_ROSE.top, BLOCKS.LEAF_MINT.top, BLOCKS.LEAF_BLUSH.top];
+    for (let z = 2; z < S - 2; z++) {
+      for (let x = 2; x < S - 2; x++) {
+        const i = z * S + x;
+        const top = heights[i];
+        const id = grid.get(x, top, z);
+        if (!GRASS_IDS.has(id) && id !== BLOCKS.STONE.id && id !== BLOCKS.STONE_PALE.id) continue;
+        if (grid.isSolid(x, top + 1, z)) continue;
+        const isNearLandmark = nearLandmark[i];
+        const elev = top - sea;
+        // Crystals prefer elevated rocky ground and landmark proximity
+        if (!isNearLandmark && elev < 8) continue;
+        const chance = isNearLandmark ? 0.028 : (elev > 16 ? 0.014 : 0.005);
+        if (!rng.chance(chance)) continue;
+        const col = rng.pick(crystalCols);
+        const n = rng.int(1, isNearLandmark ? 4 : 3);
+        const fx = x + 0.5, fz = z + 0.5, y = top + 1;
+        for (let k = 0; k < n; k++) {
+          const ox = rng.range(-0.35, 0.35), oz = rng.range(-0.35, 0.35);
+          const w = rng.range(0.07, 0.12);
+          const h2 = rng.range(0.32, 0.68);
+          F.box(fx + ox, y - 0.02, fz + oz, w, h2, w, col, 0.95, rng() * 6.28);
+          if (rng.chance(0.5)) {
+            const w2 = w * 0.6, h3 = h2 * 0.6;
+            const sa = rng() * 6.28;
+            F.box(fx + ox + Math.cos(sa) * 0.16, y - 0.02, fz + oz + Math.sin(sa) * 0.16, w2, h3, w2, col, 0.95, sa);
+          }
+        }
       }
     }
   }

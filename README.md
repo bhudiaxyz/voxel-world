@@ -14,9 +14,11 @@ Inspired by **Verdant** [https://github.com/xikhar/verdant] and **Petalfell** [h
 - **Volumetric-style atmosphere** — sunrise/sunset limb glow, crepuscular rays (eight-tap radial blur), and animated cloud cover.
 - **Fly and drone modes** — free-flight (F) or terrain-following drone (G) with P-controller altitude hold and smooth landing state machine.
 - **Ink edge rendering** — toon-style dark and light strokes at block boundaries, composited in display space after tone mapping. Toggle with E.
-- **Rich vegetation** — oaks, blossoms, willows, spire trees, ferns, moss, lichen, grass, and bushes in four silhouette forms.
+- **Rich vegetation** — nine tree silhouette forms (oak, blossom, willow, spire, umbrella, broad, tall birch, layered pagoda, weeping cherry), ferns, moss, lichen, grass, and scattered mushrooms and crystals.
 - **Touch controls** — full nippleJS virtual joystick overlay with compass-aware minimap, auto-detected on load.
 - **GPU tiering** — four quality tiers (high / mid / low / very-low) tuned at startup from device cores, memory, and UA.
+- **Landmarks** — ancient structures appear on each continent: twisted spires, obelisks, monolith rings, tombstone fields, and floating biospheres. All marked on the map.
+- **Real wave geometry** — the water plane has true vertex displacement driven by the same analytic wave field as the surface normal, so crests cast light consistently.
 - **Seeded worlds** — the seed word is always visible in the URL (`?seed=word`). Share a URL to share an exact world; generate a new one from the pause menu.
 
 For architecture and implementation details, see [DESIGN.md](DESIGN.md).
