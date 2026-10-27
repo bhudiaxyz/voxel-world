@@ -17,7 +17,7 @@ import { createDog } from './player/dog';
 import { createBubbles } from './ui/bubbles';
 import { createMap } from './ui/map';
 import { createPause } from './ui/pause';
-import { createSettings } from './ui/settings';
+import { createSettings, DEFAULTS as SETTINGS_DEFAULTS } from './ui/settings';
 import { createHud } from './ui/hud';
 import { makeRng, genSeedWord, hashSeedWord } from './core/rng';
 import { createDroneMode } from './player/drone';
@@ -72,6 +72,19 @@ async function start(): Promise<void> {
   scene.add(water.mesh);
   setVoxelWaterline(world.meshes.material, waterDepth, world.size, DEPTH_RANGE);
   dayNight.voxelUniforms = world.meshes.material.userData.uniforms;
+  // Seed _windBase from localStorage if available, otherwise from DEFAULTS.
+  {
+    let storedWind = SETTINGS_DEFAULTS.windStrength;
+    try {
+      const raw = localStorage.getItem('VoxelWorld.settings');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        const n = Number(parsed.windStrength);
+        if (Number.isFinite(n)) storedWind = n;
+      }
+    } catch { /* ignore */ }
+    world.meshes.material.userData.uniforms._windBase = storedWind;
+  }
 
   const particles = createParticles(world.size, makeRng(SEED ^ 0x1234), ts.particleCount);
   scene.add(particles.group);
@@ -244,12 +257,16 @@ async function start(): Promise<void> {
   let perfTime = 0;
   let perfFrames = 0;
 
+  // Wind state — slowly varying direction + gust envelope
+  let windTime = 0.0;
+  const windDir = new THREE.Vector2(1.0, 0.3).normalize();
+  let windAngle = Math.atan2(windDir.y, windDir.x);
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (window as any).__fps = 0;
 
   function frame(): void {
     requestAnimationFrame(frame);
-    clock.update();
     const rawDt = clock.getDelta();
     const dt = Math.min(rawDt, 1 / 20);
 
@@ -324,8 +341,27 @@ async function start(): Promise<void> {
       fpCam.update(dt, controller.pos, controller.speed01, controller.grounded);
     }
     world.streaming.update(controller.pos, fpCam.camera.position, false, dt);
-    atmo.followTarget(controller.pos.x, controller.pos.z);
+    // Only update fog origin when the player is actually moving — saves a
+    // uniform write + fog-origin recalculation on every idle frame.
+    if (manualMovement || fly.active || drone.active)
+      atmo.followTarget(controller.pos.x, controller.pos.z);
     dayNight.update(dt);
+
+    // Wind: slowly rotate direction + gust envelope, push to voxel shader.
+    // Skipped on very-low (no particles, sparse trees) and when strength is 0.
+    if (tier !== 'very-low') {
+      const wu = world.meshes.material.userData.uniforms;
+      if (wu._windBase > 0) {
+        windTime += dt;
+        windAngle += dt * 0.04 * (Math.sin(windTime * 0.11) * 0.5 + 0.5);
+        windDir.set(Math.cos(windAngle), Math.sin(windAngle));
+        const gust = 0.5 + Math.sin(windTime * 0.7) * 0.3 + Math.sin(windTime * 1.3) * 0.2;
+        wu.uWindTime.value     = windTime;
+        wu.uWindDir.value.copy(windDir);
+        wu.uWindStrength.value = wu._windBase * gust;
+      }
+    }
+
     // Project sun to screen for crepuscular rays — active only near horizon.
     {
       const sunDir = dayNight.sunDir; // read-only reference, no allocation

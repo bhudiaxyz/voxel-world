@@ -1166,7 +1166,9 @@ function meshRegion(
             localV[i] = isTop ? 1 : isBottom ? 0 : c[1];
           }
 
-          target.quad(verts, F.n, baseCol, tintCol, fringeCol, uvs, ao, pattern || 0, block.fringe || 0, localV);
+          // Bit 3 of the pattern byte signals wind sway; mod(aData.y, 8) in the frag shader strips it.
+          const patternPacked = (pattern || 0) | (block.sway ? 8 : 0);
+          target.quad(verts, F.n, baseCol, tintCol, fringeCol, uvs, ao, patternPacked, block.fringe || 0, localV);
         }
       }
     }
@@ -1800,6 +1802,10 @@ const VERT_DECL = /* glsl */ `
   varying vec4 vDataV;
   varying vec3 vNrmW;
   varying vec3 vPosW;
+
+  uniform float uWindTime;
+  uniform vec2  uWindDir;
+  uniform float uWindStrength;
 `;
 
 const VERT_BODY = /* glsl */ `
@@ -1811,6 +1817,19 @@ const VERT_BODY = /* glsl */ `
   // Chunk positions are absolute and the meshes are never transformed, so the
   // local attribute is already the world position.
   vPosW  = position;
+
+  // Wind sway: bit 3 of aData.y flags swayable blocks (leaf blocks).
+  // Phase offset from world XZ keeps adjacent trees out of sync.
+  // Height factor (aData.w) keeps the base stationary.
+  if (aData.y >= 8.0 && uWindStrength > 0.0) {
+    float phase = transformed.x * 0.31 + transformed.z * 0.27;
+    float sway  = (sin(uWindTime * 1.1 + phase) * 0.6
+                 + sin(uWindTime * 0.47 + phase * 1.9) * 0.4)
+                 * uWindStrength;
+    float heightT = clamp(transformed.y / 28.0, 0.0, 1.0);
+    transformed.x += uWindDir.x * sway * heightT;
+    transformed.z += uWindDir.y * sway * heightT;
+  }
 `;
 
 const FRAG_DECL = /* glsl */ `
@@ -2063,6 +2082,11 @@ export function makeVoxelMaterial() {
     uWaterInkWidth: { value: 1.5 },
     uWaterInkStrength: { value: 0.85 },
 
+    /* --- wind sway ---------------------------------------------------- */
+    uWindTime:     { value: 0.0 },
+    uWindDir:      { value: new THREE.Vector2(1.0, 0.3).normalize() },
+    uWindStrength: { value: 0.0 },
+
     /* --- planet bend -------------------------------------------------- */
     ...planetUniformValues(new THREE.Vector3()),
   };
@@ -2095,7 +2119,7 @@ export function makeVoxelMaterial() {
       );
     mat.userData.shader = shader;
   };
-  mat.customProgramCacheKey = () => 'VoxelWorld-voxel-v7';
+  mat.customProgramCacheKey = () => 'VoxelWorld-voxel-v8';
   return mat;
 }
 

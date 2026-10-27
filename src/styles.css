@@ -60,37 +60,42 @@ canvas { display: block; width: 100%; height: 100%; }
 }
 
 .ls-emblem {
-  width: 72px;
-  height: 72px;
+  width: 64px;
+  height: 64px;
   margin: 0 auto 26px;
-  border-radius: 50%;
-  border: 1px solid rgba(192, 88, 40, 0.22);
-  position: relative;
+  perspective: 240px;
   transition: opacity 0.5s ease;
 }
 
-.ls-emblem::before,
-.ls-emblem::after {
-  content: '';
+.ls-cube {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  transform-style: preserve-3d;
+  animation: ls-voxel 3.2s linear infinite;
+}
+
+.ls-face {
   position: absolute;
-  border-radius: 50%;
+  width: 100%;
+  height: 100%;
+  border: 1px solid rgba(0, 0, 0, 0.35);
 }
 
-.ls-emblem::before {
-  inset: -1px;
-  border: 2px solid transparent;
-  border-top-color: var(--gold-bright);
-  border-right-color: rgba(192, 88, 40, 0.4);
-  animation: ls-spin 3.4s linear infinite;
-}
-
-.ls-emblem::after {
-  inset: 14px;
-  border: 1px solid rgba(192, 88, 40, 0.5);
-  animation: ls-spin 6s linear infinite reverse;
-}
+/* Voxel shading: top = brightest, sides darker */
+.ls-face--top    { background: #d4922a; transform: rotateX(90deg)  translateZ(32px); }
+.ls-face--bottom { background: #4a1e02; transform: rotateX(-90deg) translateZ(32px); }
+.ls-face--front  { background: #a85212; transform: translateZ(32px); }
+.ls-face--back   { background: #5c2908; transform: rotateY(180deg) translateZ(32px); }
+.ls-face--left   { background: #7a3d08; transform: rotateY(-90deg) translateZ(32px); }
+.ls-face--right  { background: #8e4610; transform: rotateY(90deg)  translateZ(32px); }
 
 #boot.ready .ls-emblem { opacity: 0; }
+
+@keyframes ls-voxel {
+  0%   { transform: rotateX(-20deg) rotateY(0deg); }
+  100% { transform: rotateX(-20deg) rotateY(360deg); }
+}
 
 .ls-title {
   font-family: var(--font-display);
@@ -169,8 +174,6 @@ canvas { display: block; width: 100%; height: 100%; }
 
 #boot.ready .ls-enter,
 #boot.ready .ls-controls { display: block; }
-
-@keyframes ls-spin { to { transform: rotate(360deg); } }
 
 @keyframes pulse {
   0%, 100% { opacity: 0.5; }

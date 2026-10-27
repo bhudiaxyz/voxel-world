@@ -62,7 +62,7 @@ export const TIER_SETTINGS: Record<GpuTier, TierSettings> = {
   'mobile-high':{ dprCap: 1.5,  shadowRes: 2048, shadowBlurSamples: 8,  shadowExtent: 110, cameraFar: 3000, bloom: true,  aoTaps: 4, dof: true,  crepuscularTaps: 4, edgeMask: false, cloudShadow: true,  nightSkyFull: true,  aaQuality: 'smaa', streamRadius: 11, waterSubdivision: 32, particleCount: 700  },
   mid:          { dprCap: 1.25, shadowRes: 2048, shadowBlurSamples: 8,  shadowExtent: 120, cameraFar: 3000, bloom: true,  aoTaps: 4, dof: true,  crepuscularTaps: 4, edgeMask: false, cloudShadow: true,  nightSkyFull: true,  aaQuality: 'smaa', streamRadius: 11, waterSubdivision: 32, particleCount: 600  },
   low:          { dprCap: 1,    shadowRes: 1024, shadowBlurSamples: 4,  shadowExtent: 100, cameraFar: 1500, bloom: false, aoTaps: 0, dof: false, crepuscularTaps: 0, edgeMask: false, cloudShadow: false, nightSkyFull: false, aaQuality: 'fxaa', streamRadius: 8,  waterSubdivision: 16, particleCount: 200  },
-  'very-low':   { dprCap: 1,    shadowRes: 512,  shadowBlurSamples: 4,  shadowExtent: 80,  cameraFar: 1200, bloom: false, aoTaps: 0, dof: false, crepuscularTaps: 0, edgeMask: false, cloudShadow: false, nightSkyFull: false, aaQuality: 'none', streamRadius: 6,  waterSubdivision: 8,  particleCount: 0    },
+  'very-low':   { dprCap: 1,    shadowRes: 512,  shadowBlurSamples: 4,  shadowExtent: 80,  cameraFar: 1200, bloom: false, aoTaps: 0, dof: false, crepuscularTaps: 0, edgeMask: false, cloudShadow: false, nightSkyFull: false, aaQuality: 'none', streamRadius: 6,  waterSubdivision: 4,  particleCount: 0    },
 };
 
 /**
@@ -89,6 +89,9 @@ export function detectGpuTier(): GpuTier {
   const maxTexSize: number = gl2
     ? (gl2.getParameter(gl2.MAX_TEXTURE_SIZE) as number)
     : 4096;
+  // Release the probe context — it has served its purpose and holding it
+  // occupies GPU memory until the tab closes.
+  gl2?.getExtension('WEBGL_lose_context')?.loseContext();
 
   // deviceMemory is absent on Firefox/Safari; fall back to a canvas timing
   // probe or WebGL2 presence as a proxy.

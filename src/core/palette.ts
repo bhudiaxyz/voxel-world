@@ -68,7 +68,7 @@ export const PATTERN = {
 /* ------------------------------------------------------------------ *
  * Block library
  * ------------------------------------------------------------------ */
-const B = (id: any, def: any) => ({ id, pattern: PATTERN.NONE, fringe: 0, rough: 0.35, ...def });
+const B = (id: any, def: any) => ({ id, pattern: PATTERN.NONE, fringe: 0, rough: 0.35, sway: false, ...def });
 
 export const BLOCKS = {
   AIR: { id: 0 },
@@ -263,6 +263,7 @@ export const BLOCKS = {
     tint: c(0xf0a040),
     pattern: PATTERN.NONE,
     rough: 0.22,
+    sway: true,
   }),
   LEAF_BLUSH: B(31, {
     // bright gold
@@ -272,6 +273,7 @@ export const BLOCKS = {
     tint: c(0xf8c048),
     pattern: PATTERN.NONE,
     rough: 0.2,
+    sway: true,
   }),
   LEAF_LILAC: B(32, {
     // russet — lifted slightly
@@ -281,6 +283,7 @@ export const BLOCKS = {
     tint: c(0xd86848),
     pattern: PATTERN.NONE,
     rough: 0.22,
+    sway: true,
   }),
   LEAF_CREAM: B(33, {
     // warm straw
@@ -290,6 +293,7 @@ export const BLOCKS = {
     tint: c(0xf0d480),
     pattern: PATTERN.NONE,
     rough: 0.2,
+    sway: true,
   }),
   LEAF_MINT: B(34, {
     // forest green
@@ -299,6 +303,7 @@ export const BLOCKS = {
     tint: c(0x82a050),
     pattern: PATTERN.NONE,
     rough: 0.22,
+    sway: true,
   }),
   LEAF_ROSE: B(35, {
     // burnt orange
@@ -308,6 +313,7 @@ export const BLOCKS = {
     tint: c(0xe87848),
     pattern: PATTERN.NONE,
     rough: 0.22,
+    sway: true,
   }),
 
   /* --- accents ------------------------------------------------------- */

@@ -33,6 +33,7 @@ export const DEFAULTS = {
   shadowResolution: DEFAULT_SHADOW_RESOLUTION,
   planetRadius: PLANET_RADIUS_DEFAULT,
   daySpeed: 1,
+  windStrength: 0.4,
 };
 
 const RANGES = {
@@ -45,6 +46,7 @@ const RANGES = {
   shadowResolution: { min: 0, max: 4096, step: 1024 },
   planetRadius: { min: 100, max: 1000, step: 10 },
   daySpeed: { min: 0.1, max: 5, step: 0.1 },
+  windStrength: { min: 0, max: 1.5, step: 0.05 },
 };
 
 const CSS = `
@@ -126,6 +128,7 @@ interface SettingsValues {
   shadowResolution: number;
   planetRadius: number;
   daySpeed: number;
+  windStrength: number;
 }
 
 function load(): SettingsValues {
@@ -192,6 +195,7 @@ function clampAll(v: SettingsValues): SettingsValues {
     Math.round(clamp(v.planetRadius, RANGES.planetRadius.min, RANGES.planetRadius.max) / RANGES.planetRadius.step) *
     RANGES.planetRadius.step;
   v.daySpeed = Math.round(clamp(v.daySpeed, RANGES.daySpeed.min, RANGES.daySpeed.max) * 10) / 10;
+  v.windStrength = Math.round(clamp(v.windStrength, RANGES.windStrength.min, RANGES.windStrength.max) / RANGES.windStrength.step) * RANGES.windStrength.step;
   return v;
 }
 
@@ -205,6 +209,7 @@ const fmt = {
   shadowResolution: (n: number) => (n > 0 ? `${Math.round(n / 1024)}K` : 'Off'),
   planetRadius: (n: number) => String(Math.round(n)),
   daySpeed: (n: number) => `${n.toFixed(1)}×`,
+  windStrength: (n: number) => n === 0 ? 'Off' : n.toFixed(2),
 };
 
 interface SettingsDeps {
@@ -223,7 +228,7 @@ interface SettingsDeps {
       pendingCount?: number;
       setLoadRadius(r: number): void;
     };
-    meshes?: { edgeMaterial?: { linewidth: number } };
+    meshes?: { edgeMaterial?: { linewidth: number }; material?: { userData: { uniforms: any } } };
     allPlanetUnis: Array<{ uPlanetRadius: { value: number } }>;
   };
   dayNight: DayNight;
@@ -312,6 +317,13 @@ export function createSettings({ rig, atmo, input, world, dayNight, seed }: Sett
                min="${RANGES.daySpeed.min}" max="${RANGES.daySpeed.max}"
                step="${RANGES.daySpeed.step}" />
       </div>
+      <div class="row">
+        <label for="set-wind">Wind sway</label>
+        <span class="val" id="set-wind-val"></span>
+        <input id="set-wind" type="range"
+               min="${RANGES.windStrength.min}" max="${RANGES.windStrength.max}"
+               step="${RANGES.windStrength.step}" />
+      </div>
       <div class="foot">
         <button type="button" id="set-new-world">🎲 New world</button>
         <button type="button" id="set-reset" aria-label="Reset settings" style="margin-left:auto;">↺</button>
@@ -345,6 +357,7 @@ export function createSettings({ rig, atmo, input, world, dayNight, seed }: Sett
     shadowResolution: root.querySelector('#set-shadow-resolution') as HTMLInputElement,
     planetRadius: root.querySelector('#set-planet-radius') as HTMLInputElement,
     daySpeed: root.querySelector('#set-day-speed') as HTMLInputElement,
+    wind: root.querySelector('#set-wind') as HTMLInputElement,
   };
   const vals = {
     ink: root.querySelector('#set-ink-val') as HTMLElement,
@@ -355,6 +368,7 @@ export function createSettings({ rig, atmo, input, world, dayNight, seed }: Sett
     shadowResolution: root.querySelector('#set-shadow-resolution-val') as HTMLElement,
     planetRadius: root.querySelector('#set-planet-radius-val') as HTMLElement,
     daySpeed: root.querySelector('#set-day-speed-val') as HTMLElement,
+    wind: root.querySelector('#set-wind-val') as HTMLElement,
   };
 
   const values = load();
@@ -390,6 +404,9 @@ export function createSettings({ rig, atmo, input, world, dayNight, seed }: Sett
     for (const u of world.allPlanetUnis) u.uPlanetRadius.value = values.planetRadius;
     // Apply day speed: daySpeed is a multiplier; base cycle = 1200s
     dayNight.dayLengthSeconds = 1200 / values.daySpeed;
+    // Apply wind strength: _windBase is read by the frame loop's gust envelope
+    const wu = world?.meshes?.material?.userData?.uniforms;
+    if (wu) wu._windBase = values.windStrength;
   };
 
   const syncUi = () => {
@@ -402,6 +419,7 @@ export function createSettings({ rig, atmo, input, world, dayNight, seed }: Sett
     els.shadowResolution.value = String(values.shadowResolution);
     els.planetRadius.value = String(values.planetRadius);
     els.daySpeed.value = String(values.daySpeed);
+    els.wind.value = String(values.windStrength);
     els.fog.disabled = !values.fogEnabled;
     vals.ink.textContent = fmt.inkWidth(values.inkWidth);
     vals.zmin.textContent = fmt.zoomMin(values.zoomMin);
@@ -411,6 +429,7 @@ export function createSettings({ rig, atmo, input, world, dayNight, seed }: Sett
     vals.shadowResolution.textContent = fmt.shadowResolution(values.shadowResolution);
     vals.planetRadius.textContent = fmt.planetRadius(values.planetRadius);
     vals.daySpeed.textContent = fmt.daySpeed(values.daySpeed);
+    vals.wind.textContent = fmt.windStrength(values.windStrength);
   };
 
   const commit = () => {
@@ -453,6 +472,10 @@ export function createSettings({ rig, atmo, input, world, dayNight, seed }: Sett
   });
   els.daySpeed.addEventListener('input', () => {
     values.daySpeed = +els.daySpeed.value;
+    commit();
+  });
+  els.wind.addEventListener('input', () => {
+    values.windStrength = +els.wind.value;
     commit();
   });
 
