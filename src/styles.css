@@ -162,6 +162,7 @@ canvas { display: block; width: 100%; height: 100%; }
   color: var(--ink-faint);
   display: none;
 }
+.ls-controls:not(:empty) { display: block; }
 
 #boot.ready .ls-bar,
 #boot.ready .ls-tip { display: none; }

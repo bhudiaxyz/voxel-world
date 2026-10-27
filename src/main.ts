@@ -37,9 +37,11 @@ const container = document.getElementById('app')!;
 const bootEl = document.getElementById('boot')!;
 const barEl = bootEl.querySelector('.ls-bar span')!;
 const subEl = bootEl.querySelector('.ls-sub')!;
+const ctrlEl = bootEl.querySelector('.ls-controls') as HTMLElement;
 
-const setProgress = (p: number): void => {
+const setProgress = (p: number, s?: string): void => {
   (barEl as HTMLElement).style.width = `${Math.round(p * 100)}%`;
+  if (s) ctrlEl.textContent = s;
 };
 
 async function start(): Promise<void> {
@@ -330,7 +332,6 @@ async function start(): Promise<void> {
 
     if (!started) {
       started = true;
-      const ctrlEl = bootEl.querySelector('.ls-controls') as HTMLElement;
       ctrlEl.textContent = isTouchDevice
         ? 'Left stick · move   Swipe right · look   ↑ · jump/ascend   ↓ · descend   ⚡ · sprint   ✈ · fly   🚁 · drone   🛬 · land'
         : 'WASD · move   Mouse · look   Space · jump   F · fly   G · drone   L · land   E · edges   M · map';
