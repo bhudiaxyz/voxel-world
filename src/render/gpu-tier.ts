@@ -9,7 +9,8 @@
  *   very-low     — 7-year-old or weaker mobile
  *
  * Samsung Galaxy S22 Ultra (8-core, 12 GB)     → mobile-high
- * Apple iPad Pro M2 (8-core, 8 GB)             → mobile-high
+ * Apple iPad Pro M2 (8-core, 8 GB)             → mobile-high (Safari: deviceMemory absent, probe=4, threshold ≥4 catches it)
+ * Apple iPad Air M2 (8-core, 4 GB)             → mobile-high
  * Apple iPad Air A14 (6-core, 4 GB)            → mid
  * MacBook Air M2 (8-core, 8 GB, no mobile UA)  → high  (maxTex=16384)
  * Intel UHD laptop (8-core, 16 GB, maxTex≤8192)→ mid   (downclassed by texture probe)
@@ -112,7 +113,7 @@ export function detectGpuTier(): GpuTier {
 
   // mobile-high: flagship phone/tablet (replaces old 'high' mobile path to avoid
   // enabling EdgeMask on mobile, which doubles draw calls for little visual gain)
-  if (mobile && cores >= 8 && estimatedMem >= 8) return 'mobile-high';
+  if (mobile && cores >= 8 && estimatedMem >= 4) return 'mobile-high';
 
   // high: desktop with discrete GPU — requires large texture units to exclude
   // integrated Intel/AMD which tops out at maxTexSize=8192.
