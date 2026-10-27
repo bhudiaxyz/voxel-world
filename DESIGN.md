@@ -19,9 +19,9 @@ src/
 │   ├── planner.ts           ← planWorld(): island layout, stepping stones, bridge chains, biome fields, river routing
 │   ├── terrain.ts           ← generateTerrain(): contour-disc terracing, river carving, voxel fill, RIVER_WATER blocks
 │   ├── water.ts             ← makeDepthMap() (RG texture), createWater() (wave shader, Beer-Lambert absorption)
-│   ├── vegetation.ts        ← plantTree() (9 silhouette forms), plantBush(), ferns, moss, lichen, grass, mushrooms, crystals
+│   ├── vegetation.ts        ← plantTree() (14 silhouette forms), plantBush(), ferns, moss, lichen, grass, mushrooms, crystals; BIOME_FLORA tables
 │   ├── props.ts             ← bridges, rocks, and other static props placed from terrain data
-│   └── stamps.ts            ← buildStamps(): scenic grammars (waterfall, crossing, pond, grove, overlook), landmark grammars
+│   └── stamps.ts            ← buildStamps(): scenic grammars (waterfall, crossing, pond, grove, overlook, hotspring), landmark grammars (spire, obelisk, ring, tombs, biosphere, well, arch)
 │
 ├── render/
 │   ├── renderer.ts          ← WebGLRenderer setup, shadow map config per tier
@@ -622,7 +622,7 @@ On startup (`main.ts`):
 | 0.19 | shaping the banks | `generateTerrain` — walkability, stairs, boulders |
 | 0.21 | filling the voxels | `generateTerrain` — voxel fill loop |
 | 0.26 | building the crossings | `buildStructures` — bridges, stepping stones |
-| 0.34 | placing the landmarks | `buildStamps` — spires, obelisks, biospheres, tombs |
+| 0.34 | placing scenes and landmarks | `buildStamps` — scenic stamps (groves, hot springs, overlooks…) + landmark structures (spires, wells, arches…) |
 | 0.40 | growing the forests | `scatterVegetation` — trees, mushrooms, crystals |
 | 0.50 | finding the path | `findSpawn` — locate a good player start position |
 | 0.54 → 0.96 | meshing the world | chunk streaming preload (per-chunk sub-progress) |
@@ -667,12 +667,13 @@ Each grammar re-validates the terrain before building. A site whose conditions a
 | `lilyPond` | Level clearing near waterline | Excavated basin, sand rim, lily pads, leaning tree |
 | `blossomGrove` | Level open ground | Torii gate, swept floor, great tree, secondary ring, lanterns |
 | `cliffOverlook` | Level ground with 7+ block drop | Paved terrace, parapet, bench, lanterns, one tree |
+| `hotSpring` | Dry inland mid-elevation ground | Oval RIVER_WATER pool on STONE_WARM floor, boulder rim, leaf-moss scatter |
 
-Separation: `MIN_SEPARATION = 34` blocks between any two scene centres. Quotas (`QUOTA`) cap each kind per 256×256 area so one type does not dominate.
+Separation: `MIN_SEPARATION = 34` blocks between any two scene centres. Quotas (`QUOTA`) cap each kind per 256×256 area so one type does not dominate. `hotspring` quota: 2 per area.
 
 ### Landmark grammars
 
-One pass per continent after scenic stamps. Five kinds, one per continent slot, shuffled per seed. Each landmark reserves its footprint against the vegetation scatter pass.
+One pass per continent after scenic stamps. Seven kinds, 2–3 per continent slot, shuffled per seed. Each landmark reserves its footprint against the vegetation scatter pass. All seven kinds are registered in `map.ts` and appear on the minimap as landmark circles.
 
 | Grammar | Generates |
 | --- | --- |
@@ -681,30 +682,41 @@ One pass per continent after scenic stamps. Five kinds, one per continent slot, 
 | `monolithRing` | 7–8 standing stones at radius 10–13, every-other lintel, PATH floor |
 | `tombstoneField` | 14–22 scattered upright slabs 2–4 blocks tall, random lean caps |
 | `floatingBiosphere` | Ovoid voxel body floating 20–32 blocks above terrain (grass cap → soil → warm-stone core), 8 stalactite drips below, small tree on top |
+| `ancientWell` | Stone rim (3×3 ring), STONE_PALE crossbeam, PATH clearing radius 5, scattered worn stones |
+| `ruinedArch` | Two pillars 5–7 blocks tall, partial lintel (1–2 centre blocks missing), rubble scatter |
 
 The floating biosphere uses `T.put()` at `floatY + dy` offsets, bypassing the heightfield entirely. Stalactite length tapers from `STONE_WARM` (tip) through `STONE_PALE` to `STONE` (base).
+
+The ruined arch spans along the X axis; the gap is randomised per seed so no two arches look identical. `ancientWell` is the most common ancient-ruin type and appears in flat inland clearings.
 
 ---
 
 ## Vegetation detail
 
-`src/world/vegetation.ts` — `plantTree()` supports nine silhouette forms:
+`src/world/vegetation.ts` — `plantTree()` supports fourteen silhouette forms:
 
-| Form | Silhouette |
-| --- | --- |
-| `round` | Classic round crown |
-| `stack` | Tiered stacking |
-| `twin` | Two-lobed top |
-| `bunch` | Tight cluster |
-| `nub` | Small compact cap |
-| `spire` | Tall narrow cone |
-| `umbrella` | Flat wide canopy |
-| `broad` | Low spreading crown |
-| `tall` | Birch/poplar — very tall bare trunk, small airy crown |
-| `layered` | Pagoda/cedar — 2–4 tiered horizontal discs with gaps |
-| `weeping` | Weeping cherry — wide drooping skirt, lifted central crown |
+| Form | Silhouette | Primary biomes |
+| --- | --- | --- |
+| `round` | Classic round crown | All |
+| `stack` | Tiered stacking | All |
+| `twin` | Two-lobed top | All |
+| `bunch` | Tight cluster | All |
+| `nub` | Small compact cap | All (small scale) |
+| `spire` | Tall narrow cone | HIGHLAND, CONIFER |
+| `umbrella` | Flat wide canopy | MEADOW, SHORE |
+| `broad` | Low spreading crown | MEADOW, WETLAND |
+| `tall` | Birch/poplar — very tall bare trunk, small airy crown | MEADOW |
+| `layered` | Pagoda/cedar — 2–4 tiered horizontal discs with gaps | SAKURA |
+| `weeping` | Weeping cherry — wide drooping skirt, lifted central crown | SAKURA |
+| `palm` | Curved trunk, frond canopy with satellite clusters | SHORE (double-weighted) |
+| `dead` | Bare skeletal stubs, optional lean caps | HIGHLAND (double-weighted), SHORE |
+| `mangrove` | Aerial-root spread base, tiered canopy by scale | WETLAND (double-weighted) |
 
-`pickForm(scale, rng)` selects a form based on tree scale. `BIOME_FLORA` per-biome tables bias toward biome-appropriate forms (e.g. `SAKURA` biome doubles the weight of `weeping`).
+`pickForm(scale, rng)` selects a form based on tree scale: large trees (`scale > 0.72`) may be `palm`; medium (`scale > 0.46`) may be `mangrove`; small-medium (`scale > 0.26`) may be `dead`. `BIOME_FLORA` per-biome tables further bias toward biome-appropriate forms via weighted repetition in the `forms` array. Updated biomes:
+
+- **SHORE** — adds `'palm'` (×2), `'dead'`; `scale` range widened to `[0.16, 0.7]`
+- **WETLAND** — adds `'mangrove'` (×2) alongside `'broad'`, `'weeping'`, `'tall'`
+- **HIGHLAND** — adds `'dead'` (×2) alongside `'spire'`, `'layered'`
 
 ### Ground detail: mushrooms and crystals
 
