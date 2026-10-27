@@ -334,7 +334,7 @@ function findLip(T: any, cx: any, cz: any, r: any) {
  *   generates  cascade · plunge pool · spray rocks · viewing deck
  *              · two framing trees · lanterns · reeds
  */
-function waterfallGarden(world: any, T: any, site: any, rng: any) {
+function waterfallGarden(_world: any, T: any, site: any, rng: any) {
   const c = findCascadeCliff(T, site.at[0] | 0, site.at[1] | 0, SEARCH_R);
   if (!c) return null;
 
@@ -508,7 +508,7 @@ function stoneCrossing(world: any, T: any, site: any, rng: any) {
  *   requires   a level clearing above the waterline
  *   generates  basin · sand rim · lily pads · a leaning tree · reeds · a rock
  */
-function lilyPond(world: any, T: any, site: any, rng: any) {
+function lilyPond(_world: any, T: any, site: any, rng: any) {
   const spot = findClearing(T, site.at[0] | 0, site.at[1] | 0, SEARCH_R, 7);
   if (!spot) return null;
   const [cx, cz] = spot;
@@ -577,7 +577,7 @@ function lilyPond(world: any, T: any, site: any, rng: any) {
  * The clearing is the point. A grove that is merely denser than the woodland
  * around it is invisible; a grove with a hole in the middle of it is a place.
  */
-function blossomGrove(world: any, T: any, site: any, rng: any) {
+function blossomGrove(_world: any, T: any, site: any, rng: any) {
   const spot = findClearing(T, site.at[0] | 0, site.at[1] | 0, SEARCH_R, 5);
   if (!spot) return null;
   const [cx, cz] = spot;
@@ -637,7 +637,7 @@ function blossomGrove(world: any, T: any, site: any, rng: any) {
  *   requires   level ground with a 7+ block drop beside it
  *   generates  a paved terrace · a low parapet · a bench · lanterns · one tree
  */
-function cliffOverlook(world: any, T: any, site: any, rng: any) {
+function cliffOverlook(_world: any, T: any, site: any, rng: any) {
   const lip = findLip(T, site.at[0] | 0, site.at[1] | 0, SEARCH_R);
   if (!lip) return null;
   const { ux, uz, h } = lip;
@@ -1074,7 +1074,7 @@ const GRAMMARS = {
  * Runs after props (so a stamp can see the bridges) and before vegetation (so
  * the scatter respects the clearings it reserves).
  */
-export function buildStamps(world: any, rng: any) {
+export function buildStamps(world: any, _rng: any) {
   const plan = world.plan;
   world.stampTrees = world.stampTrees || [];
   world.stamps = [];

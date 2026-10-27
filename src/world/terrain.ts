@@ -1087,7 +1087,7 @@ function scatterBoulders(H: any, S: any, land: any, stairMask: any, noStair: any
   }
 }
 
-function blob(H: any, S: any, mask: any, cx: any, cz: any, wx: any, wz: any, rise: any, tone: any, rng: any) {
+function blob(H: any, S: any, mask: any, cx: any, cz: any, wx: any, wz: any, rise: any, tone: any, _rng: any) {
   const base = H[cz * S + cx];
   for (let dz = -wz; dz <= wz; dz++) {
     for (let dx = -wx; dx <= wx; dx++) {
@@ -1101,7 +1101,7 @@ function blob(H: any, S: any, mask: any, cx: any, cz: any, wx: any, wz: any, ris
   }
 }
 
-function round(H: any, S: any, mask: any, cx: any, cz: any, r: any, rise: any, tone: any, rng: any) {
+function round(H: any, S: any, mask: any, cx: any, cz: any, r: any, rise: any, tone: any, _rng: any) {
   const base = H[cz * S + cx];
   const ri = Math.ceil(r);
   for (let dz = -ri; dz <= ri; dz++) {
@@ -1125,7 +1125,7 @@ function round(H: any, S: any, mask: any, cx: any, cz: any, r: any, rise: any, t
  * touching the heightfield, so walkability and every downstream consumer are
  * unaffected — these only ever add or remove blocks *below* a column top.
  */
-function decorateCliffs(grid: any, heights: any, land: any, S: any, rng: any, nRock: any, area = 1) {
+function decorateCliffs(grid: any, heights: any, land: any, S: any, rng: any, _nRock: any, area = 1) {
   const { STONE, STONE_PALE, STONE_WARM } = BLOCKS;
   const at = (x: any, z: any) => heights[clamp(z, 0, S - 1) * S + clamp(x, 0, S - 1)];
 

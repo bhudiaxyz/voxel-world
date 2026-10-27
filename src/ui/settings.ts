@@ -228,7 +228,7 @@ interface SettingsDeps {
       pendingCount?: number;
       setLoadRadius(r: number): void;
     };
-    meshes?: { edgeMaterial?: { linewidth: number }; material?: { userData: { uniforms: any } } };
+    meshes?: { edgeMaterial?: { linewidth: number }; material?: { userData: Record<string, any> } };
     allPlanetUnis: Array<{ uPlanetRadius: { value: number } }>;
   };
   dayNight: DayNight;
