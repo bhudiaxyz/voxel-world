@@ -31,6 +31,7 @@ export const SKY_UNIFORMS_GLSL = /* glsl */ `
   uniform vec3  uSunColor;
   uniform float uAurora;
   uniform float uAuroraTime;
+  uniform float uNightSkyFull;
 `;
 
 export const SKY_FN_GLSL = /* glsl */ `
@@ -135,7 +136,7 @@ export const SKY_FN_GLSL = /* glsl */ `
     add += vec3(0.82, 0.88, 1.0) * (moonDisc * 1.15 + moonGlow) * uNight;
 
     float clearNight = uNight * (1.0 - uCloudCover * 0.88);
-    if (clearNight > 0.01 && h > -0.08) {
+    if (clearNight > 0.01 && h > -0.08 && uNightSkyFull > 0.5) {
       vec3 axis = normalize(vec3(0.2, 0.78, 0.35));
       vec3 celestial = _rotateAroundAxis(dir, axis, -uStarAngle);
 
@@ -279,7 +280,8 @@ export function skyUniformValues(
     uCloudDark: { value: 0.0 },
     uWind: { value: new THREE_.Vector2(1, 0) },
     uSunColor: { value: new THREE_.Color(1.0, 0.9, 0.7) },
-    uAurora:     { value: 0.0 },
-    uAuroraTime: { value: 0.0 },
+    uAurora:       { value: 0.0 },
+    uAuroraTime:   { value: 0.0 },
+    uNightSkyFull: { value: 1.0 }, // 0 = static moon+stars only, 1 = full Milky Way + nebulae
   };
 }

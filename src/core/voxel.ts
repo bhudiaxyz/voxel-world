@@ -15,7 +15,7 @@
 import * as THREE from 'three';
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
-import { BLOCK_BY_ID, WATER } from './palette';
+import { BLOCK_BY_ID, WATER, LIGHT } from './palette';
 import { PLANET_UNIFORMS_GLSL, PLANET_BEND_GLSL, planetUniformValues } from '../render/planet.glsl';
 
 export const CHUNK = 24;
@@ -1828,6 +1828,9 @@ const FRAG_DECL = /* glsl */ `
   uniform float uWaterLevel, uWaterRange, uWorldSize;
   uniform float uWaterInkWidth, uWaterInkStrength;
   uniform vec3  uWaterInk;
+  uniform vec3  uSunDir;
+  uniform float uSunAmbient;   // diffuse boost from sun on lit faces
+  uniform float uFillAmbient;  // flat ambient lift for all faces
 
 
   /**
@@ -1946,13 +1949,24 @@ const FRAG_BODY = /* glsl */ `
     col *= 0.95 + macro * 0.10;   // ±5 % luminance variation
 
     // --- face-direction shading -------------------------------------
-    // A constant per-axis ramp. This is what makes voxel forms readable
-    // from any angle, independent of where the sun happens to be.
+    // A constant per-axis ramp keeps voxel forms readable from any angle
+    // independent of the sun direction. Side values raised from 0.88/0.94 so
+    // the unlit face reads as shaded surface rather than silhouette.
     float faceShade = 1.0;
     if (vNrmW.y > 0.5)            faceShade = 1.0;
-    else if (vNrmW.y < -0.5)      faceShade = 0.72;
-    else if (abs(vNrmW.x) > 0.5)  faceShade = 0.94;
-    else                          faceShade = 0.88;
+    else if (vNrmW.y < -0.5)      faceShade = 0.78;
+    else if (abs(vNrmW.x) > 0.5)  faceShade = 0.96;
+    else                          faceShade = 0.92;
+    // Hemisphere sky-ground blend: adds a small sky-tinted lift to faces that
+    // point upward and a ground-bounce lift to those that point down, matching
+    // the scene HemisphereLight behaviour and lifting the darkest side faces.
+    float skyFacing = clamp(dot(vNrmW, vec3(0.0, 1.0, 0.0)) * 0.5 + 0.5, 0.0, 1.0);
+    faceShade += skyFacing * 0.08;
+    // Directional sun contribution: faces angled toward the sun receive a
+    // diffuse boost, faces away get a smaller fill (no face is fully unlit).
+    float sunDot = dot(vNrmW, uSunDir);
+    faceShade += max(sunDot, 0.0) * uSunAmbient;
+    faceShade += (1.0 - max(sunDot, 0.0)) * uFillAmbient;
     col *= faceShade;
 
     // --- height-based tint on side faces ----------------------------
@@ -2025,6 +2039,9 @@ export function makeVoxelMaterial() {
     uAoTint: { value: new THREE.Color(0.64, 0.59, 0.74) },
     uShadowHue: { value: new THREE.Vector3(1.05, 0.9, 1.18) },
     uShadowTintStrength: { value: 0.82 },
+    uSunDir: { value: LIGHT.sunDir.clone() },
+    uSunAmbient: { value: 0.14 },  // diffuse lift on sun-facing sides
+    uFillAmbient: { value: 0.06 }, // flat lift on shadow sides
 
     /* --- waterline ---------------------------------------------------- */
     /** Signed depth field, handed over by setVoxelWaterline once the world exists. */

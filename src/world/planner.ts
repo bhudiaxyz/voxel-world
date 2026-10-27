@@ -150,6 +150,28 @@ export function planWorld(seed: any, size: any) {
     islandCenters.push([ix, iz]);
   }
 
+  // 0=tropical  1=temperate  2=arid  3=tundra — each island gets one, assigned
+  // by a seeded hash so the same world seed always produces the same palette.
+  // We ensure variety: if there are 4+ islands, all four biomes appear.
+  const ISLAND_BIOME_TYPES = ['tropical', 'temperate', 'arid', 'tundra'] as const;
+  const islandBiomes: number[] = islandCenters.map((_, idx) => {
+    // Simple seeded hash: mix seed with index
+    const h = Math.abs((seed ^ (idx * 0x9e3779b9)) >>> 0);
+    return h % ISLAND_BIOME_TYPES.length;
+  });
+  // Guarantee all four biomes appear when there are enough islands
+  if (islandCenters.length >= 4) {
+    const present = new Set(islandBiomes);
+    let slot = 0;
+    for (let b = 0; b < 4; b++) {
+      if (!present.has(b)) {
+        while (present.has(islandBiomes[slot])) slot++;
+        islandBiomes[slot] = b;
+        present.add(b);
+      }
+    }
+  }
+
   /* ---- 0b. stepping-stone islands ---------------------------------
    * Place 1–2 small intermediate islands along the line between each pair of
    * main islands. Stored separately so terrain can mask them at their own
@@ -294,16 +316,20 @@ export function planWorld(seed: any, size: any) {
   const cw = Math.ceil(size / CELL);
   const cellRegion = new Int16Array(cw * cw);
   const cellBiome = new Uint8Array(cw * cw);
-  // Warp is bounded by the region spacing so the search radius below stays
-  // valid; as a fraction of world size it grew to 56 blocks at 1024 and threw
-  // the lookup clean out of its own neighbourhood.
-  const WARP = REGION_SPACING * 0.5;
+  // Base warp is bounded by region spacing; it grows near island rims so
+  // biome borders are more ragged/organic at the shore (where it reads best).
+  const WARP_BASE = REGION_SPACING * 0.5;
   const scratch: any[] = [];
 
   for (let cz = 0; cz < cw; cz++) {
     for (let cx = 0; cx < cw; cx++) {
       const wx = (cx + 0.5) * CELL,
         wz = (cz + 0.5) * CELL;
+      // rimFrac: 0 at island centre, 1 at shore/beyond — drives extra warp
+      let minIslandDist = Infinity;
+      for (const [ix, iz] of islandCenters) minIslandDist = Math.min(minIslandDist, Math.hypot(wx - ix, wz - iz));
+      const rimFrac = clamp((minIslandDist - islandRadius * 0.4) / (islandRadius * 0.6), 0, 1);
+      const WARP = WARP_BASE * (1.0 + rimFrac * 0.8);
       const qx = wx + fbm2(nEdge, wx * 0.006, wz * 0.006, 3) * WARP;
       const qz = wz + fbm2(nEdge, wx * 0.006 + 19, wz * 0.006 + 7, 3) * WARP;
       const cand = nearby(qx, qz, 1, scratch);
@@ -691,6 +717,7 @@ export function planWorld(seed: any, size: any) {
     inside,
     /** Island centres and per-island radius — used by terrain to mask land/sea. */
     islandCenters,
+    islandBiomes,
     islandRadius,
     stoneIslands,
     steppingRadius,

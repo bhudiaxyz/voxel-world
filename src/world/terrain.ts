@@ -275,6 +275,18 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
   const islandRadius: number = plan ? plan.islandRadius : S * 0.427;
   const rimR = (x: any, z: any) => islandRadius + fbm2(nEdge, x * 0.011, z * 0.011, 3) * 15 * K;
 
+  // Nearest main island biome index (0=tropical 1=temperate 2=arid 3=tundra)
+  const nearestIslandBiome = (x: number, z: number): number => {
+    if (!plan?.islandCenters?.length) return 1;
+    let bestDist = Infinity, bestIdx = 0;
+    for (let i = 0; i < plan.islandCenters.length; i++) {
+      const [ix, iz] = plan.islandCenters[i];
+      const d = Math.hypot(x - ix, z - iz);
+      if (d < bestDist) { bestDist = d; bestIdx = i; }
+    }
+    return plan.islandBiomes?.[bestIdx] ?? 1;
+  };
+
   /* ================================================================
    * The water network
    * ================================================================
@@ -894,14 +906,35 @@ export function generateTerrain(seed = 20260820, plan: any = null) {
         smoothstep(3, 9, dropBelow(heights, S, x, z)) * 0.1;
       const sandField = 1 - smoothstep(0.0, 6.0, riverDist(x, z));
 
+      const biome = nearestIslandBiome(x, z);
+      // Per-biome thresholds: arid extends sand inland; tundra makes pale rocky
+      // ground; tropical prefers lush deep grass; temperate uses defaults.
+      // biome: 0=tropical  1=temperate  2=arid  3=tundra
+      const sandThreshold  = biome === 2 ? 0.55 : biome === 0 ? 0.05 : 0.15;
+      const rockThreshold  = biome === 3 ? 0.32 : biome === 2 ? 0.38 : 0.42;
+      const rockLightThreshold = biome === 3 ? 0.18 : biome === 2 ? 0.24 : 0.28;
+
       let s;
       if (!land[i]) s = SAND.id;
-      else if (top <= SEA + 2 && (sandField > 0.15 || wetness[i] > 0.3)) s = SAND.id;
-      else if (rockField > 0.42) s = (fbm2(nRock, x * 0.03 + 9, z * 0.03, 2) > 0.0 ? STONE : STONE_PALE).id;
-      else {
+      else if (top <= SEA + 2 && (sandField > sandThreshold || wetness[i] > 0.3)) s = SAND.id;
+      else if (biome === 2 && top <= SEA + 8 && sandField > 0.02) s = SAND.id; // arid: deep sandy shores
+      else if (rockField > rockThreshold) {
+        // tundra uses pale stone; arid uses warm stone; others mix
+        const warmRock = biome === 2 || (biome === 1 && fbm2(nRock, x * 0.03 + 9, z * 0.03, 2) > 0.2);
+        s = (biome === 3 ? STONE_PALE : warmRock ? STONE_WARM : fbm2(nRock, x * 0.03 + 9, z * 0.03, 2) > 0.0 ? STONE : STONE_PALE).id;
+      } else {
         const g = fbm2(nTone, x * 0.0115 + 90, z * 0.0115 + 12, 2) + jitter;
-        s = g > 0.13 ? GRASS_LIGHT.id : g < -0.14 ? GRASS_DEEP.id : GRASS.id;
-        if (rockField > 0.28) {
+        if (biome === 0) {
+          // tropical: lush, mostly deep/mid green
+          s = g > 0.18 ? GRASS.id : GRASS_DEEP.id;
+        } else if (biome === 3) {
+          // tundra: pale and muted
+          s = g > -0.05 ? GRASS_LIGHT.id : GRASS.id;
+        } else {
+          // temperate / arid default grass band
+          s = g > 0.13 ? GRASS_LIGHT.id : g < -0.14 ? GRASS_DEEP.id : GRASS.id;
+        }
+        if (rockField > rockLightThreshold) {
           s = s === GRASS_LIGHT.id ? GRASS_LIGHT_STONE.id : s === GRASS_DEEP.id ? GRASS_DEEP_STONE.id : GRASS_STONE.id;
         }
       }

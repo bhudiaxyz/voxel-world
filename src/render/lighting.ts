@@ -139,6 +139,7 @@ export class Atmosphere {
 
     /* ---- sky dome ------------------------------------------------ */
     this.sky = makeSkyDome(worldSize * 2.6, LIGHT.sunDir);
+    this.sky.material.uniforms.uNightSkyFull.value = ts.nightSkyFull ? 1.0 : 0.0;
     scene.add(this.sky);
 
     /* ---- key light ----------------------------------------------- */
@@ -156,7 +157,12 @@ export class Atmosphere {
     sun.shadow.camera.bottom = -S;
     sun.shadow.camera.near = 1;
     sun.shadow.camera.far = worldSize * 3.2;
-    const shadowRes = ts.shadowRes > 0 ? ts.shadowRes : SHADOW_RES;
+    const requestedRes = ts.shadowRes > 0 ? ts.shadowRes : SHADOW_RES;
+    // Cap to MAX_TEXTURE_SIZE so old mobile GPUs don't silently fail or clamp.
+    const gl = (document.createElement('canvas').getContext('webgl2') ||
+                document.createElement('canvas').getContext('webgl')) as WebGLRenderingContext | null;
+    const maxTex = gl ? (gl.getParameter(gl.MAX_TEXTURE_SIZE) as number) : 2048;
+    const shadowRes = Math.min(requestedRes, maxTex);
     sun.shadow.mapSize.set(shadowRes, shadowRes);
     // Voxels are 1 unit. The old normalBias of 0.5 was half a block, which
     // slid every shadow half a block off its caster (peter-panning at every
@@ -166,7 +172,7 @@ export class Atmosphere {
     // VSM's separable blur: enough softness to match the painted reference,
     // with enough samples that the penumbra is smooth rather than speckled.
     sun.shadow.radius = 2.25;
-    sun.shadow.blurSamples = ts.blurSamples;
+    sun.shadow.blurSamples = 12;
     sun.shadow.intensity = 0.48;
     // Keep this fully dynamic. A day/night system can animate the sun every
     // frame and both terrain and player shadows will respond immediately.

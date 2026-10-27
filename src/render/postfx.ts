@@ -359,9 +359,10 @@ function makeAtmosphereShader(sunDir: THREE.Vector3) {
 
       /* ---- extras ---- */
       uInscatter: { value: 0.28 },
-      uDof: { value: 1.2 },    // pixels of defocus at full haze (0 = disabled)
-      uAOTaps: { value: 8 },   // rosette taps (0 = skip AO)
+      uDof: { value: 1.2 },         // pixels of defocus at full haze (0 = disabled)
+      uAOTaps: { value: 8 },        // rosette taps (0 = skip AO)
       uCloud: { value: 0.055 },
+      uCloudShadow: { value: 1.0 }, // 1 = cloud shadow noise on, 0 = disabled
     },
     vertexShader: /* glsl */ `
       varying vec2 vUv;
@@ -373,7 +374,7 @@ function makeAtmosphereShader(sunDir: THREE.Vector3) {
       uniform float uNear, uFar, uAerialD, uFogNear, uDesat, uSkyBlend;
       uniform float uMistBase, uMistH, uMistDens, uMistMax;
       uniform float uAOStrength, uAORadius, uAORange;
-      uniform float uInscatter, uDof, uAOTaps, uCloud, uTime, uFocal;
+      uniform float uInscatter, uDof, uAOTaps, uCloud, uCloudShadow, uTime, uFocal;
       uniform vec3 uCamPos, uMistColor, uAOTint;
       uniform vec2 uResolution;
       uniform mat4 uInvProj, uInvView;
@@ -464,28 +465,29 @@ function makeAtmosphereShader(sunDir: THREE.Vector3) {
           float px = clamp(uAORadius * uFocal / max(-zc, 1.0), 2.0, 64.0);
           vec2 aoStep = px / uResolution;
           float occ = 0.0;
-          int taps = int(uAOTaps);
           for (int i = 0; i < 8; i++) {
-            if (i >= taps) break;
+            float w = step(float(i), uAOTaps - 1.0);
             float zs1 = viewZ(vUv + AO_DIR[i] * aoStep * 0.45);
             float zs2 = viewZ(vUv + AO_DIR[i] * aoStep);
             float d1 = zs1 - zc;
             float d2 = zs2 - zc;
-            occ += clamp(d1 / uAORange, 0.0, 1.0) * (1.0 - smoothstep(uAORange, uAORange * 4.0, d1)) * 0.6;
-            occ += clamp(d2 / uAORange, 0.0, 1.0) * (1.0 - smoothstep(uAORange, uAORange * 4.0, d2)) * 0.4;
+            occ += w * clamp(d1 / uAORange, 0.0, 1.0) * (1.0 - smoothstep(uAORange, uAORange * 4.0, d1)) * 0.6;
+            occ += w * clamp(d2 / uAORange, 0.0, 1.0) * (1.0 - smoothstep(uAORange, uAORange * 4.0, d2)) * 0.4;
           }
-          occ = clamp(occ / float(taps), 0.0, 1.0);
+          occ = clamp(occ / max(uAOTaps, 1.0), 0.0, 1.0);
           // Fade AO out with distance: it has nothing to say once the air has
           // eaten the contrast anyway, and it keeps the far field clean.
           ao = 1.0 - uAOStrength * occ * (1.0 - fog);
         }
         col *= mix(uAOTint, vec3(1.0), ao);
 
-        // ---- drifting cloud shadow ---------------------------------------
-        float cs = n2(world.xz * 0.010 + vec2(uTime * 0.011, uTime * 0.006)) * 0.65
-                 + n2(world.xz * 0.026 - vec2(uTime * 0.017, 0.0)) * 0.35;
-        cs = smoothstep(0.40, 0.78, cs);
-        col *= 1.0 - uCloud * cs * (1.0 - fog);
+        // ---- drifting cloud shadow (tiered) --------------------------------
+        if (uCloudShadow > 0.5) {
+          float cs = n2(world.xz * 0.010 + vec2(uTime * 0.011, uTime * 0.006)) * 0.65
+                   + n2(world.xz * 0.026 - vec2(uTime * 0.017, 0.0)) * 0.35;
+          cs = smoothstep(0.40, 0.78, cs);
+          col *= 1.0 - uCloud * cs * (1.0 - fog);
+        }
 
         // ---- chroma falls faster than value ------------------------------
         float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
@@ -549,16 +551,19 @@ export function createPostFX(
     depthTexture,
   });
 
+  const ts = TIER_SETTINGS[tier];
+
   composer.addPass(new SceneDepthPass(scene, camera, sceneFBO));
   edgeMaterial.uniforms.tSceneDepth.value = depthTexture;
   const edgePass = new EdgeMaskPass(edgeMaterial, camera, edgeMask, scene);
-  composer.addPass(edgePass);
+  if (ts.edgeMask) composer.addPass(edgePass);
 
   const haze = new ShaderPass(makeAtmosphereShader(LIGHT.sunDir));
   haze.uniforms.tDepth.value = depthTexture;
-  const ts = TIER_SETTINGS[tier];
   haze.uniforms.uAOTaps.value = ts.aoTaps;
   haze.uniforms.uDof.value = ts.dof ? 1.2 : 0.0;
+  haze.uniforms.uCloudShadow.value = ts.cloudShadow ? 1.0 : 0.0;
+  haze.uniforms.uNightSkyFull = { value: ts.nightSkyFull ? 1.0 : 0.0 };
   const authoredMistMax = haze.uniforms.uMistMax.value;
   composer.addPass(haze);
 
@@ -587,6 +592,7 @@ export function createPostFX(
       uDecay: { value: 0.96 },
       uDensity: { value: 0.96 },
       uWeight: { value: 0.35 },
+      uTaps: { value: 8.0 }, // 0 = disabled, 4 = half-quality, 8 = full
     },
     vertexShader: /* glsl */ `
       varying vec2 vUv;
@@ -599,24 +605,27 @@ export function createPostFX(
       uniform float uDecay;
       uniform float uDensity;
       uniform float uWeight;
+      uniform float uTaps;
       varying vec2 vUv;
       void main() {
-        if (uSunVisible < 0.01) { gl_FragColor = texture2D(tDiffuse, vUv); return; }
+        if (uSunVisible < 0.01 || uTaps < 0.5) { gl_FragColor = texture2D(tDiffuse, vUv); return; }
         vec2 delta = (vUv - uSunScreen) * uDensity / 8.0;
         vec2 uv = vUv;
         float illum = 1.0;
         vec3 accum = vec3(0.0);
         for (int i = 0; i < 8; i++) {
+          float w = step(float(i), uTaps - 1.0);
           uv -= delta;
-          accum += texture2D(tDiffuse, uv).rgb * illum;
-          illum *= uDecay;
+          accum += texture2D(tDiffuse, uv).rgb * illum * w;
+          illum *= mix(1.0, uDecay, w);
         }
-        accum *= uWeight * uSunVisible / 8.0;
+        accum *= uWeight * uSunVisible / max(uTaps, 1.0);
         gl_FragColor = texture2D(tDiffuse, vUv) + vec4(accum, 0.0);
       }
     `,
   };
   const crepPass = new ShaderPass(CrepuscularShader);
+  crepPass.uniforms['uTaps'].value = ts.crepuscularTaps;
   composer.addPass(crepPass);
 
   const grade = new ShaderPass(GradeShader);
@@ -627,6 +636,12 @@ export function createPostFX(
   grade.uniforms.tEdges.value = edgeMask.texture;
   grade.uniforms.toneMappingExposure.value = renderer.toneMappingExposure;
   grade.uniforms.uAberration.value = 0.0008;
+  // When EdgeMaskPass is skipped, zero the opacities so the black fallback
+  // texture fed to tEdges is invisible in the grade pass.
+  if (!ts.edgeMask) {
+    grade.uniforms.uEdgeDarkOpacity.value = 0.0;
+    grade.uniforms.uEdgeLightOpacity.value = 0.0;
+  }
   composer.addPass(grade);
 
   // SMAAPass constructor signature varies by Three.js version; cast to bypass.

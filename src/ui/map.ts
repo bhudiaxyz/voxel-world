@@ -168,7 +168,7 @@ function bakeTerrain(world: any) {
   return cv;
 }
 
-export function createMap({ world, controller, input }: any) {
+export function createMap({ world, controller, input, fpCam }: any) {
   const style = document.createElement('style');
   style.textContent = CSS;
   document.head.appendChild(style);
@@ -247,10 +247,17 @@ export function createMap({ world, controller, input }: any) {
     }
 
     // ---- the player -------------------------------------------------
-    const { cx: px, cy: pz } = proj.toCanvas(controller.pos.x, controller.pos.z);
-    // The camera's own facing, so the arrow answers "which way am I looking",
-    // which is the only question anyone opens a map to ask.
-    const h = controller.heading ?? 0;
+    // In drone/fly mode the camera moves independently of controller.pos, so
+    // read the live camera world position instead.
+    const airborne = fpCam && (fpCam.droneActive || fpCam.flyActive);
+    const mapX = airborne ? fpCam.camera.position.x : controller.pos.x;
+    const mapZ = airborne ? fpCam.camera.position.z : controller.pos.z;
+    const { cx: px, cy: pz } = proj.toCanvas(mapX, mapZ);
+    // Drone/fly forward = (-sin(rot.y), -cos(rot.y)) in XZ, so map heading = rot.y + π.
+    // Ground: controller.heading = atan2(vel.x, vel.z) already matches the arrow convention.
+    const h = airborne
+      ? fpCam.camera.rotation.y + Math.PI
+      : (controller.heading ?? 0);
     const dx = Math.sin(h),
       dz = Math.cos(h);
     const a = 11 * unit;
@@ -291,6 +298,50 @@ export function createMap({ world, controller, input }: any) {
     ctx.fill();
     ctx.stroke();
     ctx.restore();
+
+    // ---- compass rose (top-right) ------------------------------------
+    const cr = 18 * unit;          // outer radius
+    const cx2 = proj.W - cr * 1.8; // centre x
+    const cy2 = cr * 1.8;          // centre y
+
+    // Subtle disc background
+    ctx.save();
+    ctx.globalAlpha = 0.72;
+    ctx.fillStyle = 'rgba(18,14,10,0.55)';
+    ctx.beginPath();
+    ctx.arc(cx2, cy2, cr * 1.28, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1.0;
+
+    // Four cardinal points — N/S in red-white, E/W in grey-white
+    const CARDS = [
+      { label: 'N', angle: 0,             color: '#e84040' },
+      { label: 'E', angle: Math.PI / 2,   color: '#c8c0b0' },
+      { label: 'S', angle: Math.PI,       color: '#c8c0b0' },
+      { label: 'W', angle: -Math.PI / 2,  color: '#c8c0b0' },
+    ] as const;
+    ctx.font = `bold ${Math.round(cr * 0.72)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (const { label, angle, color } of CARDS) {
+      const lx = cx2 + Math.sin(angle) * cr * 1.05;
+      const ly = cy2 - Math.cos(angle) * cr * 1.05;
+      ctx.fillStyle = color;
+      ctx.fillText(label, lx, ly);
+    }
+
+    // Small tick marks between cardinals
+    for (let t = 0; t < 8; t++) {
+      const a = (t * Math.PI) / 4;
+      const inner = t % 2 === 0 ? cr * 0.52 : cr * 0.62;
+      ctx.strokeStyle = 'rgba(200,192,176,0.5)';
+      ctx.lineWidth = unit;
+      ctx.beginPath();
+      ctx.moveTo(cx2 + Math.sin(a) * inner, cy2 - Math.cos(a) * inner);
+      ctx.lineTo(cx2 + Math.sin(a) * cr * 0.78, cy2 - Math.cos(a) * cr * 0.78);
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   function setOpen(v: any) {
@@ -311,10 +362,10 @@ export function createMap({ world, controller, input }: any) {
         });
       }
       requestAnimationFrame(() => root.classList.add('vis'));
-      // Walking blind while the map covers the screen is how you end up in a
-      // lake. The previous pause state is restored, not assumed.
+      // In drone/fly mode leave input running so the player can navigate by map.
+      // In ground mode, pause to prevent walking blind into a lake.
       wasPaused = input.paused;
-      input.paused = true;
+      if (!fpCam?.droneActive && !fpCam?.flyActive) input.paused = true;
     } else {
       root.classList.remove('vis');
       input.paused = wasPaused;

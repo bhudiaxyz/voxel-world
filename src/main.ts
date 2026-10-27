@@ -124,7 +124,7 @@ async function start(): Promise<void> {
     dom: renderer.domElement,
     input,
   });
-  const map = createMap({ world, controller, input });
+  const map = createMap({ world, controller, input, fpCam });
   const bubbles = createBubbles({
     camera: fpCam.camera,
     container,
