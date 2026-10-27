@@ -22,13 +22,18 @@
 import * as THREE from 'three';
 import { BLOCK_BY_ID, WATER } from '../core/palette';
 
-/** Scene-kind marker colours — drawn from the world palette. */
-const KIND = {
-  waterfall: { fill: 'rgba(106,160,154,0.82)', ring: 'rgba(40,58,58,0.90)', label: 'waterfall' },
-  pond:      { fill: 'rgba(80,130,130,0.75)',  ring: 'rgba(42,64,64,0.90)',  label: 'pond' },
-  crossing:  { fill: 'rgba(192,144,82,0.82)',  ring: 'rgba(100,72,40,0.90)', label: 'crossing' },
-  grove:     { fill: 'rgba(130,168,82,0.82)',  ring: 'rgba(74,108,44,0.90)', label: 'grove' },
-  overlook:  { fill: 'rgba(170,162,150,0.75)', ring: 'rgba(96,90,82,0.90)',  label: 'overlook' },
+/** Scene-kind marker colours and icons — drawn from the world palette. */
+const KIND: Record<string, { fill: string; ring: string; label: string; icon?: string; landmark?: boolean }> = {
+  waterfall: { fill: 'rgba(106,160,154,0.82)', ring: 'rgba(40,58,58,0.90)',   label: 'Waterfall', icon: '💧' },
+  pond:      { fill: 'rgba(80,130,130,0.75)',  ring: 'rgba(42,64,64,0.90)',   label: 'Pond',      icon: '🪷' },
+  crossing:  { fill: 'rgba(192,144,82,0.82)',  ring: 'rgba(100,72,40,0.90)',  label: 'Crossing',  icon: '🌉' },
+  grove:     { fill: 'rgba(130,168,82,0.82)',  ring: 'rgba(74,108,44,0.90)',  label: 'Grove',     icon: '🌸' },
+  overlook:  { fill: 'rgba(170,162,150,0.75)', ring: 'rgba(96,90,82,0.90)',   label: 'Overlook',  icon: '🔭' },
+  // Landmarks — drawn as circles to distinguish them from scene diamonds
+  spire:     { fill: 'rgba(210,185,145,0.88)', ring: 'rgba(90,72,48,0.92)',   label: 'Twisted Spire',    icon: '⛰️',  landmark: true },
+  obelisk:   { fill: 'rgba(195,175,140,0.88)', ring: 'rgba(80,66,44,0.92)',   label: 'Obelisk',          icon: '🪨',  landmark: true },
+  ring:      { fill: 'rgba(180,165,138,0.85)', ring: 'rgba(72,60,42,0.92)',   label: 'Monolith Ring',    icon: '🗿',  landmark: true },
+  tombs:     { fill: 'rgba(160,150,138,0.82)', ring: 'rgba(64,58,50,0.92)',   label: 'Tombstone Field',  icon: '🪦',  landmark: true },
 };
 
 const CSS = `
@@ -228,22 +233,56 @@ export function createMap({ world, controller, input, fpCam }: any) {
       ctx.stroke();
     }
 
-    // ---- scenes: a diamond per composed place ----------------------
+    // ---- scenes + landmarks: shape + icon + label ----------------------
+    // Font sizes in canvas pixels so they appear consistent at any display scale.
+    const iconPx  = Math.round(18 * unit);
+    const labelPx = Math.round(13 * unit);
+    ctx.lineWidth = 1.3 * unit;
     for (const s of world.stamps || []) {
       const p = proj.toCanvas(s.at[0], s.at[1]);
-      const k = (KIND as any)[s.kind] || KIND.grove;
-      const r = 4.0 * unit;
-      ctx.save();
-      ctx.translate(p.cx, p.cy);
-      ctx.rotate(Math.PI / 4);
+      const k = KIND[s.kind] || KIND.grove;
       ctx.fillStyle = k.fill;
       ctx.strokeStyle = k.ring;
-      ctx.lineWidth = 1.3 * unit;
-      ctx.beginPath();
-      ctx.rect(-r, -r, r * 2, r * 2);
-      ctx.fill();
-      ctx.stroke();
-      ctx.restore();
+
+      if (k.landmark) {
+        // Landmark: filled circle
+        const r = 4.5 * unit;
+        ctx.beginPath();
+        ctx.arc(p.cx, p.cy, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      } else {
+        // Scenic stamp: rotated square (diamond)
+        const r = 4.0 * unit;
+        ctx.save();
+        ctx.translate(p.cx, p.cy);
+        ctx.rotate(Math.PI / 4);
+        ctx.beginPath();
+        ctx.rect(-r, -r, r * 2, r * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      if (k.icon) {
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.font = `${iconPx}px sans-serif`;
+        // Shadow pass (offset +1 px for readability over terrain)
+        ctx.fillStyle = 'rgba(0,0,0,0.55)';
+        ctx.fillText(k.icon, p.cx + 1, p.cy - 5 * unit + 1);
+        ctx.fillStyle = '#fff';
+        ctx.fillText(k.icon, p.cx, p.cy - 5 * unit);
+
+        ctx.font = `${labelPx}px sans-serif`;
+        ctx.textBaseline = 'top';
+        ctx.fillStyle = 'rgba(0,0,0,0.65)';
+        ctx.fillText(k.label, p.cx + 1, p.cy + 6 * unit + 1);
+        ctx.fillStyle = '#e8dcc1';
+        ctx.fillText(k.label, p.cx, p.cy + 6 * unit);
+        ctx.restore();
+      }
     }
 
     // ---- the player -------------------------------------------------

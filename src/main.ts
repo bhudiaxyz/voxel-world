@@ -63,7 +63,7 @@ async function start(): Promise<void> {
   const world = await buildWorld(SEED, setProgress, ts.streamRadius);
   scene.add(world.group);
 
-  const fpCam = new FPCamera(container.clientWidth / container.clientHeight, renderer.domElement);
+  const fpCam = new FPCamera(container.clientWidth / container.clientHeight, renderer.domElement, ts.cameraFar);
   const atmo = new Atmosphere(scene, world.size, tier);
   const dayNight = new DayNight(atmo, renderer);
 

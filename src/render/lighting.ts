@@ -149,7 +149,7 @@ export class Atmosphere {
 
     // The frustum follows the player, so a fixed view-sized extent keeps the
     // same crisp texel density even as the generated world grows.
-    const S = Math.min(worldSize * 0.42, SHADOW_EXTENT);
+    const S = Math.min(worldSize * 0.42, ts.shadowExtent ?? SHADOW_EXTENT);
     this.shadowExtent = S;
     sun.shadow.camera.left = -S;
     sun.shadow.camera.right = S;
@@ -172,7 +172,7 @@ export class Atmosphere {
     // VSM's separable blur: enough softness to match the painted reference,
     // with enough samples that the penumbra is smooth rather than speckled.
     sun.shadow.radius = 2.25;
-    sun.shadow.blurSamples = 12;
+    sun.shadow.blurSamples = ts.shadowBlurSamples ?? 12;
     sun.shadow.intensity = 0.48;
     // Keep this fully dynamic. A day/night system can animate the sun every
     // frame and both terrain and player shadows will respond immediately.

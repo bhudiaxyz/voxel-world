@@ -2,29 +2,35 @@
  * Lightweight GPU tier detection.
  *
  * Buckets:
- *   high      — desktop or flagship mobile (≥8 cores, ≥6 GB, or flagship mobile)
- *   mid       — laptop / modern tablet / capable mid-range phone (≥6 cores AND ≥3 GB)
- *   low       — older or constrained device (≤4 cores or ≤2 GB, desktop/non-mobile)
- *   very-low  — 7-year-old or weaker mobile
+ *   high         — desktop discrete GPU (≥8 cores, ≥6 GB, large texture units)
+ *   mobile-high  — flagship phone/iPad (≥8 cores, ≥8 GB mobile)
+ *   mid          — laptop / modern tablet / capable mid-range phone
+ *   low          — older or constrained desktop device
+ *   very-low     — 7-year-old or weaker mobile
  *
- * Samsung Galaxy S22 Ultra (8-core, 12 GB)     → high
- * Apple iPad M2 (8-core, 8 GB)                 → high
+ * Samsung Galaxy S22 Ultra (8-core, 12 GB)     → mobile-high
+ * Apple iPad Pro M2 (8-core, 8 GB)             → mobile-high
  * Apple iPad Air A14 (6-core, 4 GB)            → mid
- * 2019-era phone (6-core, 3 GB)                → mid
- * Budget phone (4-core, 2 GB)                  → low (desktop) / very-low (mobile)
- * 7-year-old mobile (4-core, 2 GB, mobile UA)  → very-low
- *
- * Key fix over previous version: mid now requires ≥6 cores AND ≥3 GB (previously OR),
- * so weak devices that passed on cores alone no longer get EdgeMask + bloom.
+ * MacBook Air M2 (8-core, 8 GB, no mobile UA)  → high  (maxTex=16384)
+ * Intel UHD laptop (8-core, 16 GB, maxTex≤8192)→ mid   (downclassed by texture probe)
+ * 2019 mid-range phone (6-core, 3 GB)          → mid
+ * Budget phone (4-core, 2 GB, WebGL2)          → low (desktop) / very-low (mobile)
+ * 7-year-old mobile (no WebGL2)                → very-low
  */
 
-export type GpuTier = 'high' | 'mid' | 'low' | 'very-low';
+export type GpuTier = 'high' | 'mobile-high' | 'mid' | 'low' | 'very-low';
 
 export interface TierSettings {
   /** Maximum device pixel ratio used for render targets. */
   dprCap: number;
   /** VSM shadow map edge length in pixels. */
   shadowRes: number;
+  /** VSM blur sample count — fewer = cheaper on fill-rate-limited mobile. */
+  shadowBlurSamples: number;
+  /** Shadow frustum half-extent in world units. Smaller = denser texels. */
+  shadowExtent: number;
+  /** Main camera far plane. Lower = better depth precision, no visible difference with fog. */
+  cameraFar: number;
   /** Whether the Unreal bloom pass is added to the composer. */
   bloom: boolean;
   /** Number of AO rosette taps (0 = skip AO entirely). */
@@ -39,6 +45,8 @@ export interface TierSettings {
   cloudShadow: boolean;
   /** Whether the full night-sky FBM (Milky Way, nebulae) runs. */
   nightSkyFull: boolean;
+  /** Anti-aliasing quality. 'smaa' = full SMAA, 'fxaa' = single-pass, 'none' = off. */
+  aaQuality: 'smaa' | 'fxaa' | 'none';
   /** Chunk stream radius in chunk units. Lower = fewer draw calls on weak devices. */
   streamRadius: number;
   /** Water plane subdivision (NxN quads). Higher = smoother waves but more vertices. */
@@ -47,29 +55,39 @@ export interface TierSettings {
   particleCount: number;
 }
 
+//                         dprCap  shadowRes  blurSamples  shadowExtent  cameraFar  bloom   aoTaps  dof    crep  edge   cloud  nightFull  aa       stream  waterSub  particles
 export const TIER_SETTINGS: Record<GpuTier, TierSettings> = {
-  //                dprCap  shadowRes  bloom   aoTaps  dof    crep  edge   cloud  nightFull  stream  waterSub  particles
-  high:       { dprCap: 2,    shadowRes: 3072, bloom: true,  aoTaps: 8, dof: true,  crepuscularTaps: 8, edgeMask: true,  cloudShadow: true,  nightSkyFull: true,  streamRadius: 8, waterSubdivision: 64, particleCount: 1200 },
-  mid:        { dprCap: 1.25, shadowRes: 2048, bloom: true,  aoTaps: 4, dof: true,  crepuscularTaps: 4, edgeMask: false, cloudShadow: true,  nightSkyFull: true,  streamRadius: 7, waterSubdivision: 32, particleCount: 600  },
-  low:        { dprCap: 1,    shadowRes: 1024, bloom: false, aoTaps: 2, dof: false, crepuscularTaps: 0, edgeMask: false, cloudShadow: false, nightSkyFull: false, streamRadius: 5, waterSubdivision: 16, particleCount: 200  },
-  'very-low': { dprCap: 1,    shadowRes: 512,  bloom: false, aoTaps: 0, dof: false, crepuscularTaps: 0, edgeMask: false, cloudShadow: false, nightSkyFull: false, streamRadius: 4, waterSubdivision: 8,  particleCount: 0    },
+  high:         { dprCap: 2,    shadowRes: 3072, shadowBlurSamples: 12, shadowExtent: 120, cameraFar: 6000, bloom: true,  aoTaps: 8, dof: true,  crepuscularTaps: 8, edgeMask: true,  cloudShadow: true,  nightSkyFull: true,  aaQuality: 'smaa', streamRadius: 8, waterSubdivision: 64, particleCount: 1200 },
+  'mobile-high':{ dprCap: 1.5,  shadowRes: 2048, shadowBlurSamples: 8,  shadowExtent: 110, cameraFar: 3000, bloom: true,  aoTaps: 4, dof: true,  crepuscularTaps: 4, edgeMask: false, cloudShadow: true,  nightSkyFull: true,  aaQuality: 'smaa', streamRadius: 7, waterSubdivision: 32, particleCount: 700  },
+  mid:          { dprCap: 1.25, shadowRes: 2048, shadowBlurSamples: 8,  shadowExtent: 120, cameraFar: 3000, bloom: true,  aoTaps: 4, dof: true,  crepuscularTaps: 4, edgeMask: false, cloudShadow: true,  nightSkyFull: true,  aaQuality: 'smaa', streamRadius: 7, waterSubdivision: 32, particleCount: 600  },
+  low:          { dprCap: 1,    shadowRes: 1024, shadowBlurSamples: 4,  shadowExtent: 100, cameraFar: 1500, bloom: false, aoTaps: 0, dof: false, crepuscularTaps: 0, edgeMask: false, cloudShadow: false, nightSkyFull: false, aaQuality: 'fxaa', streamRadius: 5, waterSubdivision: 16, particleCount: 200  },
+  'very-low':   { dprCap: 1,    shadowRes: 512,  shadowBlurSamples: 4,  shadowExtent: 80,  cameraFar: 1200, bloom: false, aoTaps: 0, dof: false, crepuscularTaps: 0, edgeMask: false, cloudShadow: false, nightSkyFull: false, aaQuality: 'none', streamRadius: 4, waterSubdivision: 8,  particleCount: 0    },
 };
 
 /**
  * Detect GPU tier from hardware signals.
  *
  * Uses hardwareConcurrency, deviceMemory (with canvas-timing fallback for
- * Firefox/Safari), WebGL2 availability, and UA mobile detection.
+ * Firefox/Safari), MAX_TEXTURE_SIZE (discriminates integrated vs discrete GPU),
+ * WebGL2 availability, and UA mobile detection.
  */
 export function detectGpuTier(): GpuTier {
   const cores = navigator.hardwareConcurrency ?? 4;
   const mobile = /Mobi|Android|iPad|iPhone|iPod/i.test(navigator.userAgent);
 
   // WebGL2 absence is a strong low-tier signal on 7-year-old devices.
-  const hasWebGL2 = (() => {
-    try { return !!document.createElement('canvas').getContext('webgl2'); }
-    catch { return false; }
+  const gl2 = (() => {
+    try { return document.createElement('canvas').getContext('webgl2'); }
+    catch { return null; }
   })();
+  const hasWebGL2 = !!gl2;
+
+  // MAX_TEXTURE_SIZE: integrated Intel/AMD tops out at 8192; discrete and all
+  // Apple Silicon report 16384+. This is the most reliable way to separate
+  // a 16-core i9 laptop with integrated graphics from a desktop discrete GPU.
+  const maxTexSize: number = gl2
+    ? (gl2.getParameter(gl2.MAX_TEXTURE_SIZE) as number)
+    : 4096;
 
   // deviceMemory is absent on Firefox/Safari; fall back to a canvas timing
   // probe or WebGL2 presence as a proxy.
@@ -91,12 +109,20 @@ export function detectGpuTier(): GpuTier {
   if (mobile && (!hasWebGL2 || cores <= 4 || estimatedMem <= 2)) return 'very-low';
   // low: weak desktop/non-mobile (≤4 cores OR ≤2 GB)
   if (cores <= 4 || estimatedMem <= 2) return 'low';
-  // high: flagship — desktop ≥8 core/≥6 GB, or flagship mobile ≥8 core/≥8 GB
-  if (!mobile && cores >= 8 && estimatedMem >= 6) return 'high';
-  if (mobile  && cores >= 8 && estimatedMem >= 8) return 'high';
-  // mid: capable device — requires BOTH ≥6 cores AND ≥3 GB (previously OR, which
-  // let weak single-signal devices through to mid with EdgeMask + bloom).
+
+  // mobile-high: flagship phone/tablet (replaces old 'high' mobile path to avoid
+  // enabling EdgeMask on mobile, which doubles draw calls for little visual gain)
+  if (mobile && cores >= 8 && estimatedMem >= 8) return 'mobile-high';
+
+  // high: desktop with discrete GPU — requires large texture units to exclude
+  // integrated Intel/AMD which tops out at maxTexSize=8192.
+  if (!mobile && cores >= 8 && estimatedMem >= 6 && maxTexSize >= 16384) return 'high';
+
+  // mid: capable device — requires BOTH ≥6 cores AND ≥3 GB.
+  // Also catches integrated-GPU desktops (maxTexSize≤8192) that would otherwise
+  // hit high but can't sustain EdgeMask + 3072 shadow.
   if (cores >= 6 && estimatedMem >= 3) return 'mid';
+
   // anything else (e.g. 6-core/2 GB or 4-core/4 GB) falls to low
   return 'low';
 }

@@ -38,8 +38,8 @@ export class FPCamera {
   private _droneMX: number;
   private _droneAltDelta: number;
 
-  constructor(aspect: number, domElement: HTMLElement) {
-    this.camera = new THREE.PerspectiveCamera(72, aspect, 0.1, 6000);
+  constructor(aspect: number, domElement: HTMLElement, cameraFar = 6000) {
+    this.camera = new THREE.PerspectiveCamera(72, aspect, 0.1, cameraFar);
     this.camera.rotation.order = 'YXZ';
 
     this.yaw = 0;

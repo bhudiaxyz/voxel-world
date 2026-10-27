@@ -38,6 +38,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
+import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
 import { Pass, FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
 import { GRADE, SKY, LIGHT } from '../core/palette';
 import { FOG_NEAR } from './lighting';
@@ -644,16 +645,25 @@ export function createPostFX(
   }
   composer.addPass(grade);
 
-  // SMAAPass constructor signature varies by Three.js version; cast to bypass.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const aa = new (SMAAPass as any)(size.x * dpr, size.y * dpr) as SMAAPass;
-  // AA is always the final pass and writes directly to the screen. Swapping
-  // the composer's offscreen buffers afterwards is unnecessary; worse, it
-  // made RenderPass alternate between rt1 and rt2 on successive frames while
-  // the atmosphere depth texture belongs to rt2. The result was a scene frame
-  // followed by a nearly blank haze frame — the visible full-screen flashing.
-  aa.needsSwap = false;
-  composer.addPass(aa);
+  // AA pass — SMAA (high/mid), FXAA (low), or none (very-low).
+  // All paths: needsSwap=false keeps RenderPass from alternating rt1/rt2,
+  // which caused the atmosphere depth texture mismatch and full-screen flash.
+  let aaResolutionUniforms: { value: THREE.Vector2 } | null = null;
+  if (ts.aaQuality === 'smaa') {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const smaa = new (SMAAPass as any)(size.x * dpr, size.y * dpr) as SMAAPass;
+    smaa.needsSwap = false;
+    composer.addPass(smaa);
+    const smaaAny = smaa as unknown as { uniforms?: { resolution: { value: THREE.Vector2 } } };
+    if (smaaAny.uniforms?.resolution) aaResolutionUniforms = smaaAny.uniforms.resolution;
+  } else if (ts.aaQuality === 'fxaa') {
+    const fxaa = new ShaderPass(FXAAShader);
+    fxaa.needsSwap = false;
+    fxaa.uniforms['resolution'].value.set(1 / (size.x * dpr), 1 / (size.y * dpr));
+    composer.addPass(fxaa);
+    aaResolutionUniforms = fxaa.uniforms['resolution'];
+  }
+  // 'none': no AA pass added — fastest path for very-low tier
 
   const setRes = (w: number, h: number) => {
     const p = renderer.getPixelRatio();
@@ -661,8 +671,7 @@ export function createPostFX(
     // focal length in pixels — converts a world-space radius at a given view
     // depth into a screen-space one
     haze.uniforms.uFocal.value = camera.projectionMatrix.elements[5] * h * p * 0.5;
-    const aaAny = aa as unknown as { uniforms?: { resolution: { value: THREE.Vector2 } } };
-    if (aaAny.uniforms?.resolution) aaAny.uniforms.resolution.value.set(1 / (w * p), 1 / (h * p));
+    if (aaResolutionUniforms) aaResolutionUniforms.value.set(1 / (w * p), 1 / (h * p));
   };
   setRes(size.x, size.y);
 
