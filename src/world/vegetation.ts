@@ -619,6 +619,21 @@ export function plantTree(grid: any, x: number, y: number, z: number, rng: any, 
     }
   }
 
+  // Scatter extra foliage tufts around the crown to break the uniform silhouette
+  // and add height variation — smaller clusters at random heights and offsets.
+  {
+    const spread = large ? 3 : unit === 2 ? 2 : 1;
+    const crownH = topY - canopyY;
+    const count  = large ? rng.int(5, 9) : unit === 2 ? rng.int(3, 6) : rng.int(2, 4);
+    for (let k = 0; k < count; k++) {
+      const ox = rng.int(-spread, spread);
+      const oz = rng.int(-spread, spread);
+      const oy = rng.int(0, Math.max(1, crownH + 1)); // distribute across full crown height
+      const sw = rng.chance(0.55) ? 2 : 1;
+      fillBox(ox, oy, oz, sw, 1, sw, rng.chance(0.55) ? lightId : leaf.id);
+    }
+  }
+
   // Keep the visible trunk perfectly vertical and terminate it at the crown.
   const trunkOffset = -Math.floor((tw - 1) / 2);
   for (let ty = 0; ty < bare; ty++)
