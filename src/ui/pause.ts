@@ -83,7 +83,8 @@ const TOUCH_BINDINGS = [
   ['🚁', 'Enter drone'],
   ['🛬', 'Land (drone)'],
   ['⬡', 'Edges'],
-  ['Esc', 'Pause'],
+  ['🗺', 'Map'],
+  ['◀ ▶', 'Time of day'],
 ];
 
 function buildBindings(rows: string[][]): string {

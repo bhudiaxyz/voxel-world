@@ -29,7 +29,6 @@ export class FPCamera {
   private _jumpEdge: boolean;
   private _bobPhase: number;
   private _wishV: THREE.Vector3;
-  private _touchWish: THREE.Vector3;
   /** Raw joystick axes set by setTouchMove — used by drone for its own yaw. */
   _joyX = 0;
   _joyY = 0;
@@ -55,7 +54,6 @@ export class FPCamera {
     this._jumpEdge = false;
     this._bobPhase = 0;
     this._wishV = new THREE.Vector3();
-    this._touchWish = new THREE.Vector3();
     this._prevSpace = false;
     this._droneMX = 0;
     this._droneAltDelta = 0;
@@ -67,7 +65,7 @@ export class FPCamera {
     const dom = this._dom;
 
     dom.addEventListener('pointerdown', (e: PointerEvent) => {
-      if (e.button === 0 && !this.isLocked) dom.requestPointerLock();
+      if (e.pointerType === 'mouse' && e.button === 0 && !this.isLocked) dom.requestPointerLock();
     });
 
     document.addEventListener('pointerlockchange', () => {
@@ -121,13 +119,15 @@ export class FPCamera {
    */
   getWish(): THREE.Vector3 {
     const w = this._wishV.set(0, 0, 0);
-    // Touch wish is already in world space (set by touch-controls.ts)
-    if (this.touchActive && this._touchWish.lengthSq() > 0) {
-      return w.copy(this._touchWish);
-    }
-    if (!this.isLocked || this.droneActive || this.flyActive) return w;
+    if (this.droneActive || this.flyActive) return w;
     const fwd = -Math.sin(this.yaw);
     const rgt = Math.cos(this.yaw);
+    // Touch joystick — rebuilt from current yaw each frame so swipe-look steers while held.
+    if (this.touchActive && (this._joyX || this._joyY)) {
+      const nx = this._joyX, ny = this._joyY;
+      return w.set(fwd * ny + rgt * nx, 0, -rgt * ny + fwd * nx).normalize();
+    }
+    if (!this.isLocked) return w;
     if (this._keys.has('KeyW') || this._keys.has('ArrowUp')) {
       w.x += fwd;
       w.z -= rgt;
@@ -153,10 +153,6 @@ export class FPCamera {
     if (!this.touchActive) return;
     this._joyX = nx;
     this._joyY = ny;
-    const fwd = -Math.sin(this.yaw);
-    const rgt = Math.cos(this.yaw);
-    this._touchWish.set(fwd * ny + rgt * nx, 0, -rgt * ny + fwd * nx);
-    if (this._touchWish.lengthSq() > 0) this._touchWish.normalize();
   }
 
   /** Accumulate touch look delta (radians). */

@@ -22,7 +22,14 @@ const STYLE = `
   right: max(20px, env(safe-area-inset-right));
   bottom: max(100px, calc(80px + env(safe-area-inset-bottom)));
   display: flex; flex-direction: column; gap: 12px;
+  /* wrap into extra columns (growing leftward) instead of overflowing off the top on phones */
+  flex-wrap: wrap-reverse; align-content: flex-start;
+  max-height: calc(100dvh - max(120px, calc(100px + env(safe-area-inset-bottom))));
   pointer-events: auto; z-index: 10;
+}
+@media (max-height: 500px) {
+  #touch-btns { gap: 8px; bottom: max(16px, env(safe-area-inset-bottom)); max-height: calc(100dvh - 32px); }
+  #touch-btns button { width: 46px; height: 46px; font-size: 18px; }
 }
 #touch-btns button {
   width: 60px; height: 60px; border-radius: 50%;

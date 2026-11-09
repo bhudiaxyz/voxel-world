@@ -471,8 +471,9 @@ async function start(): Promise<void> {
     if (!started) {
       started = true;
       ctrlEl.textContent = isTouchDevice
-        ? 'Left stick · move   Swipe right · look   ↑ · jump/ascend   ↓ · descend   ⚡ · sprint   ✈ · fly   🚁 · drone   🛬 · land'
+        ? 'Left thumb · move   Right drag · look   ↑ · jump/ascend   ↓ · descend   ⚡ · sprint   ✈ · fly   🚁 · drone   🛬 · land   🗺 · map   ◀▶ · time'
         : 'WASD · move   Mouse · look   Space · jump   F · fly   G · drone   L · land   E · edges   M · map';
+      if (isTouchDevice) bootEl.querySelector('.ls-enter')!.textContent = 'Tap to enter';
       bootEl.classList.add('ready');
       bootEl.addEventListener(
         'click',
@@ -484,7 +485,7 @@ async function start(): Promise<void> {
           });
           // Boot overlay sits above the canvas, so the click never reaches it —
           // request pointer lock here so the player can act immediately.
-          renderer.domElement.requestPointerLock();
+          if (!isTouchDevice) renderer.domElement.requestPointerLock();
         },
         { once: true },
       );
