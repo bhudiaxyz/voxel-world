@@ -693,7 +693,6 @@ export function createWorldChunkStreamer(
     const chunksX = Math.ceil(grid.sx / CHUNK);
     const chunksZ = Math.ceil(grid.sz / CHUNK);
     const loaded = new Map<string, any>();
-    const fadingMeshes = new Set<any>(); // only meshes actively fading in
     let loadQueue: any[] = [];
     let unloadQueue: string[] = [];
     let desiredLoadKeys = new Set<string>();
@@ -728,52 +727,19 @@ export function createWorldChunkStreamer(
     const keyOf = (ci: any, ck: any) => `${ci},${ck}`;
     const frameYield = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-    /** Wire up per-chunk lodAlpha fade-in for a freshly built record. */
-    const initChunkFade = (record: any) => {
-        const uniforms = meshes.material.userData.uniforms;
-        for (const mesh of [record.solid, record.glow]) {
-            if (!mesh) continue;
-            mesh.userData.lodAlpha = 0.0;
-            mesh.userData.lodFading = true;
-            fadingMeshes.add(mesh);
-            mesh.onBeforeRender = () => {
-                uniforms.uLodAlpha.value = mesh.userData.lodAlpha;
-            };
-            mesh.onAfterRender = () => {
-                uniforms.uLodAlpha.value = 1.0;
-            };
-        }
-        if (record.edges) {
-            const edgeUniforms = (meshes.edgeMaterial as any).uniforms;
-            const resolveCb = record.edges.onBeforeRender; // resolution callback from prepareEdgeObject
-            record.edges.userData.lodAlpha = 0.0;
-            record.edges.userData.lodFading = true;
-            fadingMeshes.add(record.edges);
-            record.edges.userData.resolveCb = resolveCb;
-            record.edges.onBeforeRender = (renderer: any) => {
-                resolveCb.call(record.edges, renderer);
-                edgeUniforms.uLodAlpha.value = record.edges.userData.lodAlpha;
-            };
-            record.edges.onAfterRender = () => {
-                edgeUniforms.uLodAlpha.value = 1.0;
-            };
-        }
-    };
-
+    // No per-chunk fade-in: a shared material only re-uploads uniforms on material
+    // change, so per-mesh uLodAlpha never reached most chunks, while the dither
+    // `discard` it needed disabled early-Z / mobile HSR on all terrain.
     const loadChunk = (ci: any, ck: any) => {
         const key = keyOf(ci, ck);
         if (loaded.has(key) || disposed) return;
         const record = buildMeshChunk(grid, ci, ck, meshes);
-        initChunkFade(record);
         loaded.set(key, record);
     };
 
     const unloadChunk = (key: any) => {
         const record = loaded.get(key);
         if (!record) return;
-        for (const mesh of [record.solid, record.glow, record.edges]) {
-            if (mesh) fadingMeshes.delete(mesh);
-        }
         removeMeshChunk(meshes, record);
         loaded.delete(key);
     };
@@ -842,7 +808,6 @@ export function createWorldChunkStreamer(
             if (!activeLoad) break;
             const record = stepMeshChunk(activeLoad.state);
             if (record) {
-                initChunkFade(record);
                 loaded.set(activeLoad.key, record);
                 activeLoad = null;
             }
@@ -877,7 +842,6 @@ export function createWorldChunkStreamer(
                 meshWorker = null;
             } else if (completed?.key === data.key && desiredLoadKeys.has(data.key) && !loaded.has(data.key)) {
                 const record = restoreMeshChunk(data.payload, data.ci, data.ck, meshes);
-                initChunkFade(record);
                 loaded.set(data.key, record);
             }
             schedule();
@@ -887,19 +851,6 @@ export function createWorldChunkStreamer(
 
     const update = (player: any, camera = player, trimToRadius = false, dt = 0) => {
         if (disposed || !player) return;
-        // Advance LOD fade-in for newly loaded chunks.
-        // Only meshes actively fading are in fadingMeshes, so this is O(fading) not O(all loaded).
-        if (dt > 0 && fadingMeshes.size > 0) {
-            for (const mesh of fadingMeshes) {
-                mesh.userData.lodAlpha = Math.min(1.0, mesh.userData.lodAlpha + dt * 1.5);
-                if (mesh.userData.lodAlpha >= 1.0) {
-                    mesh.userData.lodFading = false;
-                    mesh.onBeforeRender = mesh.userData.resolveCb ?? (() => {});
-                    mesh.onAfterRender = () => {};
-                    fadingMeshes.delete(mesh);
-                }
-            }
-        }
         // Unloading is intentionally frame-driven rather than idle-driven. A busy
         // GPU can starve requestIdleCallback, but stale GPU buffers must still be
         // released promptly as the player crosses the world.
@@ -992,15 +943,6 @@ export function createWorldChunkStreamer(
         initial.sort((a, b) => a.distanceSq - b.distanceSq);
         for (let i = 0; i < initial.length; i++) {
             loadChunk(initial[i].ci, initial[i].ck);
-            // Preloaded spawn chunks appear fully opaque immediately — no screen-door on start.
-            const record = loaded.get(keyOf(initial[i].ci, initial[i].ck));
-            if (record) {
-                for (const mesh of [record.solid, record.glow, record.edges]) {
-                    if (!mesh) continue;
-                    mesh.userData.lodAlpha = 1.0;
-                    mesh.userData.lodFading = false;
-                }
-            }
             onProgress?.((i + 1) / initial.length);
             await frameYield();
         }
@@ -1956,22 +1898,6 @@ const FRAG_DECL = /* glsl */ `
   }
 `;
 
-const BAYER_DITHER_GLSL = /* glsl */ `
-  {
-    // Bayer 4×4 ordered dither — screen-door fade, no blending cost.
-    const float bayer[16] = float[16](
-       0.0,  8.0,  2.0, 10.0,
-      12.0,  4.0, 14.0,  6.0,
-       3.0, 11.0,  1.0,  9.0,
-      15.0,  7.0, 13.0,  5.0
-    );
-    int bx = int(gl_FragCoord.x) & 3;
-    int by = int(gl_FragCoord.y) & 3;
-    float threshold = (bayer[by * 4 + bx] + 0.5) / 16.0;
-    if (uLodAlpha < threshold) discard;
-  }
-`;
-
 const FRAG_BODY = /* glsl */ `
   {
     vec3 col = diffuseColor.rgb;
@@ -2140,7 +2066,6 @@ export function makeVoxelMaterial() {
             );
         shader.fragmentShader = shader.fragmentShader
             .replace('#include <common>', `#include <common>\n${COMMON_GLSL}\n${FRAG_DECL}`)
-            .replace('void main() {', `void main() {\n${BAYER_DITHER_GLSL}`)
             .replace('#include <color_fragment>', `#include <color_fragment>\n${FRAG_BODY}`)
             .replace(
                 'vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + totalEmissiveRadiance;',
@@ -2159,7 +2084,7 @@ export function makeVoxelMaterial() {
             );
         mat.userData.shader = shader;
     };
-    mat.customProgramCacheKey = () => 'VoxelWorld-voxel-v8';
+    mat.customProgramCacheKey = () => 'VoxelWorld-voxel-v9';
     return mat;
 }
 

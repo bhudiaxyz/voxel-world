@@ -12,7 +12,7 @@ import type { DayNight } from '../render/day-night';
 import { VOXEL_PALETTES, activePaletteName } from '../core/palette';
 
 const STORE_KEY = 'VoxelWorld.settings';
-const SETTINGS_VERSION = 2;
+const SETTINGS_VERSION = 3;
 
 const INK_BASE = 0.05;
 const PREVIOUS_INK_DEFAULT = INK_BASE * 1.12;
@@ -37,6 +37,12 @@ export const DEFAULTS = {
     windStrength: 0.4,
 };
 
+/** Per-device defaults — call before createSettings(). Reset also returns to these. */
+export function setTierDefaults(d: { loadRadius: number; shadowResolution: number }): void {
+    DEFAULTS.loadRadius = d.loadRadius;
+    DEFAULTS.shadowResolution = d.shadowResolution;
+}
+
 const RANGES = {
     // Half-thousandth precision keeps authored values such as 1.85x exact.
     inkWidth: { min: 0.012, max: 0.16, step: 0.0005 },
@@ -44,7 +50,7 @@ const RANGES = {
     zoomMax: { min: 40, max: 140, step: 1 },
     fogStart: { min: 70, max: 420, step: 2 },
     loadRadius: { min: 3, max: 12, step: 1 },
-    shadowResolution: { min: 0, max: 4096, step: 1024 },
+    shadowResolution: { min: 0, max: 4096, step: 512 },
     planetRadius: { min: 100, max: 1000, step: 10 },
     daySpeed: { min: 0.1, max: 5, step: 0.1 },
     windStrength: { min: 0, max: 1.5, step: 0.05 },
@@ -176,6 +182,12 @@ function load(): SettingsValues {
                 out.shadowResolution = DEFAULTS.shadowResolution;
             }
         }
+        // v3: stream radius and shadow size now default per GPU tier. Earlier
+        // versions saved the desktop values on every device, phones included.
+        if (((parsed['_version'] as number) || 1) < 3) {
+            out.loadRadius = DEFAULTS.loadRadius;
+            out.shadowResolution = DEFAULTS.shadowResolution;
+        }
         return clampAll(out);
     } catch {
         return { ...DEFAULTS };
@@ -224,7 +236,7 @@ const fmt = {
     zoomMin: (n: number) => String(Math.round(n)),
     zoomMax: (n: number) => String(Math.round(n)),
     fogStart: (n: number) => String(Math.round(n)),
-    shadowResolution: (n: number) => (n > 0 ? `${Math.round(n / 1024)}K` : 'Off'),
+    shadowResolution: (n: number) => (n <= 0 ? 'Off' : n < 1024 ? String(n) : `${n / 1024}K`),
     planetRadius: (n: number) => String(Math.round(n)),
     daySpeed: (n: number) => `${n.toFixed(1)}×`,
     windStrength: (n: number) => (n === 0 ? 'Off' : n.toFixed(2)),

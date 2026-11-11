@@ -158,11 +158,8 @@ export class Atmosphere {
         sun.shadow.camera.near = 1;
         sun.shadow.camera.far = worldSize * 3.2;
         const requestedRes = ts.shadowRes > 0 ? ts.shadowRes : SHADOW_RES;
-        // Cap to MAX_TEXTURE_SIZE so old mobile GPUs don't silently fail or clamp.
-        const gl = (document.createElement('canvas').getContext('webgl2') ||
-            document.createElement('canvas').getContext('webgl')) as WebGLRenderingContext | null;
-        const maxTex = gl ? (gl.getParameter(gl.MAX_TEXTURE_SIZE) as number) : 2048;
-        const shadowRes = Math.min(requestedRes, maxTex);
+        // Every WebGL2 device supports ≥4096 textures; no probe context needed.
+        const shadowRes = Math.min(requestedRes, 4096);
         sun.shadow.mapSize.set(shadowRes, shadowRes);
         // Voxels are 1 unit. The old normalBias of 0.5 was half a block, which
         // slid every shadow half a block off its caster (peter-panning at every
@@ -218,7 +215,7 @@ export class Atmosphere {
     /** Reallocate the VSM targets at a developer-selected resolution. */
     setShadowResolution(resolution: any) {
         const requested = Number(resolution);
-        const next = requested <= 0 ? 0 : THREE.MathUtils.clamp(Math.round(requested / 1024) * 1024, 1024, 4096);
+        const next = requested <= 0 ? 0 : THREE.MathUtils.clamp(Math.round(requested / 512) * 512, 512, 4096);
         if (next === this.shadowResolution) return;
 
         const shadow = this.sun.shadow;

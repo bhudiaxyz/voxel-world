@@ -20,7 +20,7 @@
 
 import * as THREE from 'three';
 import { WATER, BLOCKS, BLOCK_BY_ID, PATTERN, registerBlock } from '../core/palette';
-import { clamp, smoothstep, makeNoise2D, fbm2 } from '../core/rng';
+import { clamp, smoothstep, makeNoise2D, fbm2, makeRng } from '../core/rng';
 import { DetailField } from './veg-detail';
 import { BIOME } from './planner';
 
@@ -1174,8 +1174,16 @@ function buildGroundDetail(world: any, rng: any, occupied?: Uint8Array) {
     const blockFor = (id: any) =>
         id === BLOSSOM_DRIFT.id ? BLOSSOM_DRIFT : BLOCK_BY_ID[id]?.grassCap ? BLOCK_BY_ID[id] : BLOCKS.GRASS;
 
-    const spawnX = world.spawn?.x ?? S / 2;
-    const spawnZ = world.spawn?.z ?? S / 2;
+    // Tier-scaled density of the extra sprite layer (meadow blades, wildflowers).
+    // 0 keeps only the sparse authored tufts; render cost is bounded separately
+    // by the per-batch draw distance in DetailField.build().
+    const dd: number = world.detail?.density ?? 1;
+    // Own stream: the extra layer must not shift the authored detail (or
+    // anything after it), or each tier would grow a different world.
+    const r2 = makeRng(0x9e37 ^ S);
+    const seedTip = BLOCKS.STONE_PALE.top;
+    const wildCols = [...flowerTops, BLOCKS.LEAF_MINT.top];
+    const centreCol = BLOCKS.LEAF_CREAM.top;
 
     for (let z = 1; z < S - 1; z++) {
         for (let x = 1; x < S - 1; x++) {
@@ -1187,8 +1195,6 @@ function buildGroundDetail(world: any, rng: any, occupied?: Uint8Array) {
             const y = top + 1;
             const fx = x + 0.5,
                 fz = z + 0.5;
-            // ponytail: O(1) per cell; skip fine detail beyond LOD1 radius (~60u)
-            const farFromSpawn = Math.hypot(x - spawnX, z - spawnZ) > 60;
 
             /* --- reeds & rushes at the waterline ------------------------- */
             // Rushes stand in the SHALLOWS, so the bed has to be near the surface —
@@ -1222,7 +1228,6 @@ function buildGroundDetail(world: any, rng: any, occupied?: Uint8Array) {
 
             /* --- fern fronds --------------------------------------------- */
             if (id === FERN.id || id === FERN_RED.id) {
-                if (farFromSpawn) continue;
                 const fernBot = id === FERN_RED.id ? FERN_RED.top : FERN.top;
                 const fernTop = (id === FERN_RED.id ? FERN_RED.topTint : FERN.topTint) ?? fernBot;
                 F.fern(fx, y - 0.03, fz, fernBot, fernTop, rng() * 6.28, rng);
@@ -1236,7 +1241,7 @@ function buildGroundDetail(world: any, rng: any, occupied?: Uint8Array) {
                 tuftLite.copy(blk.top).multiplyScalar(1.08);
 
                 const lush = meadow(x, z);
-                if (!farFromSpawn && rng.chance(0.018 + lush * 0.055)) {
+                if (rng.chance(0.018 + lush * 0.055)) {
                     const n = rng.int(1, 3);
                     for (let k = 0; k < n; k++) {
                         F.tuft(
@@ -1266,6 +1271,46 @@ function buildGroundDetail(world: any, rng: any, occupied?: Uint8Array) {
                         F.tuft(fx + ox, y - 0.03, fz + oz, 0.07, h, tuftDark, tuftDark, 0, 0, 0, 0.6);
                         F.box(fx + ox, y + h - 0.04, fz + oz, 0.2, 0.16, 0.2, col, 0.9, rng() * 6.28);
                     }
+                }
+
+                // Meadow blades: clumps of thin single blades, densest on lush shelves.
+                // Kept off the drift so petal carpets stay readable.
+                if (dd > 0 && id !== BLOSSOM_DRIFT.id && r2.chance(dd * (0.06 + lush * lush * 0.34))) {
+                    const n = r2.int(3, 6);
+                    for (let k = 0; k < n; k++) {
+                        const tall = r2.chance(0.18);
+                        F.blade(
+                            fx + r2.range(-0.42, 0.42),
+                            y - 0.03,
+                            fz + r2.range(-0.42, 0.42),
+                            r2.range(0.05, 0.09),
+                            tall ? r2.range(0.6, 0.9) : r2.range(0.22, 0.48),
+                            r2() * Math.PI,
+                            tuftDark,
+                            tall ? seedTip : tuftLite,
+                            r2() * 6.28,
+                            r2.range(-0.16, 0.16),
+                            r2.range(-0.16, 0.16),
+                        );
+                    }
+                }
+
+                // Lone wildflowers between the drifts: a stem with a flat star of
+                // petals and a pale centre, so fields read as dotted, not empty.
+                if (dd > 0 && ff <= 0.66 && r2.chance(dd * 0.03 * (0.4 + lush))) {
+                    const h = r2.range(0.2, 0.4);
+                    const ox = r2.range(-0.3, 0.3),
+                        oz = r2.range(-0.3, 0.3);
+                    F.tuft(fx + ox, y - 0.03, fz + oz, 0.06, h, tuftDark, tuftDark, 0, 0, 0, 0.6);
+                    F.flowerHead(
+                        fx + ox,
+                        y - 0.03 + h,
+                        fz + oz,
+                        r2.range(0.16, 0.26),
+                        r2.pick(wildCols),
+                        centreCol,
+                        r2() * 1.57,
+                    );
                 }
 
                 // Pebbles and clods. Never animated — they are the still notes.
@@ -1450,7 +1495,7 @@ function buildGroundDetail(world: any, rng: any, occupied?: Uint8Array) {
         }
     }
 
-    return F.build({ windAmp: 0.09, windSpeed: 1.0 });
+    return F.build({ windAmp: 0.09, windSpeed: 1.0, drawDistance: world.detail?.distance ?? 140 });
 }
 
 function flatEnough(h: any, S: number, x: number, z: number, r: number, tol: number) {

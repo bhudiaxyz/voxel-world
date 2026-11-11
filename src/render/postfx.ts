@@ -383,8 +383,11 @@ function makeAtmosphereShader(sunDir: THREE.Vector3) {
       varying vec2 vUv;
       ${SKY_FN_GLSL}
 
+      // Explicit LOD: called inside a uniform-bounded loop with an early break,
+      // where implicit-derivative fetches are undefined (D3D warning X3595).
+      // tDepth has no mips, so the result is identical.
       float viewZ(vec2 uv) {
-        float d = texture2D(tDepth, uv).x;
+        float d = textureLod(tDepth, uv, 0.0).x;
         return perspectiveDepthToViewZ(d, uNear, uFar);
       }
 
@@ -466,14 +469,19 @@ function makeAtmosphereShader(sunDir: THREE.Vector3) {
           float px = clamp(uAORadius * uFocal / max(-zc, 1.0), 2.0, 64.0);
           vec2 aoStep = px / uResolution;
           float occ = 0.0;
+          // Real early-out (uniform-driven, so every pixel takes the same branch):
+          // the former step()-masked loop paid for all 8 taps at every tier.
+          // 4 taps use every other direction so the rosette stays balanced.
+          int stride = uAOTaps < 5.0 ? 2 : 1;
           for (int i = 0; i < 8; i++) {
-            float w = step(float(i), uAOTaps - 1.0);
-            float zs1 = viewZ(vUv + AO_DIR[i] * aoStep * 0.45);
-            float zs2 = viewZ(vUv + AO_DIR[i] * aoStep);
+            if (float(i) >= uAOTaps) break;
+            vec2 dir = AO_DIR[(i * stride) & 7];
+            float zs1 = viewZ(vUv + dir * aoStep * 0.45);
+            float zs2 = viewZ(vUv + dir * aoStep);
             float d1 = zs1 - zc;
             float d2 = zs2 - zc;
-            occ += w * clamp(d1 / uAORange, 0.0, 1.0) * (1.0 - smoothstep(uAORange, uAORange * 4.0, d1)) * 0.6;
-            occ += w * clamp(d2 / uAORange, 0.0, 1.0) * (1.0 - smoothstep(uAORange, uAORange * 4.0, d2)) * 0.4;
+            occ += clamp(d1 / uAORange, 0.0, 1.0) * (1.0 - smoothstep(uAORange, uAORange * 4.0, d1)) * 0.6;
+            occ += clamp(d2 / uAORange, 0.0, 1.0) * (1.0 - smoothstep(uAORange, uAORange * 4.0, d2)) * 0.4;
           }
           occ = clamp(occ / max(uAOTaps, 1.0), 0.0, 1.0);
           // Fade AO out with distance: it has nothing to say once the air has
@@ -520,9 +528,10 @@ export function createPostFX(
 ) {
     const size = renderer.getSize(new THREE.Vector2());
     const dpr = renderer.getPixelRatio();
+    const hdrType = (renderer as any).floatRT === false ? THREE.UnsignedByteType : THREE.HalfFloatType;
 
     const target = new THREE.WebGLRenderTarget(size.x * dpr, size.y * dpr, {
-        type: THREE.HalfFloatType,
+        type: hdrType,
         // SMAA is the final pass. Multisampling this HDR target as well consumed
         // four times the colour/depth bandwidth for nearly identical edges.
         samples: 0,
@@ -547,7 +556,7 @@ export function createPostFX(
     // sceneFBO owns the depthTexture and is never part of the composer's
     // ping-pong chain, so no pass ever writes to it while sampling depthTexture.
     const sceneFBO = new THREE.WebGLRenderTarget(size.x * dpr, size.y * dpr, {
-        type: THREE.HalfFloatType,
+        type: hdrType,
         samples: 0,
         depthTexture,
     });
@@ -615,10 +624,10 @@ export function createPostFX(
         float illum = 1.0;
         vec3 accum = vec3(0.0);
         for (int i = 0; i < 8; i++) {
-          float w = step(float(i), uTaps - 1.0);
+          if (float(i) >= uTaps) break;
           uv -= delta;
-          accum += texture2D(tDiffuse, uv).rgb * illum * w;
-          illum *= mix(1.0, uDecay, w);
+          accum += textureLod(tDiffuse, uv, 0.0).rgb * illum;
+          illum *= uDecay;
         }
         accum *= uWeight * uSunVisible / max(uTaps, 1.0);
         gl_FragColor = texture2D(tDiffuse, vUv) + vec4(accum, 0.0);
@@ -627,6 +636,8 @@ export function createPostFX(
     };
     const crepPass = new ShaderPass(CrepuscularShader);
     crepPass.uniforms['uTaps'].value = ts.crepuscularTaps;
+    // Only in the chain while rays are visible — otherwise it is a full-screen copy.
+    crepPass.enabled = false;
     composer.addPass(crepPass);
 
     const grade = new ShaderPass(GradeShader);
@@ -686,6 +697,7 @@ export function createPostFX(
         setSunScreenPos(x: number, y: number, visible: number): void {
             crepPass.uniforms['uSunScreen'].value.set(x, y);
             crepPass.uniforms['uSunVisible'].value = visible;
+            crepPass.enabled = visible > 0.01 && ts.crepuscularTaps > 0;
         },
         render(dt: number) {
             grade.uniforms.uTime.value += dt;

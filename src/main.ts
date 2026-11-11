@@ -17,12 +17,12 @@ import { createDog } from './player/dog';
 import { createBubbles } from './ui/bubbles';
 import { createMap } from './ui/map';
 import { createPause } from './ui/pause';
-import { createSettings, DEFAULTS as SETTINGS_DEFAULTS } from './ui/settings';
+import { createSettings, setTierDefaults, DEFAULTS as SETTINGS_DEFAULTS } from './ui/settings';
 import { createHud } from './ui/hud';
 import { makeRng, genSeedWord, hashSeedWord } from './core/rng';
 import { createDroneMode } from './player/drone';
 import { createFlyMode } from './player/fly';
-import { detectGpuTier, TIER_SETTINGS } from './render/gpu-tier';
+import { detectGpuTier, hasWebGL2, TIER_SETTINGS } from './render/gpu-tier';
 import { createTouchControls, isTouchDevice } from './ui/touch-controls';
 
 export let currentSeedWord = 'LusaliBenoruLezagi';
@@ -55,12 +55,26 @@ const setProgress = (p: number, s?: string): void => {
 };
 
 async function start(): Promise<void> {
+    if (!hasWebGL2()) {
+        throw new Error('WebGL 2 is not available — update the browser or enable hardware acceleration.');
+    }
     const tier = detectGpuTier();
     const renderer = createRenderer(container, tier);
     const scene = new THREE.Scene();
 
     const ts = TIER_SETTINGS[tier];
-    const world = await buildWorld(SEED, setProgress, ts.streamRadius);
+    setTierDefaults({ loadRadius: ts.streamRadius, shadowResolution: ts.shadowRes });
+    // Mobile GPUs drop contexts under memory pressure / tab switching. Rebuilding
+    // every GPU resource in place is a lot of code for a rare event; a reload is
+    // the same world (seeded URL) a second later.
+    renderer.domElement.addEventListener('webglcontextlost', (e) => {
+        e.preventDefault();
+        setTimeout(() => location.reload(), 300);
+    });
+    const world = await buildWorld(SEED, setProgress, ts.streamRadius, {
+        density: ts.detailDensity,
+        distance: ts.detailDistance,
+    });
     scene.add(world.group);
 
     const fpCam = new FPCamera(container.clientWidth / container.clientHeight, renderer.domElement, ts.cameraFar);
@@ -320,14 +334,19 @@ async function start(): Promise<void> {
     scene.updateMatrixWorld(true);
     scene.matrixWorldAutoUpdate = false;
 
-    addEventListener('resize', () => {
+    const resize = () => {
         const w = container.clientWidth,
             h = container.clientHeight;
         (renderer as any).resizeTo(w, h);
         fpCam.resize(w / h);
         post.setSize(w, h);
         bubbles.resize();
-    });
+    };
+    addEventListener('resize', resize);
+    let shadowFrame = 0;
+    let dprScale = 1,
+        govTime = 0,
+        govFrames = 0;
 
     const clock = new THREE.Timer();
     let started = false;
@@ -498,7 +517,38 @@ async function start(): Promise<void> {
             if (gu.uVignette) gu.uVignette.value = GRADE.vignette + wrapFlash * 1.2;
         }
 
+        // Shadow cadence for tiers that don't re-render shadows every frame. DayNight
+        // also requests one when the sun moves noticeably.
+        if (!renderer.shadowMap.autoUpdate && ++shadowFrame >= ts.shadowInterval) {
+            shadowFrame = 0;
+            renderer.shadowMap.needsUpdate = true;
+        }
+
         post.render(dt);
+
+        // Adaptive resolution: if frames stay slow, drop render scale in steps
+        // (down to 60%), and claw it back when there is headroom. Keeps older
+        // devices playable whatever tier they were bucketed into.
+        if (rawDt < 0.25) {
+            govTime += rawDt;
+            govFrames++;
+            if (govTime >= 2) {
+                const fps = govFrames / govTime;
+                govTime = 0;
+                govFrames = 0;
+                const next =
+                    fps < 40 && dprScale > 0.6
+                        ? Math.max(0.6, dprScale - 0.1)
+                        : fps > 57 && dprScale < 1
+                          ? Math.min(1, dprScale + 0.1)
+                          : dprScale;
+                if (next !== dprScale) {
+                    dprScale = next;
+                    (renderer as any).setDprScale(dprScale);
+                    resize();
+                }
+            }
+        }
 
         if (!started) {
             started = true;
@@ -554,5 +604,6 @@ async function start(): Promise<void> {
 start().catch((err: unknown) => {
     console.error(err);
     (subEl as HTMLElement).textContent = 'Unable to start';
+    ctrlEl.textContent = err instanceof Error ? err.message : String(err);
     (subEl as HTMLElement).classList.add('error');
 });

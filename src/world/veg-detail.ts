@@ -182,6 +182,46 @@ export class DetailField {
         );
     }
 
+    /** One thin blade (a single quad) at plan angle `rot` — cheaper than a crossed tuft. */
+    blade(
+        x: number,
+        y: number,
+        z: number,
+        w: number,
+        h: number,
+        rot: number,
+        colBot: any,
+        colTop: any,
+        phase: number,
+        leanX = 0,
+        leanZ = 0,
+    ) {
+        const ax = Math.cos(rot) * w * 0.5,
+            az = Math.sin(rot) * w * 0.5;
+        const tx = x + leanX,
+            tz = z + leanZ;
+        this._quad(
+            [
+                [x - ax, y, z - az],
+                [x + ax, y, z + az],
+                [tx + ax * 0.15, y + h, tz + az * 0.15],
+                [tx - ax * 0.15, y + h, tz - az * 0.15],
+            ],
+            UP,
+            colBot,
+            colTop,
+            1,
+            phase,
+        );
+    }
+
+    /** Flat eight-point flower head (two crossed petal squares) with a small centre. */
+    flowerHead(x: number, y: number, z: number, s: number, color: any, centre: any, rot: number) {
+        this.petal(x, y, z, s, rot, color, 0.9);
+        this.petal(x, y + 0.004, z, s, rot + Math.PI / 4, color, 0.9);
+        this.petal(x, y + 0.01, z, s * 0.38, rot, centre, 0.9);
+    }
+
     /** Three arching frond blades — wider and lower than a grass tuft. */
     fern(x: number, y: number, z: number, colBot: any, colTop: any, phase: number, rng: any) {
         const angles = [0, Math.PI * 0.66, Math.PI * 1.33];
@@ -194,7 +234,7 @@ export class DetailField {
     }
 
     /** A petal lying flat on the ground, rotated in plan. */
-    petal(x: any, y: any, z: any, s: any, rot: any, color: any) {
+    petal(x: any, y: any, z: any, s: any, rot: any, color: any, sway = 0) {
         const c = Math.cos(rot) * s * 0.5,
             sn = Math.sin(rot) * s * 0.5;
         this._quad(
@@ -207,7 +247,7 @@ export class DetailField {
             UP,
             color,
             color,
-            0,
+            sway,
             0,
         );
     }
@@ -217,12 +257,11 @@ export class DetailField {
      * entry: an Object3D plus an `update(dt)` that advances the shared wind
      * clock.
      */
-    build({ windAmp = 0.1, windSpeed = 1.0, name = 'veg-detail' } = {}) {
+    build({ windAmp = 0.1, windSpeed = 1.0, name = 'veg-detail', drawDistance = Infinity } = {}) {
         const uniforms = {
             uTime: { value: 0 },
             uWindAmp: { value: windAmp },
             uWindSpeed: { value: windSpeed },
-            uLodAlpha: { value: 1.0 },
             ...planetUniformValues(new THREE.Vector3()),
         };
 
@@ -238,33 +277,6 @@ export class DetailField {
         mat.userData.uniforms = uniforms;
         mat.onBeforeCompile = (shader) => {
             Object.assign(shader.uniforms, uniforms);
-            // Bayer 4×4 dither for LOD fade-in (same as terrain).
-            shader.fragmentShader = shader.fragmentShader
-                .replace(
-                    '#include <common>',
-                    /* glsl */ `
-          #include <common>
-          uniform float uLodAlpha;
-        `,
-                )
-                .replace(
-                    'void main() {',
-                    /* glsl */ `
-          void main() {
-          {
-            const float bayer[16] = float[16](
-               0.0,  8.0,  2.0, 10.0,
-              12.0,  4.0, 14.0,  6.0,
-               3.0, 11.0,  1.0,  9.0,
-              15.0,  7.0, 13.0,  5.0
-            );
-            int bx = int(gl_FragCoord.x) & 3;
-            int by = int(gl_FragCoord.y) & 3;
-            float threshold = (bayer[by * 4 + bx] + 0.5) / 16.0;
-            if (uLodAlpha < threshold) discard;
-          }
-        `,
-                );
             shader.vertexShader = shader.vertexShader
                 .replace(
                     '#include <common>',
@@ -299,7 +311,7 @@ export class DetailField {
         `,
                 );
         };
-        mat.customProgramCacheKey = () => 'VoxelWorld-vegdetail-v3';
+        mat.customProgramCacheKey = () => 'VoxelWorld-vegdetail-v4';
 
         // Every primitive emitted by DetailField is an isolated four-vertex quad.
         // Count those quads by spatial cell first, then fill exact-size typed
@@ -383,8 +395,10 @@ export class DetailField {
             // Depth write is off (see material above), so the blades draw after the
             // terrain or its chunks would paint over them.
             mesh.renderOrder = 2;
-            mesh.userData.lodAlpha = 1.0;
-            mesh.userData.lodFading = false;
+            const bs = geometry.boundingSphere!;
+            mesh.userData.cullSq = (drawDistance + bs.radius) ** 2;
+            mesh.userData.cx = bs.center.x;
+            mesh.userData.cz = bs.center.z;
             group.add(mesh);
         }
 
@@ -392,11 +406,18 @@ export class DetailField {
             object3d: group,
             material: mat,
             planetUnis: uniforms,
-            update(dt: number) {
+            update(dt: number, camera?: THREE.Camera) {
                 uniforms.uTime.value += dt;
-                for (const mesh of group.children as THREE.Mesh[]) {
-                    if (!mesh.userData.lodFading) continue;
-                    mesh.userData.lodAlpha = Math.min(1.0, mesh.userData.lodAlpha + dt * 1.5);
+                // Distance cull per batch. Hidden batches also skip the VSM shadow
+                // pass, which renders every shadow *receiver* as well as casters.
+                if (!camera) return;
+                const px = camera.position.x,
+                    pz = camera.position.z;
+                for (const mesh of group.children) {
+                    const u = mesh.userData;
+                    const dx = u.cx - px,
+                        dz = u.cz - pz;
+                    mesh.visible = dx * dx + dz * dz < u.cullSq;
                 }
             },
         };

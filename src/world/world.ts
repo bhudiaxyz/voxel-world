@@ -47,6 +47,7 @@ export async function buildWorld(
     seed: number,
     onProgress: (p: number, s?: string) => void = () => {},
     streamRadius = 8,
+    detail: { density: number; distance: number } = { density: 1, distance: 140 },
 ): Promise<World> {
     const yieldFrame = () => new Promise((r) => setTimeout(r, 0));
 
@@ -63,6 +64,7 @@ export async function buildWorld(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const world: any = generateTerrain(seed, plan, (p, s) => onProgress(0.06 + p * 0.18, s));
     world.plan = plan;
+    world.detail = detail;
     world.rng = makeRng(seed ^ 0x5f3a);
 
     /**

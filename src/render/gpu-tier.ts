@@ -8,15 +8,16 @@
  *   low          — older or constrained desktop device
  *   very-low     — 7-year-old or weaker mobile
  *
- * Samsung Galaxy S22 Ultra (8-core, 12 GB)     → mobile-high
- * Apple iPad Pro M2 (8-core, 8 GB)             → mobile-high (Safari: deviceMemory absent, probe=4, threshold ≥4 catches it)
- * Apple iPad Air M2 (8-core, 4 GB)             → mobile-high
- * Apple iPad Air A14 (6-core, 4 GB)            → mid
- * MacBook Air M2 (8-core, 8 GB, no mobile UA)  → high  (maxTex=16384)
- * Intel UHD laptop (8-core, 16 GB, maxTex≤8192)→ mid   (downclassed by texture probe)
- * 2019 mid-range phone (6-core, 3 GB)          → mid
- * Budget phone (4-core, 2 GB, WebGL2)          → low (desktop) / very-low (mobile)
- * 7-year-old mobile (no WebGL2)                → very-low
+ * Samsung Galaxy S22 Ultra (8-core, deviceMemory 8)   → mobile-high
+ * Apple iPad / iPhone, A12 or newer (maxTex 16384)    → mobile-high (iPadOS desktop UA detected via touch points)
+ * Older Apple mobile (maxTex < 16384)                 → mid
+ * Desktop with discrete GPU (renderer string)         → high
+ * Laptop with integrated Intel/AMD GPU                → mid
+ * 2019 mid-range Android (6-core, 3-4 GB)             → mid
+ * Old Mali-T / Adreno ≤5xx phones                     → low
+ * Budget phone (≤4 cores or ≤2 GB)                    → very-low
+ * Software renderer (SwiftShader, llvmpipe)           → very-low
+ * No WebGL2 → app cannot run; main.ts shows a message.
  */
 
 export type GpuTier = 'high' | 'mobile-high' | 'mid' | 'low' | 'very-low';
@@ -54,13 +55,19 @@ export interface TierSettings {
     waterSubdivision: number;
     /** Particle instance count for leaves/dust effects. */
     particleCount: number;
+    /** Ground-sprite (grass blades / wildflowers) density multiplier. 0 = legacy sparse tufts only. */
+    detailDensity: number;
+    /** Ground-sprite draw distance in world units (per-batch distance cull). */
+    detailDistance: number;
+    /** Re-render the shadow map every N frames (1 = every frame). */
+    shadowInterval: number;
 }
 
 //                         dprCap  shadowRes  blurSamples  shadowExtent  cameraFar  bloom   aoTaps  dof    crep  edge   cloud  nightFull  aa       stream  waterSub  particles
 export const TIER_SETTINGS: Record<GpuTier, TierSettings> = {
     high: {
         dprCap: 2,
-        shadowRes: 3072,
+        shadowRes: 4096,
         shadowBlurSamples: 12,
         shadowExtent: 120,
         cameraFar: 6000,
@@ -75,6 +82,9 @@ export const TIER_SETTINGS: Record<GpuTier, TierSettings> = {
         streamRadius: 12,
         waterSubdivision: 64,
         particleCount: 1200,
+        detailDensity: 1.0,
+        detailDistance: 140,
+        shadowInterval: 1,
     },
     'mobile-high': {
         dprCap: 1.5,
@@ -93,6 +103,9 @@ export const TIER_SETTINGS: Record<GpuTier, TierSettings> = {
         streamRadius: 11,
         waterSubdivision: 32,
         particleCount: 700,
+        detailDensity: 0.55,
+        detailDistance: 90,
+        shadowInterval: 2,
     },
     mid: {
         dprCap: 1.25,
@@ -111,6 +124,9 @@ export const TIER_SETTINGS: Record<GpuTier, TierSettings> = {
         streamRadius: 11,
         waterSubdivision: 32,
         particleCount: 600,
+        detailDensity: 0.6,
+        detailDistance: 100,
+        shadowInterval: 2,
     },
     low: {
         dprCap: 1,
@@ -129,6 +145,9 @@ export const TIER_SETTINGS: Record<GpuTier, TierSettings> = {
         streamRadius: 8,
         waterSubdivision: 16,
         particleCount: 200,
+        detailDensity: 0.25,
+        detailDistance: 70,
+        shadowInterval: 3,
     },
     'very-low': {
         dprCap: 1,
@@ -147,76 +166,77 @@ export const TIER_SETTINGS: Record<GpuTier, TierSettings> = {
         streamRadius: 6,
         waterSubdivision: 4,
         particleCount: 0,
+        detailDensity: 0,
+        detailDistance: 50,
+        shadowInterval: 6,
     },
 };
+
+/** The renderer (three r185) requires WebGL2; without it the app cannot start. */
+export function hasWebGL2(): boolean {
+    try {
+        return !!document.createElement('canvas').getContext('webgl2');
+    } catch {
+        return false;
+    }
+}
 
 /**
  * Detect GPU tier from hardware signals.
  *
- * Uses hardwareConcurrency, deviceMemory (with canvas-timing fallback for
- * Firefox/Safari), MAX_TEXTURE_SIZE (discriminates integrated vs discrete GPU),
- * WebGL2 availability, and UA mobile detection.
+ * `?tier=<name>` overrides detection (testing on real devices).
+ *
+ * Signals: unmasked GPU renderer string (integrated vs discrete vs software),
+ * hardwareConcurrency, deviceMemory (Chrome/Android only — capped at 8), and
+ * mobile detection that includes iPadOS, which reports a desktop Mac UA.
+ * Misclassification is cheap: main.ts runs an adaptive-resolution governor on
+ * top of whatever tier is picked here.
  */
 export function detectGpuTier(): GpuTier {
-    const cores = navigator.hardwareConcurrency ?? 4;
-    const mobile = /Mobi|Android|iPad|iPhone|iPod/i.test(navigator.userAgent);
+    const forced = new URLSearchParams(location.search).get('tier') as GpuTier | null;
+    if (forced && forced in TIER_SETTINGS) return forced;
 
-    // WebGL2 absence is a strong low-tier signal on 7-year-old devices.
-    const gl2 = (() => {
-        try {
-            return document.createElement('canvas').getContext('webgl2');
-        } catch {
-            return null;
+    const cores = navigator.hardwareConcurrency || 4;
+    const iPadOS = /Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1;
+    const mobile = iPadOS || /Mobi|Android|iPad|iPhone|iPod/i.test(navigator.userAgent);
+    // Absent on Safari/Firefox. Unknown is treated as "enough" — the GPU string
+    // and the resolution governor do the real work.
+    const mem: number = (navigator as any).deviceMemory ?? 8;
+
+    let gpu = '';
+    let maxTex = 4096;
+    try {
+        const gl = document.createElement('canvas').getContext('webgl2');
+        if (!gl) return 'very-low';
+        maxTex = gl.getParameter(gl.MAX_TEXTURE_SIZE) as number;
+        const info = gl.getExtension('WEBGL_debug_renderer_info');
+        gpu = String(gl.getParameter(info ? info.UNMASKED_RENDERER_WEBGL : gl.RENDERER)).toLowerCase();
+        // Release the probe context — mobile Safari caps live contexts.
+        gl.getExtension('WEBGL_lose_context')?.loseContext();
+    } catch {
+        return 'very-low';
+    }
+
+    if (/swiftshader|llvmpipe|software|basic render/.test(gpu)) return 'very-low';
+
+    if (mobile) {
+        // iOS/iPadOS: no deviceMemory and coarse core counts. A12+ (2018) report
+        // 16384 textures and comfortably run the mid/mobile-high feature set.
+        if (/apple/.test(gpu) || iPadOS || /iPad|iPhone/.test(navigator.userAgent)) {
+            return maxTex >= 16384 ? 'mobile-high' : 'mid';
         }
-    })();
-    const hasWebGL2 = !!gl2;
+        if (cores <= 4 || mem <= 2) return 'very-low';
+        // Old Mali-T / Adreno 3xx-5xx (pre-2019 mid-range) stay off the heavy path.
+        if (/mali-t|adreno \(tm\) [345]\d\d|powervr/.test(gpu)) return 'low';
+        if (cores >= 8 && mem >= 6) return 'mobile-high'; // e.g. Galaxy S22 Ultra (Adreno 730 / Xclipse 920)
+        return cores >= 6 && mem >= 3 ? 'mid' : 'low';
+    }
 
-    // MAX_TEXTURE_SIZE: integrated Intel/AMD tops out at 8192; discrete and all
-    // Apple Silicon report 16384+. This is the most reliable way to separate
-    // a 16-core i9 laptop with integrated graphics from a desktop discrete GPU.
-    const maxTexSize: number = gl2 ? (gl2.getParameter(gl2.MAX_TEXTURE_SIZE) as number) : 4096;
-    // Release the probe context — it has served its purpose and holding it
-    // occupies GPU memory until the tab closes.
-    gl2?.getExtension('WEBGL_lose_context')?.loseContext();
-
-    // deviceMemory is absent on Firefox/Safari; fall back to a canvas timing
-    // probe or WebGL2 presence as a proxy.
-    const declaredMem = (navigator as any).deviceMemory as number | undefined;
-    const estimatedMem =
-        declaredMem ??
-        (() => {
-            if (!hasWebGL2) return 1;
-            try {
-                const cv = document.createElement('canvas');
-                cv.width = cv.height = 512;
-                const ctx = cv.getContext('2d');
-                if (!ctx) return 4;
-                const t0 = performance.now();
-                for (let i = 0; i < 20; i++) ctx.fillRect(0, 0, 512, 512);
-                return performance.now() - t0 > 15 ? 2 : 4;
-            } catch {
-                return 4;
-            }
-        })();
-
-    // very-low: no WebGL2, or weak mobile hardware
-    if (mobile && (!hasWebGL2 || cores <= 4 || estimatedMem <= 2)) return 'very-low';
-    // low: weak desktop/non-mobile (≤4 cores OR ≤2 GB)
-    if (cores <= 4 || estimatedMem <= 2) return 'low';
-
-    // mobile-high: flagship phone/tablet (replaces old 'high' mobile path to avoid
-    // enabling EdgeMask on mobile, which doubles draw calls for little visual gain)
-    if (mobile && cores >= 8 && estimatedMem >= 4) return 'mobile-high';
-
-    // high: desktop with discrete GPU — requires large texture units to exclude
-    // integrated Intel/AMD which tops out at maxTexSize=8192.
-    if (!mobile && cores >= 8 && estimatedMem >= 6 && maxTexSize >= 16384) return 'high';
-
-    // mid: capable device — requires BOTH ≥6 cores AND ≥3 GB.
-    // Also catches integrated-GPU desktops (maxTexSize≤8192) that would otherwise
-    // hit high but can't sustain EdgeMask + 3072 shadow.
-    if (cores >= 6 && estimatedMem >= 3) return 'mid';
-
-    // anything else (e.g. 6-core/2 GB or 4-core/4 GB) falls to low
-    return 'low';
+    if (cores <= 4 || mem <= 2) return 'low';
+    // ANGLE/D3D11 reports MAX_TEXTURE_SIZE 16384 even on Intel UHD, so it cannot
+    // separate integrated from discrete. The renderer string can.
+    const integrated =
+        /intel|iris|uhd|(radeon\(tm\)|radeon) (vega )?graphics|mali|adreno/.test(gpu) && !/arc/.test(gpu);
+    if (!integrated && cores >= 8 && mem >= 6 && maxTex >= 16384) return 'high';
+    return cores >= 6 ? 'mid' : 'low';
 }
