@@ -1,5 +1,5 @@
 /**
- * Settings panel — gear button or tilde / backquote.
+ * Settings panel — gear button, G (as planet-explorer) or backquote.
  *
  * Live controls for outline scale, zoom limits, atmosphere, and world
  * streaming. Values persist in localStorage and apply immediately.
@@ -7,7 +7,7 @@
 
 import { DEFAULT_STREAM_RADIUS } from '../core/voxel';
 import { DEFAULT_SHADOW_RESOLUTION } from '../render/lighting';
-import { PLANET_RADIUS_DEFAULT } from '../render/planet.glsl';
+import { PLANET_RADIUS_DEFAULT } from '../render/planet';
 import type { DayNight } from '../render/day-night';
 import { VOXEL_PALETTES, activePaletteName } from '../core/palette';
 
@@ -548,8 +548,14 @@ export function createSettings({ rig, atmo, input, world, dayNight, seed }: Sett
 
     addEventListener('keydown', (e: KeyboardEvent) => {
         if (e.repeat) return;
+        // Not while typing a seed word into the panel's own text field.
+        if ((e.target as HTMLElement)?.tagName === 'INPUT' && (e.target as HTMLInputElement).type === 'text') return;
         if (e.code === 'Escape' && open) {
             setOpen(false);
+        } else if (e.code === 'KeyG' || e.code === 'Backquote') {
+            setOpen(!open);
+            // Release the mouse so the panel's sliders are usable.
+            if (open) document.exitPointerLock?.();
         }
     });
 

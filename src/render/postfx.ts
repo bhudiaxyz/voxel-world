@@ -383,9 +383,9 @@ function makeAtmosphereShader(sunDir: THREE.Vector3) {
       varying vec2 vUv;
       ${SKY_FN_GLSL}
 
-      // Explicit LOD: called inside a uniform-bounded loop with an early break,
-      // where implicit-derivative fetches are undefined (D3D warning X3595).
-      // tDepth has no mips, so the result is identical.
+      // Explicit LOD for every fetch inside a loop or per-pixel branch: implicit
+      // derivatives are undefined there (D3D warning X3595). No buffer in the
+      // post chain has mips, so textureLod(…, 0.0) is identical.
       float viewZ(vec2 uv) {
         float d = textureLod(tDepth, uv, 0.0).x;
         return perspectiveDepthToViewZ(d, uNear, uFar);
@@ -455,7 +455,7 @@ function makeAtmosphereShader(sunDir: THREE.Vector3) {
           vec2 px = blurPx / uResolution;
           vec3 acc = col;
           for (int i = 0; i < 4; i++) {
-            acc += texture2D(tDiffuse, vUv + AO_DIR[i * 2] * px).rgb;
+            acc += textureLod(tDiffuse, vUv + AO_DIR[i * 2] * px, 0.0).rgb;
           }
           col = acc / 5.0;
         }

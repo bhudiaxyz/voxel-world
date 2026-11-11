@@ -9,7 +9,7 @@ import { createWater, makeDepthMap, DEPTH_RANGE } from './world/water';
 import { createParticles } from './fx/particles';
 import { createCharacter } from './player/character';
 import { setVoxelWaterline } from './core/voxel';
-import { updatePlanetUniforms } from './render/planet.glsl';
+import { updatePlanetUniforms } from './render/planet';
 import { DayNight } from './render/day-night';
 import { Controller, Input } from './player/controller';
 import { createPathNavigator } from './player/pathfinding';
@@ -123,49 +123,58 @@ async function start(): Promise<void> {
     const fly = createFlyMode(world.grid);
     const input = new Input(renderer.domElement);
     const canAct = () => fpCam.isLocked || fpCam.touchActive;
-    document.addEventListener('keydown', (e: KeyboardEvent) => {
-        // L: land — allowed even without pointer lock so Escape-then-L still lands.
-        if (e.code === 'KeyL' && !e.repeat && drone.active) {
-            drone.beginLanding();
-            return;
-        }
-        if (!canAct()) return;
-        // F: toggle fly mode
-        if (e.code === 'KeyF' && !e.repeat && !drone.active) {
-            if (fly.active) {
-                fly.exit();
-                fpCam.flyActive = false;
-                fpCam.yaw = fpCam.camera.rotation.y;
-                fpCam.pitch = 0;
-                // Sync controller to the camera's ground position so walk resumes here.
-                controller.pos.x = fpCam.camera.position.x;
-                controller.pos.z = fpCam.camera.position.z;
-                controller.pos.y = world.grid.surfaceY(controller.pos.x, controller.pos.z);
-                controller.vel.set(0, 0, 0);
-            } else {
-                fly.enter(fpCam.camera);
-                fpCam.flyActive = true;
-            }
-        }
-        // G: enter drone (works from fly mode too — skip rise, hold current altitude)
-        if (e.code === 'KeyG' && !e.repeat && !drone.active) {
-            const fromFly = fly.active;
-            if (fromFly) {
-                fly.exit();
-                fpCam.flyActive = false;
-            }
-            drone.enter(fpCam.camera, fromFly);
+    // ---- shared mode actions (keyboard + touch call the same functions) ----
+    // Cycle matches planet-explorer: walk → drone → fly → walk.
+    const toWalk = () => {
+        fly.exit();
+        fpCam.flyActive = false;
+        fpCam.yaw = fpCam.camera.rotation.y;
+        fpCam.pitch = 0;
+        // Sync controller to the camera's ground position so walk resumes here.
+        controller.pos.x = fpCam.camera.position.x;
+        controller.pos.z = fpCam.camera.position.z;
+        controller.pos.y = world.grid.surfaceY(controller.pos.x, controller.pos.z);
+        controller.vel.set(0, 0, 0);
+    };
+    const cycleMode = () => {
+        if (fly.active) toWalk();
+        else if (drone.active) {
+            drone.exit();
+            fpCam.droneActive = false;
+            fpCam.yaw = fpCam.camera.rotation.y;
+            fpCam.pitch = 0;
+            fly.enter(fpCam.camera);
+            fpCam.flyActive = true;
+        } else {
+            drone.enter(fpCam.camera);
             fpCam.droneActive = true;
         }
-        if (e.code === 'KeyE' && !e.repeat) {
-            const g = post.grade.uniforms;
-            const on = g['uEdgeDarkOpacity'].value === 0;
-            g['uEdgeDarkOpacity'].value = on ? 0.64 : 0;
-            g['uEdgeLightOpacity'].value = on ? 0.3 : 0;
-        }
-        // [ / ] — step time of day back/forward by 3 hours for transition testing
-        if (e.code === 'BracketLeft' && !e.repeat) dayNight.timeOfDay = (dayNight.timeOfDay - 0.125 + 1) % 1;
-        if (e.code === 'BracketRight' && !e.repeat) dayNight.timeOfDay = (dayNight.timeOfDay + 0.125) % 1;
+    };
+    const land = () => {
+        if (drone.active) drone.beginLanding();
+        else if (fly.active) toWalk();
+    };
+    const toggleEdges = () => {
+        const g = post.grade.uniforms;
+        const on = g['uEdgeDarkOpacity'].value === 0;
+        g['uEdgeDarkOpacity'].value = on ? 0.64 : 0;
+        g['uEdgeLightOpacity'].value = on ? 0.3 : 0;
+    };
+    const stepTime = (d: number) => {
+        dayNight.timeOfDay = (dayNight.timeOfDay + d + 1) % 1;
+    };
+
+    document.addEventListener('keydown', (e: KeyboardEvent) => {
+        if (e.repeat) return;
+        // L: land — allowed even without pointer lock so Escape-then-L still lands.
+        if (e.code === 'KeyL') return land();
+        if (!canAct()) return;
+        if (e.code === 'KeyF') cycleMode();
+        // B (borders): E is roll in planet-explorer, so edges moved off it.
+        else if (e.code === 'KeyB') toggleEdges();
+        // [ / ] — step time of day by 3 hours
+        else if (e.code === 'BracketLeft') stepTime(-0.125);
+        else if (e.code === 'BracketRight') stepTime(0.125);
     });
 
     const navigator = createPathNavigator({
@@ -283,47 +292,12 @@ async function start(): Promise<void> {
         map.invalidateTerrain();
     });
 
-    touch.onFly(() => {
-        if (fly.active) {
-            fly.exit();
-            fpCam.flyActive = false;
-            fpCam.yaw = fpCam.camera.rotation.y;
-            fpCam.pitch = 0;
-            controller.pos.x = fpCam.camera.position.x;
-            controller.pos.z = fpCam.camera.position.z;
-            controller.pos.y = world.grid.surfaceY(controller.pos.x, controller.pos.z);
-            controller.vel.set(0, 0, 0);
-        } else if (!drone.active) {
-            fly.enter(fpCam.camera);
-            fpCam.flyActive = true;
-        }
-    });
-    touch.onDrone(() => {
-        if (!drone.active) {
-            const fromFly = fly.active;
-            if (fromFly) {
-                fly.exit();
-                fpCam.flyActive = false;
-            }
-            drone.enter(fpCam.camera, fromFly);
-            fpCam.droneActive = true;
-        }
-    });
-    touch.onLand(() => {
-        if (drone.active) drone.beginLanding();
-    });
-    touch.onEdgeToggle(() => {
-        const g = post.grade.uniforms;
-        const on = g['uEdgeDarkOpacity'].value === 0;
-        g['uEdgeDarkOpacity'].value = on ? 0.64 : 0;
-        g['uEdgeLightOpacity'].value = on ? 0.3 : 0;
-    });
-    touch.onTimeBack(() => {
-        dayNight.timeOfDay = (dayNight.timeOfDay - 0.125 + 1) % 1;
-    });
-    touch.onTimeForward(() => {
-        dayNight.timeOfDay = (dayNight.timeOfDay + 0.125) % 1;
-    });
+    touch.onCycle(cycleMode);
+    touch.onLand(land);
+    touch.onEdgeToggle(toggleEdges);
+    touch.onTimeBack(() => stepTime(-0.125));
+    touch.onTimeForward(() => stepTime(0.125));
+    touch.onSit(() => dog.toggleSit());
     touch.onMap(() => map.toggle());
 
     // frame the spawn before the veil lifts
@@ -553,8 +527,8 @@ async function start(): Promise<void> {
         if (!started) {
             started = true;
             ctrlEl.textContent = isTouchDevice
-                ? 'Left thumb · move   Right drag · look   ↑ · jump/ascend   ↓ · descend   ⚡ · sprint   ✈ · fly   🚁 · drone   🛬 · land   🗺 · map   ◀▶ · time'
-                : 'WASD · move   Mouse · look   Space · jump   F · fly   G · drone   L · land   E · edges   M · map';
+                ? 'Left thumb · move   Right drag · look   ↑ · jump/ascend   ↓ · descend   ⚡ · sprint   ✈ · walk→drone→fly   🛬 · land   🗺 · map   🐕 · sit   ⚙ · settings'
+                : 'WASD · move   Shift · sprint   Space · jump/ascend   C · descend   F · walk→drone→fly   L · land   M · map   G · settings   Esc · menu';
             if (isTouchDevice) bootEl.querySelector('.ls-enter')!.textContent = 'Tap to enter';
             bootEl.classList.add('ready');
             bootEl.addEventListener(
@@ -598,6 +572,8 @@ async function start(): Promise<void> {
         bubbles,
         tier,
         dayNight,
+        drone,
+        fly,
     };
 }
 

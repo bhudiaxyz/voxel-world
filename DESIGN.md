@@ -29,7 +29,7 @@ src/
 │   ├── sky.ts               ← shared GLSL: SKY_UNIFORMS_GLSL, SKY_FN_GLSL (skyRadiance, nightSkyAddons, _aurora)
 │   ├── day-night.ts         ← DayNight: keyframe palette animation, getNightFactor(), aurora and star uniforms
 │   ├── postfx.ts            ← createPostFX(): SceneDepth → EdgeMask → Atmosphere → Bloom → Crepuscular → Grade → SMAA
-│   ├── planet.glsl.ts       ← PLANET_BEND_GLSL vertex snippet, updatePlanetUniforms()
+│   ├── planet.ts            ← PLANET_BEND_GLSL vertex snippet, updatePlanetUniforms()
 │   ├── fp-camera.ts         ← FPCamera: pointer lock, key/mouse state, drainDroneAltDelta(), touch state
 │   └── gpu-tier.ts          ← detectGpuTier(), TIER_SETTINGS table (high/mobile-high/mid/low/very-low)
 │
@@ -486,7 +486,7 @@ Water plane subdivision: 64×64 on `high`, 32×32 on `mobile-high`/`mid`/`low`, 
 
 ## Planet bend
 
-`src/render/planet.glsl.ts`
+`src/render/planet.ts`
 
 The vertex shader snippet `PLANET_BEND_GLSL` is pasted into every material that needs curvature (voxel mesh, water, vegetation, particles):
 
@@ -565,7 +565,7 @@ Touch joystick Y: negative values brake `speedMult = max(0, 1 + joyY)`; positive
 
 **Swipe-to-look:** raw `touchstart`/`touchmove` on the right half (clientX ≥ innerWidth/2). Calls `fpCam.applyTouchLook(dyaw, dpitch)`.
 
-**Button events** use the `held()` helper for Space/C (altitude) and Shift (sprint), and `touchend` listeners for tap-only actions (fly, drone, land, edges, time step).
+**Button events** use the `held()` helper for Space/C (altitude) and Shift (sprint), and `touchend` listeners for tap-only actions (mode cycle, land, map, sit, edges, time step). Mode changes go through the same `cycleMode()` / `land()` functions in `main.ts` that the F / L keys call, so keyboard and touch cannot drift apart.
 
 **`touchActive = true`** bypasses the `isLocked` check in `canAct()` and `getWish()`, so touch devices never need pointer lock.
 

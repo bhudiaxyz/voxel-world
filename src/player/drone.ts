@@ -20,6 +20,8 @@ export interface DroneMode {
     readonly landing: boolean;
     enter(camera: THREE.PerspectiveCamera, skipRise?: boolean): void;
     beginLanding(): void;
+    /** Leave drone mode immediately, camera stays where it is (F-cycle to fly). */
+    exit(): void;
     update(
         dt: number,
         camera: THREE.PerspectiveCamera,
@@ -74,6 +76,11 @@ export function createDroneMode(grid: VoxelGrid): DroneMode {
 
         beginLanding(): void {
             if (state !== 'idle') isLanding = true;
+        },
+
+        exit(): void {
+            state = 'idle';
+            isLanding = false;
         },
 
         getAltitude(camera: THREE.PerspectiveCamera): number {

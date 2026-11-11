@@ -22,7 +22,7 @@
 
 import * as THREE from 'three';
 import { WATER, SKY, LIGHT } from '../core/palette';
-import { PLANET_UNIFORMS_GLSL, PLANET_BEND_GLSL, planetUniformValues } from '../render/planet.glsl';
+import { PLANET_UNIFORMS_GLSL, PLANET_BEND_GLSL, planetUniformValues } from '../render/planet';
 
 /**
  * Half-range of the signed depth field, in world units. The texture is

@@ -529,8 +529,6 @@ export class Input {
                 this.jumpPressed = true;
                 e.preventDefault();
             }
-            if (e.code === 'KeyQ') this.rotateL = true;
-            if (e.code === 'KeyE') this.rotateR = true;
         });
         addEventListener('keyup', (e) => {
             this.keys.delete(e.code);

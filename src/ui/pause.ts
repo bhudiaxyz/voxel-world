@@ -59,17 +59,21 @@ const CSS = `
 #pause .binding kbd { flex-shrink:0; }
 `;
 
+// Same actions, same order, both lists — and the same keys as planet-explorer
+// where the feature exists there (F cycle, L land, G settings, C descend).
 const KEYBOARD_BINDINGS = [
     ['WASD', 'Move'],
     ['Mouse', 'Look'],
     ['Space', 'Jump / Ascend'],
     ['C', 'Descend'],
     ['Shift', 'Sprint'],
-    ['F', 'Toggle fly mode'],
-    ['G', 'Enter drone'],
-    ['L', 'Land (drone)'],
-    ['E', 'Edge toggle'],
+    ['F', 'Walk → Drone → Fly'],
+    ['L', 'Land'],
     ['M', 'Map'],
+    ['Y', 'Dog sit / stand'],
+    ['G', 'Settings'],
+    ['B', 'Edges'],
+    ['[ ]', 'Time of day'],
     ['Esc', 'Pause'],
 ];
 
@@ -79,11 +83,12 @@ const TOUCH_BINDINGS = [
     ['↑', 'Jump / Ascend'],
     ['↓', 'Descend'],
     ['⚡', 'Sprint'],
-    ['✈', 'Toggle fly mode'],
-    ['🚁', 'Enter drone'],
-    ['🛬', 'Land (drone)'],
-    ['⬡', 'Edges'],
+    ['✈', 'Walk → Drone → Fly'],
+    ['🛬', 'Land'],
     ['🗺', 'Map'],
+    ['🐕', 'Dog sit / stand'],
+    ['⚙', 'Settings'],
+    ['⬡', 'Edges'],
     ['◀ ▶', 'Time of day'],
 ];
 

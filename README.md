@@ -12,8 +12,8 @@ Inspired by **Verdant** [https://github.com/xikhar/verdant] and **Petalfell** [h
 - **Night sky** — procedural stars, a Milky Way with Great Rift dust lane, emission nebulae, and a moon disc.
 - **Aurora** — animated curtain aurora at deep night: flickering vertical rays, sweeping pulse waves, and colour that shifts from green through cyan to magenta and ghostly white at peaks.
 - **Volumetric-style atmosphere** — sunrise/sunset limb glow, crepuscular rays (eight-tap radial blur), and animated cloud cover.
-- **Fly and drone modes** — free-flight (F) or terrain-following drone (G) with P-controller altitude hold and smooth landing state machine.
-- **Ink edge rendering** — toon-style dark and light strokes at block boundaries, composited in display space after tone mapping. Toggle with E.
+- **Fly and drone modes** — terrain-following drone and free flight, cycled with F (walk → drone → fly) with P-controller altitude hold and smooth landing state machine.
+- **Ink edge rendering** — toon-style dark and light strokes at block boundaries, composited in display space after tone mapping. Toggle with B.
 - **Rich vegetation** — fourteen tree silhouette forms (round, stack, twin, bunch, nub, spire, umbrella, broad, tall birch, layered pagoda, weeping cherry, palm, dead/skeletal, mangrove), ferns, moss, lichen, grass, and scattered mushrooms and crystals. Each biome seeds its own palette of forms and leaf colours.
 - **Touch controls** — full nippleJS virtual joystick overlay with compass-aware minimap, auto-detected on load.
 - **Seasonal palettes** — five world colour palettes (Autumn, Spring, Alpine, Desert, Alien) selectable from the pause menu. Switching re-colours everything live: sky dome, fog, hemisphere light, water, atmospheric grade, and petal particles. No scene reload required.
@@ -45,42 +45,45 @@ npm run preview   # serve that bundle locally
 
 ## Controls
 
+Bindings follow [planet-explorer](../planet-explorer) wherever the feature exists in both (F mode cycle, L land, G settings, C descend). Keyboard and touch expose the same actions.
+
 ### Keyboard & mouse
 
-| Input     | Action                                          |
-| --------- | ----------------------------------------------- |
-| WASD      | Move                                            |
-| Mouse     | Look                                            |
-| Space     | Jump (hold in water to swim up)                 |
-| Shift     | Sprint                                          |
-| F         | Toggle fly mode (free flight, terrain floor)    |
-| G         | Enter drone mode (terrain-following, A/D steer) |
-| L         | Land (drone)                                    |
-| Space / C | Ascend / descend (fly or drone)                 |
-| Scroll    | Ascend / descend (drone)                        |
-| E         | Toggle edge outlines                            |
-| Y         | Tell the dog to sit or stand                    |
-| M         | Toggle map                                      |
-| [ / ]     | Step time of day back / forward by 3 hours      |
-| Esc       | Pause / release pointer                         |
-| `` ` ``   | Settings                                        |
+| Input        | Action                                         |
+| ------------ | ---------------------------------------------- |
+| WASD         | Move (A/D steer in drone mode)                 |
+| Mouse        | Look                                           |
+| Space        | Jump / ascend (hold in water to swim up)       |
+| C            | Descend (fly or drone)                         |
+| Shift        | Sprint                                         |
+| F            | Cycle mode: walk → drone → fly → walk          |
+| L            | Land (drone descends; fly drops to the ground) |
+| Scroll       | Ascend / descend (drone)                       |
+| M            | Toggle map                                     |
+| Y            | Tell the dog to sit or stand                   |
+| G or `` ` `` | Settings                                       |
+| B            | Toggle edge outlines                           |
+| [ / ]        | Step time of day back / forward by 3 hours     |
+| Esc          | Pause / release pointer                        |
 
 Click in the viewport to capture the pointer. Press Esc to release it. While landing the drone, press Space to abort and resume cruising.
 
 ### Touch (phone / tablet)
 
-| Control          | Action                                       |
-| ---------------- | -------------------------------------------- |
-| Left joystick    | Move / steer (joystick Y brakes the drone)   |
-| Swipe right half | Look                                         |
-| ↑                | Jump / ascend                                |
-| ↓                | Descend (drone or fly)                       |
-| ⚡               | Sprint                                       |
-| ✈                | Toggle fly mode (tap again to exit)          |
-| 🚁               | Enter drone mode                             |
-| 🛬               | Land drone (visible while drone is airborne) |
-| ⬡                | Toggle edge outlines                         |
-| ◀ / ▶            | Step time of day back / forward by 3 hours   |
+| Control          | Action                                     |
+| ---------------- | ------------------------------------------ |
+| Left joystick    | Move / steer (joystick Y brakes the drone) |
+| Swipe right half | Look                                       |
+| ↑                | Jump / ascend                              |
+| ↓                | Descend (fly or drone)                     |
+| ⚡               | Sprint                                     |
+| ✈ / 🕊 / 🚶       | Cycle mode — icon shows the next mode      |
+| 🛬               | Land (visible while in drone or fly mode)  |
+| 🗺                | Toggle map                                 |
+| 🐕               | Tell the dog to sit or stand               |
+| ⚙ (top right)    | Settings                                   |
+| ⬡                | Toggle edge outlines                       |
+| ◀ / ▶            | Step time of day back / forward by 3 hours |
 
 The joystick overlay appears automatically on touch devices and is hidden on desktop.
 

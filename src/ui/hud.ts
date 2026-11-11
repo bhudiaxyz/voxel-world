@@ -95,8 +95,9 @@ export function createHud({ dayNight, drone, camera }: HudDeps) {
     <div class="place show" id="hud-place">VoxelWorld</div>
     <button class="settings-btn" id="hud-settings" type="button" aria-label="Settings">⚙</button>
     <div class="shortcuts" id="hud-shortcuts">
-      <span class="shortcut"><kbd>Y</kbd>Sit</span>
+      <span class="shortcut"><kbd>F</kbd>Mode</span>
       <span class="shortcut"><kbd>M</kbd>Map</span>
+      <span class="shortcut"><kbd>Y</kbd>Sit</span>
       <span class="shortcut"><kbd>Esc</kbd>Menu</span>
     </div>
     <div class="status-bar">
