@@ -25,29 +25,29 @@ const PREVIOUS_SHADOW_RESOLUTION_DEFAULT = 4096;
  * width: inkWidth / INK_BASE.
  */
 export const DEFAULTS = {
-  inkWidth: INK_BASE * 1.85,
-  zoomMin: 50,
-  zoomMax: 120,
-  fogEnabled: true,
-  fogStart: 420,
-  loadRadius: DEFAULT_STREAM_RADIUS,
-  shadowResolution: DEFAULT_SHADOW_RESOLUTION,
-  planetRadius: PLANET_RADIUS_DEFAULT,
-  daySpeed: 1,
-  windStrength: 0.4,
+    inkWidth: INK_BASE * 1.85,
+    zoomMin: 50,
+    zoomMax: 120,
+    fogEnabled: true,
+    fogStart: 420,
+    loadRadius: DEFAULT_STREAM_RADIUS,
+    shadowResolution: DEFAULT_SHADOW_RESOLUTION,
+    planetRadius: PLANET_RADIUS_DEFAULT,
+    daySpeed: 1,
+    windStrength: 0.4,
 };
 
 const RANGES = {
-  // Half-thousandth precision keeps authored values such as 1.85x exact.
-  inkWidth: { min: 0.012, max: 0.16, step: 0.0005 },
-  zoomMin: { min: 12, max: 50, step: 1 },
-  zoomMax: { min: 40, max: 140, step: 1 },
-  fogStart: { min: 70, max: 420, step: 2 },
-  loadRadius: { min: 3, max: 12, step: 1 },
-  shadowResolution: { min: 0, max: 4096, step: 1024 },
-  planetRadius: { min: 100, max: 1000, step: 10 },
-  daySpeed: { min: 0.1, max: 5, step: 0.1 },
-  windStrength: { min: 0, max: 1.5, step: 0.05 },
+    // Half-thousandth precision keeps authored values such as 1.85x exact.
+    inkWidth: { min: 0.012, max: 0.16, step: 0.0005 },
+    zoomMin: { min: 12, max: 50, step: 1 },
+    zoomMax: { min: 40, max: 140, step: 1 },
+    fogStart: { min: 70, max: 420, step: 2 },
+    loadRadius: { min: 3, max: 12, step: 1 },
+    shadowResolution: { min: 0, max: 4096, step: 1024 },
+    planetRadius: { min: 100, max: 1000, step: 10 },
+    daySpeed: { min: 0.1, max: 5, step: 0.1 },
+    windStrength: { min: 0, max: 1.5, step: 0.05 },
 };
 
 const CSS = `
@@ -135,130 +135,132 @@ const CSS = `
 `;
 
 interface SettingsValues {
-  inkWidth: number;
-  zoomMin: number;
-  zoomMax: number;
-  fogEnabled: boolean;
-  fogStart: number;
-  loadRadius: number;
-  shadowResolution: number;
-  planetRadius: number;
-  daySpeed: number;
-  windStrength: number;
+    inkWidth: number;
+    zoomMin: number;
+    zoomMax: number;
+    fogEnabled: boolean;
+    fogStart: number;
+    loadRadius: number;
+    shadowResolution: number;
+    planetRadius: number;
+    daySpeed: number;
+    windStrength: number;
 }
 
 function load(): SettingsValues {
-  try {
-    const raw = localStorage.getItem(STORE_KEY);
-    if (!raw) return { ...DEFAULTS };
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    const out: SettingsValues = { ...DEFAULTS };
-    for (const [k, fallback] of Object.entries(DEFAULTS)) {
-      const key = k as keyof SettingsValues;
-      if (typeof fallback === 'boolean') {
-        if (typeof parsed[k] === 'boolean') (out[key] as boolean) = parsed[k] as boolean;
-        else if (parsed[k] === 0 || parsed[k] === 1) (out[key] as boolean) = Boolean(parsed[k]);
-      } else {
-        const n = Number(parsed[k]);
-        if (Number.isFinite(n)) (out[key] as number) = n;
-      }
+    try {
+        const raw = localStorage.getItem(STORE_KEY);
+        if (!raw) return { ...DEFAULTS };
+        const parsed = JSON.parse(raw) as Record<string, unknown>;
+        const out: SettingsValues = { ...DEFAULTS };
+        for (const [k, fallback] of Object.entries(DEFAULTS)) {
+            const key = k as keyof SettingsValues;
+            if (typeof fallback === 'boolean') {
+                if (typeof parsed[k] === 'boolean') (out[key] as boolean) = parsed[k] as boolean;
+                else if (parsed[k] === 0 || parsed[k] === 1) (out[key] as boolean) = Boolean(parsed[k]);
+            } else {
+                const n = Number(parsed[k]);
+                if (Number.isFinite(n)) (out[key] as number) = n;
+            }
+        }
+        // Carry users who were still on the former authored default forward while
+        // preserving every genuinely custom outline value.
+        if (Math.abs(out.inkWidth - PREVIOUS_INK_DEFAULT) < 1e-7) {
+            out.inkWidth = DEFAULTS.inkWidth;
+        }
+        if (((parsed['_version'] as number) || 1) < SETTINGS_VERSION) {
+            if (out.loadRadius === PREVIOUS_LOAD_RADIUS_DEFAULT) {
+                out.loadRadius = DEFAULTS.loadRadius;
+            }
+            if (out.shadowResolution === PREVIOUS_SHADOW_RESOLUTION_DEFAULT) {
+                out.shadowResolution = DEFAULTS.shadowResolution;
+            }
+        }
+        return clampAll(out);
+    } catch {
+        return { ...DEFAULTS };
     }
-    // Carry users who were still on the former authored default forward while
-    // preserving every genuinely custom outline value.
-    if (Math.abs(out.inkWidth - PREVIOUS_INK_DEFAULT) < 1e-7) {
-      out.inkWidth = DEFAULTS.inkWidth;
-    }
-    if (((parsed['_version'] as number) || 1) < SETTINGS_VERSION) {
-      if (out.loadRadius === PREVIOUS_LOAD_RADIUS_DEFAULT) {
-        out.loadRadius = DEFAULTS.loadRadius;
-      }
-      if (out.shadowResolution === PREVIOUS_SHADOW_RESOLUTION_DEFAULT) {
-        out.shadowResolution = DEFAULTS.shadowResolution;
-      }
-    }
-    return clampAll(out);
-  } catch {
-    return { ...DEFAULTS };
-  }
 }
 
 function save(values: SettingsValues): void {
-  try {
-    localStorage.setItem(STORE_KEY, JSON.stringify({ ...values, _version: SETTINGS_VERSION }));
-  } catch {
-    /* private mode */
-  }
+    try {
+        localStorage.setItem(STORE_KEY, JSON.stringify({ ...values, _version: SETTINGS_VERSION }));
+    } catch {
+        /* private mode */
+    }
 }
 
 function clampAll(v: SettingsValues): SettingsValues {
-  const ink = RANGES.inkWidth,
-    zmin = RANGES.zoomMin,
-    zmax = RANGES.zoomMax;
-  const fog = RANGES.fogStart,
-    loadRadius = RANGES.loadRadius;
-  const shadowResolution = RANGES.shadowResolution;
-  v.inkWidth = clamp(v.inkWidth, ink.min, ink.max);
-  v.zoomMin = clamp(v.zoomMin, zmin.min, zmin.max);
-  v.zoomMax = clamp(v.zoomMax, zmax.min, zmax.max);
-  if (v.zoomMax < v.zoomMin + 4) v.zoomMax = v.zoomMin + 4;
-  v.fogEnabled = v.fogEnabled !== false;
-  v.fogStart = clamp(v.fogStart, fog.min, fog.max);
-  v.loadRadius = Math.round(clamp(v.loadRadius, loadRadius.min, loadRadius.max));
-  v.shadowResolution =
-    Math.round(clamp(v.shadowResolution, shadowResolution.min, shadowResolution.max) / shadowResolution.step) *
-    shadowResolution.step;
-  v.planetRadius =
-    Math.round(clamp(v.planetRadius, RANGES.planetRadius.min, RANGES.planetRadius.max) / RANGES.planetRadius.step) *
-    RANGES.planetRadius.step;
-  v.daySpeed = Math.round(clamp(v.daySpeed, RANGES.daySpeed.min, RANGES.daySpeed.max) * 10) / 10;
-  v.windStrength = Math.round(clamp(v.windStrength, RANGES.windStrength.min, RANGES.windStrength.max) / RANGES.windStrength.step) * RANGES.windStrength.step;
-  return v;
+    const ink = RANGES.inkWidth,
+        zmin = RANGES.zoomMin,
+        zmax = RANGES.zoomMax;
+    const fog = RANGES.fogStart,
+        loadRadius = RANGES.loadRadius;
+    const shadowResolution = RANGES.shadowResolution;
+    v.inkWidth = clamp(v.inkWidth, ink.min, ink.max);
+    v.zoomMin = clamp(v.zoomMin, zmin.min, zmin.max);
+    v.zoomMax = clamp(v.zoomMax, zmax.min, zmax.max);
+    if (v.zoomMax < v.zoomMin + 4) v.zoomMax = v.zoomMin + 4;
+    v.fogEnabled = v.fogEnabled !== false;
+    v.fogStart = clamp(v.fogStart, fog.min, fog.max);
+    v.loadRadius = Math.round(clamp(v.loadRadius, loadRadius.min, loadRadius.max));
+    v.shadowResolution =
+        Math.round(clamp(v.shadowResolution, shadowResolution.min, shadowResolution.max) / shadowResolution.step) *
+        shadowResolution.step;
+    v.planetRadius =
+        Math.round(clamp(v.planetRadius, RANGES.planetRadius.min, RANGES.planetRadius.max) / RANGES.planetRadius.step) *
+        RANGES.planetRadius.step;
+    v.daySpeed = Math.round(clamp(v.daySpeed, RANGES.daySpeed.min, RANGES.daySpeed.max) * 10) / 10;
+    v.windStrength =
+        Math.round(clamp(v.windStrength, RANGES.windStrength.min, RANGES.windStrength.max) / RANGES.windStrength.step) *
+        RANGES.windStrength.step;
+    return v;
 }
 
 const clamp = (n: number, a: number, b: number) => Math.min(b, Math.max(a, n));
 
 const fmt = {
-  inkWidth: (n: number) => `${(n / INK_BASE).toFixed(2)} px`,
-  zoomMin: (n: number) => String(Math.round(n)),
-  zoomMax: (n: number) => String(Math.round(n)),
-  fogStart: (n: number) => String(Math.round(n)),
-  shadowResolution: (n: number) => (n > 0 ? `${Math.round(n / 1024)}K` : 'Off'),
-  planetRadius: (n: number) => String(Math.round(n)),
-  daySpeed: (n: number) => `${n.toFixed(1)}×`,
-  windStrength: (n: number) => n === 0 ? 'Off' : n.toFixed(2),
+    inkWidth: (n: number) => `${(n / INK_BASE).toFixed(2)} px`,
+    zoomMin: (n: number) => String(Math.round(n)),
+    zoomMax: (n: number) => String(Math.round(n)),
+    fogStart: (n: number) => String(Math.round(n)),
+    shadowResolution: (n: number) => (n > 0 ? `${Math.round(n / 1024)}K` : 'Off'),
+    planetRadius: (n: number) => String(Math.round(n)),
+    daySpeed: (n: number) => `${n.toFixed(1)}×`,
+    windStrength: (n: number) => (n === 0 ? 'Off' : n.toFixed(2)),
 };
 
 interface SettingsDeps {
-  rig: { setZoomRange(a: number, b: number): void };
-  atmo: {
-    setAerialD(v: number): void;
-    setFogEnabled(v: boolean): void;
-    setShadowResolution(v: number): void;
-  };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  input: any;
-  world: {
-    streaming?: {
-      loadRadius?: number;
-      loadedCount?: number;
-      pendingCount?: number;
-      setLoadRadius(r: number): void;
+    rig: { setZoomRange(a: number, b: number): void };
+    atmo: {
+        setAerialD(v: number): void;
+        setFogEnabled(v: boolean): void;
+        setShadowResolution(v: number): void;
     };
-    meshes?: { edgeMaterial?: { linewidth: number }; material?: { userData: Record<string, any> } };
-    allPlanetUnis: Array<{ uPlanetRadius: { value: number } }>;
-  };
-  dayNight: DayNight;
-  seed: { currentWord: () => string; push(word: string): void; gen(): string };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    input: any;
+    world: {
+        streaming?: {
+            loadRadius?: number;
+            loadedCount?: number;
+            pendingCount?: number;
+            setLoadRadius(r: number): void;
+        };
+        meshes?: { edgeMaterial?: { linewidth: number }; material?: { userData: Record<string, any> } };
+        allPlanetUnis: Array<{ uPlanetRadius: { value: number } }>;
+    };
+    dayNight: DayNight;
+    seed: { currentWord: () => string; push(word: string): void; gen(): string };
 }
 
 export function createSettings({ rig, atmo, input, world, dayNight, seed }: SettingsDeps) {
-  const style = document.createElement('style');
-  style.textContent = CSS;
-  document.head.appendChild(style);
+    const style = document.createElement('style');
+    style.textContent = CSS;
+    document.head.appendChild(style);
 
-  const root = document.createElement('div');
-  root.id = 'settings';
-  root.innerHTML = `
+    const root = document.createElement('div');
+    root.id = 'settings';
+    root.innerHTML = `
     <div class="panel" role="dialog" aria-label="Settings">
       <header>
         <h2>Settings</h2>
@@ -350,213 +352,215 @@ export function createSettings({ rig, atmo, input, world, dayNight, seed }: Sett
       </div>
     </div>
   `;
-  document.body.appendChild(root);
+    document.body.appendChild(root);
 
-  const seedEl = root.querySelector('#set-seed') as HTMLInputElement;
-  seedEl.value = seed.currentWord();
+    const seedEl = root.querySelector('#set-seed') as HTMLInputElement;
+    seedEl.value = seed.currentWord();
 
-  const applyNewSeed = (word: string) => {
-    const w = word.trim() || seed.gen();
-    seedEl.value = w;
-    seed.push(w);
-    location.reload();
-  };
-  seedEl.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') applyNewSeed(seedEl.value);
-    e.stopPropagation();
-  });
-  root.querySelector('#set-new-world')!.addEventListener('click', () => applyNewSeed(seed.gen()));
+    const applyNewSeed = (word: string) => {
+        const w = word.trim() || seed.gen();
+        seedEl.value = w;
+        seed.push(w);
+        location.reload();
+    };
+    seedEl.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') applyNewSeed(seedEl.value);
+        e.stopPropagation();
+    });
+    root.querySelector('#set-new-world')!.addEventListener('click', () => applyNewSeed(seed.gen()));
 
-  const paletteSelect = root.querySelector('#set-palette') as HTMLSelectElement;
-  for (const [k, p] of Object.entries(VOXEL_PALETTES)) {
-    const opt = document.createElement('option');
-    opt.value = k;
-    opt.textContent = (p as { label: string }).label;
-    if (k === activePaletteName) opt.selected = true;
-    paletteSelect.appendChild(opt);
-  }
-  let _onPaletteChange: ((name: string) => void) | null = null;
-  paletteSelect.addEventListener('change', () => _onPaletteChange?.(paletteSelect.value));
-
-  const els = {
-    ink: root.querySelector('#set-ink') as HTMLInputElement,
-    zmin: root.querySelector('#set-zmin') as HTMLInputElement,
-    zmax: root.querySelector('#set-zmax') as HTMLInputElement,
-    fogEnabled: root.querySelector('#set-fog-enabled') as HTMLInputElement,
-    fog: root.querySelector('#set-fog') as HTMLInputElement,
-    loadRadius: root.querySelector('#set-load-radius') as HTMLInputElement,
-    shadowResolution: root.querySelector('#set-shadow-resolution') as HTMLInputElement,
-    planetRadius: root.querySelector('#set-planet-radius') as HTMLInputElement,
-    daySpeed: root.querySelector('#set-day-speed') as HTMLInputElement,
-    wind: root.querySelector('#set-wind') as HTMLInputElement,
-  };
-  const vals = {
-    ink: root.querySelector('#set-ink-val') as HTMLElement,
-    zmin: root.querySelector('#set-zmin-val') as HTMLElement,
-    zmax: root.querySelector('#set-zmax-val') as HTMLElement,
-    fog: root.querySelector('#set-fog-val') as HTMLElement,
-    loadRadius: root.querySelector('#set-load-radius-val') as HTMLElement,
-    shadowResolution: root.querySelector('#set-shadow-resolution-val') as HTMLElement,
-    planetRadius: root.querySelector('#set-planet-radius-val') as HTMLElement,
-    daySpeed: root.querySelector('#set-day-speed-val') as HTMLElement,
-    wind: root.querySelector('#set-wind-val') as HTMLElement,
-  };
-
-  const values = load();
-  const fpsEl = root.querySelector('#set-fps') as HTMLElement;
-  let open = false;
-  let wasPaused = false;
-  let streamStatus = '';
-  let shownFps = -1;
-
-  const syncStreamStatus = () => {
-    const streaming = world?.streaming;
-    const radius = streaming?.loadRadius ?? values.loadRadius;
-    const loaded = streaming?.loadedCount ?? 0;
-    const pending = streaming?.pendingCount ?? 0;
-    const next = `${Math.round(radius)} chunks · ${loaded} loaded` + (pending > 0 ? ` · ${pending} queued` : '');
-    if (next === streamStatus) return;
-    streamStatus = next;
-    vals.loadRadius.textContent = next;
-  };
-
-  const apply = () => {
-    clampAll(values);
-    const edgeMaterial = world?.meshes?.edgeMaterial;
-    if (edgeMaterial) {
-      edgeMaterial.linewidth = values.inkWidth / INK_BASE;
+    const paletteSelect = root.querySelector('#set-palette') as HTMLSelectElement;
+    for (const [k, p] of Object.entries(VOXEL_PALETTES)) {
+        const opt = document.createElement('option');
+        opt.value = k;
+        opt.textContent = (p as { label: string }).label;
+        if (k === activePaletteName) opt.selected = true;
+        paletteSelect.appendChild(opt);
     }
-    rig.setZoomRange(values.zoomMin, values.zoomMax);
-    atmo.setAerialD(values.fogStart);
-    atmo.setFogEnabled(values.fogEnabled);
-    world?.streaming?.setLoadRadius(values.loadRadius);
-    atmo.setShadowResolution(values.shadowResolution);
-    // Apply planet radius to all materials
-    for (const u of world.allPlanetUnis) u.uPlanetRadius.value = values.planetRadius;
-    // Apply day speed: daySpeed is a multiplier; base cycle = 1200s
-    dayNight.dayLengthSeconds = 1200 / values.daySpeed;
-    // Apply wind strength: _windBase is read by the frame loop's gust envelope
-    const wu = world?.meshes?.material?.userData?.uniforms;
-    if (wu) wu._windBase = values.windStrength;
-  };
+    let _onPaletteChange: ((name: string) => void) | null = null;
+    paletteSelect.addEventListener('change', () => _onPaletteChange?.(paletteSelect.value));
 
-  const syncUi = () => {
-    els.ink.value = String(values.inkWidth);
-    els.zmin.value = String(values.zoomMin);
-    els.zmax.value = String(values.zoomMax);
-    els.fogEnabled.checked = values.fogEnabled;
-    els.fog.value = String(values.fogStart);
-    els.loadRadius.value = String(values.loadRadius);
-    els.shadowResolution.value = String(values.shadowResolution);
-    els.planetRadius.value = String(values.planetRadius);
-    els.daySpeed.value = String(values.daySpeed);
-    els.wind.value = String(values.windStrength);
-    els.fog.disabled = !values.fogEnabled;
-    vals.ink.textContent = fmt.inkWidth(values.inkWidth);
-    vals.zmin.textContent = fmt.zoomMin(values.zoomMin);
-    vals.zmax.textContent = fmt.zoomMax(values.zoomMax);
-    vals.fog.textContent = fmt.fogStart(values.fogStart);
-    syncStreamStatus();
-    vals.shadowResolution.textContent = fmt.shadowResolution(values.shadowResolution);
-    vals.planetRadius.textContent = fmt.planetRadius(values.planetRadius);
-    vals.daySpeed.textContent = fmt.daySpeed(values.daySpeed);
-    vals.wind.textContent = fmt.windStrength(values.windStrength);
-  };
+    const els = {
+        ink: root.querySelector('#set-ink') as HTMLInputElement,
+        zmin: root.querySelector('#set-zmin') as HTMLInputElement,
+        zmax: root.querySelector('#set-zmax') as HTMLInputElement,
+        fogEnabled: root.querySelector('#set-fog-enabled') as HTMLInputElement,
+        fog: root.querySelector('#set-fog') as HTMLInputElement,
+        loadRadius: root.querySelector('#set-load-radius') as HTMLInputElement,
+        shadowResolution: root.querySelector('#set-shadow-resolution') as HTMLInputElement,
+        planetRadius: root.querySelector('#set-planet-radius') as HTMLInputElement,
+        daySpeed: root.querySelector('#set-day-speed') as HTMLInputElement,
+        wind: root.querySelector('#set-wind') as HTMLInputElement,
+    };
+    const vals = {
+        ink: root.querySelector('#set-ink-val') as HTMLElement,
+        zmin: root.querySelector('#set-zmin-val') as HTMLElement,
+        zmax: root.querySelector('#set-zmax-val') as HTMLElement,
+        fog: root.querySelector('#set-fog-val') as HTMLElement,
+        loadRadius: root.querySelector('#set-load-radius-val') as HTMLElement,
+        shadowResolution: root.querySelector('#set-shadow-resolution-val') as HTMLElement,
+        planetRadius: root.querySelector('#set-planet-radius-val') as HTMLElement,
+        daySpeed: root.querySelector('#set-day-speed-val') as HTMLElement,
+        wind: root.querySelector('#set-wind-val') as HTMLElement,
+    };
 
-  const commit = () => {
+    const values = load();
+    const fpsEl = root.querySelector('#set-fps') as HTMLElement;
+    let open = false;
+    let wasPaused = false;
+    let streamStatus = '';
+    let shownFps = -1;
+
+    const syncStreamStatus = () => {
+        const streaming = world?.streaming;
+        const radius = streaming?.loadRadius ?? values.loadRadius;
+        const loaded = streaming?.loadedCount ?? 0;
+        const pending = streaming?.pendingCount ?? 0;
+        const next = `${Math.round(radius)} chunks · ${loaded} loaded` + (pending > 0 ? ` · ${pending} queued` : '');
+        if (next === streamStatus) return;
+        streamStatus = next;
+        vals.loadRadius.textContent = next;
+    };
+
+    const apply = () => {
+        clampAll(values);
+        const edgeMaterial = world?.meshes?.edgeMaterial;
+        if (edgeMaterial) {
+            edgeMaterial.linewidth = values.inkWidth / INK_BASE;
+        }
+        rig.setZoomRange(values.zoomMin, values.zoomMax);
+        atmo.setAerialD(values.fogStart);
+        atmo.setFogEnabled(values.fogEnabled);
+        world?.streaming?.setLoadRadius(values.loadRadius);
+        atmo.setShadowResolution(values.shadowResolution);
+        // Apply planet radius to all materials
+        for (const u of world.allPlanetUnis) u.uPlanetRadius.value = values.planetRadius;
+        // Apply day speed: daySpeed is a multiplier; base cycle = 1200s
+        dayNight.dayLengthSeconds = 1200 / values.daySpeed;
+        // Apply wind strength: _windBase is read by the frame loop's gust envelope
+        const wu = world?.meshes?.material?.userData?.uniforms;
+        if (wu) wu._windBase = values.windStrength;
+    };
+
+    const syncUi = () => {
+        els.ink.value = String(values.inkWidth);
+        els.zmin.value = String(values.zoomMin);
+        els.zmax.value = String(values.zoomMax);
+        els.fogEnabled.checked = values.fogEnabled;
+        els.fog.value = String(values.fogStart);
+        els.loadRadius.value = String(values.loadRadius);
+        els.shadowResolution.value = String(values.shadowResolution);
+        els.planetRadius.value = String(values.planetRadius);
+        els.daySpeed.value = String(values.daySpeed);
+        els.wind.value = String(values.windStrength);
+        els.fog.disabled = !values.fogEnabled;
+        vals.ink.textContent = fmt.inkWidth(values.inkWidth);
+        vals.zmin.textContent = fmt.zoomMin(values.zoomMin);
+        vals.zmax.textContent = fmt.zoomMax(values.zoomMax);
+        vals.fog.textContent = fmt.fogStart(values.fogStart);
+        syncStreamStatus();
+        vals.shadowResolution.textContent = fmt.shadowResolution(values.shadowResolution);
+        vals.planetRadius.textContent = fmt.planetRadius(values.planetRadius);
+        vals.daySpeed.textContent = fmt.daySpeed(values.daySpeed);
+        vals.wind.textContent = fmt.windStrength(values.windStrength);
+    };
+
+    const commit = () => {
+        apply();
+        save(values);
+        syncUi();
+    };
+
+    els.ink.addEventListener('input', () => {
+        values.inkWidth = +els.ink.value;
+        commit();
+    });
+    els.zmin.addEventListener('input', () => {
+        values.zoomMin = +els.zmin.value;
+        commit();
+    });
+    els.zmax.addEventListener('input', () => {
+        values.zoomMax = +els.zmax.value;
+        commit();
+    });
+    els.fogEnabled.addEventListener('change', () => {
+        values.fogEnabled = els.fogEnabled.checked;
+        commit();
+    });
+    els.fog.addEventListener('input', () => {
+        values.fogStart = +els.fog.value;
+        commit();
+    });
+    els.loadRadius.addEventListener('input', () => {
+        values.loadRadius = +els.loadRadius.value;
+        commit();
+    });
+    els.shadowResolution.addEventListener('input', () => {
+        values.shadowResolution = +els.shadowResolution.value;
+        commit();
+    });
+    els.planetRadius.addEventListener('input', () => {
+        values.planetRadius = +els.planetRadius.value;
+        commit();
+    });
+    els.daySpeed.addEventListener('input', () => {
+        values.daySpeed = +els.daySpeed.value;
+        commit();
+    });
+    els.wind.addEventListener('input', () => {
+        values.windStrength = +els.wind.value;
+        commit();
+    });
+
+    root.querySelector('#set-reset')!.addEventListener('click', () => {
+        Object.assign(values, DEFAULTS);
+        commit();
+    });
+
+    const setOpen = (next: boolean) => {
+        if (next === open) return;
+        open = next;
+        root.classList.toggle('open', open);
+        if (open) {
+            wasPaused = input.paused;
+            input.paused = true;
+            input.keys.clear();
+            syncUi();
+        } else {
+            input.paused = wasPaused;
+        }
+    };
+
+    root.querySelector('#set-x')!.addEventListener('click', () => setOpen(false));
+    root.addEventListener('wheel', (e) => e.stopPropagation(), { passive: true });
+
+    addEventListener('keydown', (e: KeyboardEvent) => {
+        if (e.repeat) return;
+        if (e.code === 'Escape' && open) {
+            setOpen(false);
+        }
+    });
+
     apply();
-    save(values);
     syncUi();
-  };
 
-  els.ink.addEventListener('input', () => {
-    values.inkWidth = +els.ink.value;
-    commit();
-  });
-  els.zmin.addEventListener('input', () => {
-    values.zoomMin = +els.zmin.value;
-    commit();
-  });
-  els.zmax.addEventListener('input', () => {
-    values.zoomMax = +els.zmax.value;
-    commit();
-  });
-  els.fogEnabled.addEventListener('change', () => {
-    values.fogEnabled = els.fogEnabled.checked;
-    commit();
-  });
-  els.fog.addEventListener('input', () => {
-    values.fogStart = +els.fog.value;
-    commit();
-  });
-  els.loadRadius.addEventListener('input', () => {
-    values.loadRadius = +els.loadRadius.value;
-    commit();
-  });
-  els.shadowResolution.addEventListener('input', () => {
-    values.shadowResolution = +els.shadowResolution.value;
-    commit();
-  });
-  els.planetRadius.addEventListener('input', () => {
-    values.planetRadius = +els.planetRadius.value;
-    commit();
-  });
-  els.daySpeed.addEventListener('input', () => {
-    values.daySpeed = +els.daySpeed.value;
-    commit();
-  });
-  els.wind.addEventListener('input', () => {
-    values.windStrength = +els.wind.value;
-    commit();
-  });
-
-  root.querySelector('#set-reset')!.addEventListener('click', () => {
-    Object.assign(values, DEFAULTS);
-    commit();
-  });
-
-  const setOpen = (next: boolean) => {
-    if (next === open) return;
-    open = next;
-    root.classList.toggle('open', open);
-    if (open) {
-      wasPaused = input.paused;
-      input.paused = true;
-      input.keys.clear();
-      syncUi();
-    } else {
-      input.paused = wasPaused;
-    }
-  };
-
-  root.querySelector('#set-x')!.addEventListener('click', () => setOpen(false));
-  root.addEventListener('wheel', (e) => e.stopPropagation(), { passive: true });
-
-  addEventListener('keydown', (e: KeyboardEvent) => {
-    if (e.repeat) return;
-    if (e.code === 'Escape' && open) {
-      setOpen(false);
-    }
-  });
-
-  apply();
-  syncUi();
-
-  return {
-    get open() {
-      return open;
-    },
-    toggle: () => setOpen(!open),
-    onPaletteChange(cb: (name: string) => void) { _onPaletteChange = cb; },
-    values,
-    update() {
-      if (!open) return;
-      syncStreamStatus();
-      const fps = (window as unknown as { __fps: number }).__fps || 0;
-      if (fps !== shownFps) {
-        shownFps = fps;
-        fpsEl.textContent = `${fps} fps`;
-      }
-    },
-  };
+    return {
+        get open() {
+            return open;
+        },
+        toggle: () => setOpen(!open),
+        onPaletteChange(cb: (name: string) => void) {
+            _onPaletteChange = cb;
+        },
+        values,
+        update() {
+            if (!open) return;
+            syncStreamStatus();
+            const fps = (window as unknown as { __fps: number }).__fps || 0;
+            if (fps !== shownFps) {
+                shownFps = fps;
+                fpsEl.textContent = `${fps} fps`;
+            }
+        },
+    };
 }

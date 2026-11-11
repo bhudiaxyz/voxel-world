@@ -47,40 +47,40 @@ npm run preview   # serve that bundle locally
 
 ### Keyboard & mouse
 
-| Input | Action |
-| --- | --- |
-| WASD | Move |
-| Mouse | Look |
-| Space | Jump (hold in water to swim up) |
-| Shift | Sprint |
-| F | Toggle fly mode (free flight, terrain floor) |
-| G | Enter drone mode (terrain-following, A/D steer) |
-| L | Land (drone) |
-| Space / C | Ascend / descend (fly or drone) |
-| Scroll | Ascend / descend (drone) |
-| E | Toggle edge outlines |
-| Y | Tell the dog to sit or stand |
-| M | Toggle map |
-| [ / ] | Step time of day back / forward by 3 hours |
-| Esc | Pause / release pointer |
-| `` ` `` | Settings |
+| Input     | Action                                          |
+| --------- | ----------------------------------------------- |
+| WASD      | Move                                            |
+| Mouse     | Look                                            |
+| Space     | Jump (hold in water to swim up)                 |
+| Shift     | Sprint                                          |
+| F         | Toggle fly mode (free flight, terrain floor)    |
+| G         | Enter drone mode (terrain-following, A/D steer) |
+| L         | Land (drone)                                    |
+| Space / C | Ascend / descend (fly or drone)                 |
+| Scroll    | Ascend / descend (drone)                        |
+| E         | Toggle edge outlines                            |
+| Y         | Tell the dog to sit or stand                    |
+| M         | Toggle map                                      |
+| [ / ]     | Step time of day back / forward by 3 hours      |
+| Esc       | Pause / release pointer                         |
+| `` ` ``   | Settings                                        |
 
 Click in the viewport to capture the pointer. Press Esc to release it. While landing the drone, press Space to abort and resume cruising.
 
 ### Touch (phone / tablet)
 
-| Control | Action |
-| --- | --- |
-| Left joystick | Move / steer (joystick Y brakes the drone) |
-| Swipe right half | Look |
-| ↑ | Jump / ascend |
-| ↓ | Descend (drone or fly) |
-| ⚡ | Sprint |
-| ✈ | Toggle fly mode (tap again to exit) |
-| 🚁 | Enter drone mode |
-| 🛬 | Land drone (visible while drone is airborne) |
-| ⬡ | Toggle edge outlines |
-| ◀ / ▶ | Step time of day back / forward by 3 hours |
+| Control          | Action                                       |
+| ---------------- | -------------------------------------------- |
+| Left joystick    | Move / steer (joystick Y brakes the drone)   |
+| Swipe right half | Look                                         |
+| ↑                | Jump / ascend                                |
+| ↓                | Descend (drone or fly)                       |
+| ⚡               | Sprint                                       |
+| ✈                | Toggle fly mode (tap again to exit)          |
+| 🚁               | Enter drone mode                             |
+| 🛬               | Land drone (visible while drone is airborne) |
+| ⬡                | Toggle edge outlines                         |
+| ◀ / ▶            | Step time of day back / forward by 3 hours   |
 
 The joystick overlay appears automatically on touch devices and is hidden on desktop.
 
@@ -88,14 +88,14 @@ The joystick overlay appears automatically on touch devices and is hidden on des
 
 The settings panel (`` ` ``) exposes:
 
-| Setting | Range | Effect |
-| --- | --- | --- |
-| Planet radius | 100 – 1000 | Tighter or looser horizon curve |
-| Day speed | 0.1× – 5× | Slow sunrise or fast time-lapse |
-| Load radius | — | How many chunks stream around the player |
-| Shadow resolution | — | Shadow map quality |
-| Bloom | — | Post-process bloom intensity |
-| World seed | text | The seed word for the current world |
+| Setting           | Range      | Effect                                   |
+| ----------------- | ---------- | ---------------------------------------- |
+| Planet radius     | 100 – 1000 | Tighter or looser horizon curve          |
+| Day speed         | 0.1× – 5×  | Slow sunrise or fast time-lapse          |
+| Load radius       | —          | How many chunks stream around the player |
+| Shadow resolution | —          | Shadow map quality                       |
+| Bloom             | —          | Post-process bloom intensity             |
+| World seed        | text       | The seed word for the current world      |
 
 The pause menu (Esc) also has a **Generate new world** button that picks a random seed, writes it to the URL, and reloads.
 

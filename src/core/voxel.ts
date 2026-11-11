@@ -31,96 +31,97 @@ export const EDGE_LAYER = 2;
  * VoxelGrid
  * ================================================================== */
 export class VoxelGrid {
-  sx: number;
-  sy: number;
-  sz: number;
-  data: Uint8Array;
-  /** highest solid voxel per column, for fast ground queries */
-  height: Int16Array;
+    sx: number;
+    sy: number;
+    sz: number;
+    data: Uint8Array;
+    /** highest solid voxel per column, for fast ground queries */
+    height: Int16Array;
 
-  constructor(sx: number, sy: number, sz: number) {
-    this.sx = sx;
-    this.sy = sy;
-    this.sz = sz;
-    this.data = new Uint8Array(sx * sy * sz);
-    this.height = new Int16Array(sx * sz).fill(-1);
-  }
-
-  idx(x: number, y: number, z: number) {
-    return (y * this.sz + z) * this.sx + x;
-  }
-
-  inside(x: number, y: number, z: number) {
-    return x >= 0 && y >= 0 && z >= 0 && x < this.sx && y < this.sy && z < this.sz;
-  }
-
-  get(x: number, y: number, z: number) {
-    if (!this.inside(x, y, z)) return 0;
-    return this.data[this.idx(x, y, z)];
-  }
-
-  set(x: number, y: number, z: number, id: number) {
-    if (!this.inside(x, y, z)) return;
-    this.data[this.idx(x, y, z)] = id;
-    const h = z * this.sx + x;
-    if (id !== 0) {
-      if (y > this.height[h]) this.height[h] = y;
-    } else if (this.height[h] === y) {
-      let yy = y - 1;
-      while (yy >= 0 && this.data[this.idx(x, yy, z)] === 0) yy--;
-      this.height[h] = yy;
+    constructor(sx: number, sy: number, sz: number) {
+        this.sx = sx;
+        this.sy = sy;
+        this.sz = sz;
+        this.data = new Uint8Array(sx * sy * sz);
+        this.height = new Int16Array(sx * sz).fill(-1);
     }
-  }
 
-  /** y of the topmost solid block in a column, or -1. */
-  columnTop(x: number, z: number) {
-    if (x < 0 || z < 0 || x >= this.sx || z >= this.sz) return -1;
-    return this.height[z * this.sx + x];
-  }
+    idx(x: number, y: number, z: number) {
+        return (y * this.sz + z) * this.sx + x;
+    }
 
-  /** World-space Y of the surface (top + 1), or 0 if the column is empty. */
-  surfaceY(x: number, z: number): number {
-    const t = this.columnTop(Math.round(x), Math.round(z));
-    return t < 0 ? 0 : t + 1;
-  }
+    inside(x: number, y: number, z: number) {
+        return x >= 0 && y >= 0 && z >= 0 && x < this.sx && y < this.sy && z < this.sz;
+    }
 
-  isSolid(x: number, y: number, z: number) {
-    const id = this.get(x, y, z);
-    return id !== 0 && !BLOCK_BY_ID[id]?.isWater;
-  }
+    get(x: number, y: number, z: number) {
+        if (!this.inside(x, y, z)) return 0;
+        return this.data[this.idx(x, y, z)];
+    }
 
-  /** Fill an axis-aligned box (inclusive bounds). */
-  box(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, id: number) {
-    for (let y = y0; y <= y1; y++) for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++) this.set(x, y, z, id);
-  }
-
-  /** Fill a sphere/ellipsoid, optionally with a predicate for shaping. */
-  ellipsoid(
-    cx: number,
-    cy: number,
-    cz: number,
-    rx: number,
-    ry: number,
-    rz: number,
-    id: number,
-    predicate: ((x: number, y: number, z: number, d: number) => boolean) | null = null,
-  ) {
-    const x0 = Math.floor(cx - rx),
-      x1 = Math.ceil(cx + rx);
-    const y0 = Math.floor(cy - ry),
-      y1 = Math.ceil(cy + ry);
-    const z0 = Math.floor(cz - rz),
-      z1 = Math.ceil(cz + rz);
-    for (let y = y0; y <= y1; y++)
-      for (let z = z0; z <= z1; z++)
-        for (let x = x0; x <= x1; x++) {
-          const dx = (x + 0.5 - cx) / rx,
-            dy = (y + 0.5 - cy) / ry,
-            dz = (z + 0.5 - cz) / rz;
-          const d = dx * dx + dy * dy + dz * dz;
-          if (d <= 1.0 && (!predicate || predicate(x, y, z, Math.sqrt(d)))) this.set(x, y, z, id);
+    set(x: number, y: number, z: number, id: number) {
+        if (!this.inside(x, y, z)) return;
+        this.data[this.idx(x, y, z)] = id;
+        const h = z * this.sx + x;
+        if (id !== 0) {
+            if (y > this.height[h]) this.height[h] = y;
+        } else if (this.height[h] === y) {
+            let yy = y - 1;
+            while (yy >= 0 && this.data[this.idx(x, yy, z)] === 0) yy--;
+            this.height[h] = yy;
         }
-  }
+    }
+
+    /** y of the topmost solid block in a column, or -1. */
+    columnTop(x: number, z: number) {
+        if (x < 0 || z < 0 || x >= this.sx || z >= this.sz) return -1;
+        return this.height[z * this.sx + x];
+    }
+
+    /** World-space Y of the surface (top + 1), or 0 if the column is empty. */
+    surfaceY(x: number, z: number): number {
+        const t = this.columnTop(Math.round(x), Math.round(z));
+        return t < 0 ? 0 : t + 1;
+    }
+
+    isSolid(x: number, y: number, z: number) {
+        const id = this.get(x, y, z);
+        return id !== 0 && !BLOCK_BY_ID[id]?.isWater;
+    }
+
+    /** Fill an axis-aligned box (inclusive bounds). */
+    box(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, id: number) {
+        for (let y = y0; y <= y1; y++)
+            for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++) this.set(x, y, z, id);
+    }
+
+    /** Fill a sphere/ellipsoid, optionally with a predicate for shaping. */
+    ellipsoid(
+        cx: number,
+        cy: number,
+        cz: number,
+        rx: number,
+        ry: number,
+        rz: number,
+        id: number,
+        predicate: ((x: number, y: number, z: number, d: number) => boolean) | null = null,
+    ) {
+        const x0 = Math.floor(cx - rx),
+            x1 = Math.ceil(cx + rx);
+        const y0 = Math.floor(cy - ry),
+            y1 = Math.ceil(cy + ry);
+        const z0 = Math.floor(cz - rz),
+            z1 = Math.ceil(cz + rz);
+        for (let y = y0; y <= y1; y++)
+            for (let z = z0; z <= z1; z++)
+                for (let x = x0; x <= x1; x++) {
+                    const dx = (x + 0.5 - cx) / rx,
+                        dy = (y + 0.5 - cy) / ry,
+                        dz = (z + 0.5 - cz) / rz;
+                    const d = dx * dx + dy * dy + dz * dz;
+                    if (d <= 1.0 && (!predicate || predicate(x, y, z, Math.sqrt(d)))) this.set(x, y, z, id);
+                }
+    }
 }
 
 /* ================================================================== *
@@ -130,90 +131,90 @@ export class VoxelGrid {
  * two in-plane axes so we can derive AO neighbours generically.
  * ================================================================== */
 const FACES = [
-  {
-    // +X
-    n: [1, 0, 0],
-    axis: 0,
-    corners: [
-      [1, 0, 0],
-      [1, 1, 0],
-      [1, 1, 1],
-      [1, 0, 1],
-    ],
-    uAxis: 2,
-    vAxis: 1,
-  },
-  {
-    // -X
-    n: [-1, 0, 0],
-    axis: 0,
-    corners: [
-      [0, 0, 1],
-      [0, 1, 1],
-      [0, 1, 0],
-      [0, 0, 0],
-    ],
-    uAxis: 2,
-    vAxis: 1,
-  },
-  {
-    // +Y
-    n: [0, 1, 0],
-    axis: 1,
-    corners: [
-      [0, 1, 0],
-      [0, 1, 1],
-      [1, 1, 1],
-      [1, 1, 0],
-    ],
-    uAxis: 0,
-    vAxis: 2,
-  },
-  {
-    // -Y
-    n: [0, -1, 0],
-    axis: 1,
-    corners: [
-      [0, 0, 1],
-      [0, 0, 0],
-      [1, 0, 0],
-      [1, 0, 1],
-    ],
-    uAxis: 0,
-    vAxis: 2,
-  },
-  {
-    // +Z
-    n: [0, 0, 1],
-    axis: 2,
-    corners: [
-      [1, 0, 1],
-      [1, 1, 1],
-      [0, 1, 1],
-      [0, 0, 1],
-    ],
-    uAxis: 0,
-    vAxis: 1,
-  },
-  {
-    // -Z
-    n: [0, 0, -1],
-    axis: 2,
-    corners: [
-      [0, 0, 0],
-      [0, 1, 0],
-      [1, 1, 0],
-      [1, 0, 0],
-    ],
-    uAxis: 0,
-    vAxis: 1,
-  },
+    {
+        // +X
+        n: [1, 0, 0],
+        axis: 0,
+        corners: [
+            [1, 0, 0],
+            [1, 1, 0],
+            [1, 1, 1],
+            [1, 0, 1],
+        ],
+        uAxis: 2,
+        vAxis: 1,
+    },
+    {
+        // -X
+        n: [-1, 0, 0],
+        axis: 0,
+        corners: [
+            [0, 0, 1],
+            [0, 1, 1],
+            [0, 1, 0],
+            [0, 0, 0],
+        ],
+        uAxis: 2,
+        vAxis: 1,
+    },
+    {
+        // +Y
+        n: [0, 1, 0],
+        axis: 1,
+        corners: [
+            [0, 1, 0],
+            [0, 1, 1],
+            [1, 1, 1],
+            [1, 1, 0],
+        ],
+        uAxis: 0,
+        vAxis: 2,
+    },
+    {
+        // -Y
+        n: [0, -1, 0],
+        axis: 1,
+        corners: [
+            [0, 0, 1],
+            [0, 0, 0],
+            [1, 0, 0],
+            [1, 0, 1],
+        ],
+        uAxis: 0,
+        vAxis: 2,
+    },
+    {
+        // +Z
+        n: [0, 0, 1],
+        axis: 2,
+        corners: [
+            [1, 0, 1],
+            [1, 1, 1],
+            [0, 1, 1],
+            [0, 0, 1],
+        ],
+        uAxis: 0,
+        vAxis: 1,
+    },
+    {
+        // -Z
+        n: [0, 0, -1],
+        axis: 2,
+        corners: [
+            [0, 0, 0],
+            [0, 1, 0],
+            [1, 1, 0],
+            [1, 0, 0],
+        ],
+        uAxis: 0,
+        vAxis: 1,
+    },
 ];
 
 const AXIS_VEC = [
-  [1, 0, 0],
-  [0, 1, 0],
-  [0, 0, 1],
+    [1, 0, 0],
+    [0, 1, 0],
+    [0, 0, 1],
 ];
 
 /* ================================================================== *
@@ -221,227 +222,227 @@ const AXIS_VEC = [
  * ================================================================== */
 
 class MeshBuffer {
-  pos: number[] = [];
-  nrm: number[] = [];
-  col: number[] = [];
-  tint: number[] = [];
-  fringeCol: number[] = [];
-  uv: number[] = [];
-  dat: number[] = [];
-  idx: number[] = [];
-  count = 0;
+    pos: number[] = [];
+    nrm: number[] = [];
+    col: number[] = [];
+    tint: number[] = [];
+    fringeCol: number[] = [];
+    uv: number[] = [];
+    dat: number[] = [];
+    idx: number[] = [];
+    count = 0;
 
-  get empty() {
-    return this.count === 0;
-  }
-
-  quad(
-    verts: any,
-    n: any,
-    base: any,
-    tint: any,
-    fringeCol: any,
-    uvs: any,
-    ao: any,
-    pattern: any,
-    fringe: any,
-    localV: any,
-  ) {
-    const b = this.count;
-    for (let i = 0; i < 4; i++) {
-      this.pos.push(verts[i][0], verts[i][1], verts[i][2]);
-      this.nrm.push(n[0], n[1], n[2]);
-      this.col.push(base.r, base.g, base.b);
-      this.tint.push(tint.r, tint.g, tint.b);
-      this.fringeCol.push(fringeCol.r, fringeCol.g, fringeCol.b);
-      this.uv.push(uvs[i][0], uvs[i][1]);
-      this.dat.push(ao[i], pattern, fringe, localV[i]);
+    get empty() {
+        return this.count === 0;
     }
-    // Flip the split so the AO gradient never creases along the wrong diagonal.
-    if (ao[0] + ao[2] > ao[1] + ao[3]) {
-      this.idx.push(b, b + 1, b + 2, b, b + 2, b + 3);
-    } else {
-      this.idx.push(b + 1, b + 2, b + 3, b + 1, b + 3, b);
+
+    quad(
+        verts: any,
+        n: any,
+        base: any,
+        tint: any,
+        fringeCol: any,
+        uvs: any,
+        ao: any,
+        pattern: any,
+        fringe: any,
+        localV: any,
+    ) {
+        const b = this.count;
+        for (let i = 0; i < 4; i++) {
+            this.pos.push(verts[i][0], verts[i][1], verts[i][2]);
+            this.nrm.push(n[0], n[1], n[2]);
+            this.col.push(base.r, base.g, base.b);
+            this.tint.push(tint.r, tint.g, tint.b);
+            this.fringeCol.push(fringeCol.r, fringeCol.g, fringeCol.b);
+            this.uv.push(uvs[i][0], uvs[i][1]);
+            this.dat.push(ao[i], pattern, fringe, localV[i]);
+        }
+        // Flip the split so the AO gradient never creases along the wrong diagonal.
+        if (ao[0] + ao[2] > ao[1] + ao[3]) {
+            this.idx.push(b, b + 1, b + 2, b, b + 2, b + 3);
+        } else {
+            this.idx.push(b + 1, b + 2, b + 3, b + 1, b + 3, b);
+        }
+        this.count += 4;
     }
-    this.count += 4;
-  }
 
-  /**
-   * Pack the vertex streams down before handing them to the GPU.
-   *
-   * Every one of these attributes was a float3/float4 — 84 bytes per vertex,
-   * which on a world this size is ~40 MB of buffers and a lot of wasted
-   * bandwidth on a stream the vertex shader touches once. Almost none of it
-   * needs float precision:
-   *
-   *   position  voxel corners are integers -> Int16
-   *   normal    axis-aligned, always 0 or ±1 -> Int8 normalized
-   *   colours   already in 0..1, and these are flat pastels where a 1/255
-   *             step is invisible -> Uint8 normalized
-   *   aUv       world-space and integral at every vertex -> Int16
-   *   aData     carries fractional AO, pattern, fringe and local height, so
-   *             this one genuinely stays float
-   *
-   * Normalized integer attributes are expanded back to 0..1 (or -1..1) by the
-   * GPU for free, so no shader change is needed.
-   */
-  toGeometry() {
-    const g = new THREE.BufferGeometry();
-    const n = this.count;
+    /**
+     * Pack the vertex streams down before handing them to the GPU.
+     *
+     * Every one of these attributes was a float3/float4 — 84 bytes per vertex,
+     * which on a world this size is ~40 MB of buffers and a lot of wasted
+     * bandwidth on a stream the vertex shader touches once. Almost none of it
+     * needs float precision:
+     *
+     *   position  voxel corners are integers -> Int16
+     *   normal    axis-aligned, always 0 or ±1 -> Int8 normalized
+     *   colours   already in 0..1, and these are flat pastels where a 1/255
+     *             step is invisible -> Uint8 normalized
+     *   aUv       world-space and integral at every vertex -> Int16
+     *   aData     carries fractional AO, pattern, fringe and local height, so
+     *             this one genuinely stays float
+     *
+     * Normalized integer attributes are expanded back to 0..1 (or -1..1) by the
+     * GPU for free, so no shader change is needed.
+     */
+    toGeometry() {
+        const g = new THREE.BufferGeometry();
+        const n = this.count;
 
-    const pos = new Int16Array(n * 3);
-    for (let i = 0; i < n * 3; i++) pos[i] = this.pos[i];
+        const pos = new Int16Array(n * 3);
+        for (let i = 0; i < n * 3; i++) pos[i] = this.pos[i];
 
-    const nrm = new Int8Array(n * 3);
-    for (let i = 0; i < n * 3; i++) nrm[i] = Math.round(this.nrm[i] * 127);
+        const nrm = new Int8Array(n * 3);
+        for (let i = 0; i < n * 3; i++) nrm[i] = Math.round(this.nrm[i] * 127);
 
-    const packColor = (src: number[]) => {
-      const a = new Uint8Array(n * 3);
-      for (let i = 0; i < n * 3; i++) {
-        const v = src[i];
-        a[i] = v <= 0 ? 0 : v >= 1 ? 255 : Math.round(v * 255);
-      }
-      return a;
-    };
+        const packColor = (src: number[]) => {
+            const a = new Uint8Array(n * 3);
+            for (let i = 0; i < n * 3; i++) {
+                const v = src[i];
+                a[i] = v <= 0 ? 0 : v >= 1 ? 255 : Math.round(v * 255);
+            }
+            return a;
+        };
 
-    const uv = new Int16Array(n * 2);
-    for (let i = 0; i < n * 2; i++) uv[i] = this.uv[i];
+        const uv = new Int16Array(n * 2);
+        for (let i = 0; i < n * 2; i++) uv[i] = this.uv[i];
 
-    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    g.setAttribute('normal', new THREE.BufferAttribute(nrm, 3, true));
-    g.setAttribute('color', new THREE.BufferAttribute(packColor(this.col), 3, true));
-    g.setAttribute('aTint', new THREE.BufferAttribute(packColor(this.tint), 3, true));
-    g.setAttribute('aFringe', new THREE.BufferAttribute(packColor(this.fringeCol), 3, true));
-    g.setAttribute('aUv', new THREE.BufferAttribute(uv, 2));
-    g.setAttribute('aData', new THREE.Float32BufferAttribute(this.dat, 4));
-    // 16-bit indices wherever a chunk fits, which is the common case.
-    g.setIndex(
-      n <= 65535
-        ? new THREE.BufferAttribute(new Uint16Array(this.idx), 1)
-        : new THREE.BufferAttribute(new Uint32Array(this.idx), 1),
-    );
-    g.computeBoundingSphere();
-    return g;
-  }
+        g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        g.setAttribute('normal', new THREE.BufferAttribute(nrm, 3, true));
+        g.setAttribute('color', new THREE.BufferAttribute(packColor(this.col), 3, true));
+        g.setAttribute('aTint', new THREE.BufferAttribute(packColor(this.tint), 3, true));
+        g.setAttribute('aFringe', new THREE.BufferAttribute(packColor(this.fringeCol), 3, true));
+        g.setAttribute('aUv', new THREE.BufferAttribute(uv, 2));
+        g.setAttribute('aData', new THREE.Float32BufferAttribute(this.dat, 4));
+        // 16-bit indices wherever a chunk fits, which is the common case.
+        g.setIndex(
+            n <= 65535
+                ? new THREE.BufferAttribute(new Uint16Array(this.idx), 1)
+                : new THREE.BufferAttribute(new Uint32Array(this.idx), 1),
+        );
+        g.computeBoundingSphere();
+        return g;
+    }
 }
 
 function createMeshRoots() {
-  const solidGroup = new THREE.Group();
-  const glowGroup = new THREE.Group();
-  const edgeGroup = new THREE.Group();
-  solidGroup.name = 'terrain';
-  glowGroup.name = 'glow';
-  edgeGroup.name = 'voxel-edges';
+    const solidGroup = new THREE.Group();
+    const glowGroup = new THREE.Group();
+    const edgeGroup = new THREE.Group();
+    solidGroup.name = 'terrain';
+    glowGroup.name = 'glow';
+    edgeGroup.name = 'voxel-edges';
 
-  const solidMat = makeVoxelMaterial();
-  const glowMat = makeGlowMaterial();
-  const edgeMat = makeEdgeMaterial();
-  // Preserve the former single-edge-object access path for developer tools.
-  (edgeGroup as any).material = edgeMat;
+    const solidMat = makeVoxelMaterial();
+    const glowMat = makeGlowMaterial();
+    const edgeMat = makeEdgeMaterial();
+    // Preserve the former single-edge-object access path for developer tools.
+    (edgeGroup as any).material = edgeMat;
 
-  return {
-    solid: solidGroup,
-    glow: glowGroup,
-    edges: edgeGroup,
-    material: solidMat,
-    glowMaterial: glowMat,
-    edgeMaterial: edgeMat,
-  };
+    return {
+        solid: solidGroup,
+        glow: glowGroup,
+        edges: edgeGroup,
+        material: solidMat,
+        glowMaterial: glowMat,
+        edgeMaterial: edgeMat,
+    };
 }
 
 function edgeBelongsToChunk(edge: any, ci: any, ck: any, grid: any) {
-  // Unit edges lying exactly on a chunk plane need one stable owner. Using
-  // the cell on the positive side means every edge is emitted once, while the
-  // one-block meshing halo still supplies both of its owning faces.
-  const midpointX = (edge.start[0] + edge.end[0]) * 0.5;
-  const midpointZ = (edge.start[2] + edge.end[2]) * 0.5;
-  const cellX = THREE.MathUtils.clamp(Math.floor(midpointX), 0, grid.sx - 1);
-  const cellZ = THREE.MathUtils.clamp(Math.floor(midpointZ), 0, grid.sz - 1);
-  return Math.floor(cellX / CHUNK) === ci && Math.floor(cellZ / CHUNK) === ck;
+    // Unit edges lying exactly on a chunk plane need one stable owner. Using
+    // the cell on the positive side means every edge is emitted once, while the
+    // one-block meshing halo still supplies both of its owning faces.
+    const midpointX = (edge.start[0] + edge.end[0]) * 0.5;
+    const midpointZ = (edge.start[2] + edge.end[2]) * 0.5;
+    const cellX = THREE.MathUtils.clamp(Math.floor(midpointX), 0, grid.sx - 1);
+    const cellZ = THREE.MathUtils.clamp(Math.floor(midpointZ), 0, grid.sz - 1);
+    return Math.floor(cellX / CHUNK) === ci && Math.floor(cellZ / CHUNK) === ck;
 }
 
 function beginMeshChunk(grid: any, ci: any, ck: any, meshes: any) {
-  const x0 = ci * CHUNK;
-  const z0 = ck * CHUNK;
-  const x1 = Math.min(x0 + CHUNK, grid.sx);
-  const z1 = Math.min(z0 + CHUNK, grid.sz);
-  return {
-    grid,
-    ci,
-    ck,
-    meshes,
-    x0,
-    z0,
-    x1,
-    z1,
-    y: 0,
-    solid: new MeshBuffer(),
-    glow: new MeshBuffer(),
-    edgeMap: new Map(),
-  };
+    const x0 = ci * CHUNK;
+    const z0 = ck * CHUNK;
+    const x1 = Math.min(x0 + CHUNK, grid.sx);
+    const z1 = Math.min(z0 + CHUNK, grid.sz);
+    return {
+        grid,
+        ci,
+        ck,
+        meshes,
+        x0,
+        z0,
+        x1,
+        z1,
+        y: 0,
+        solid: new MeshBuffer(),
+        glow: new MeshBuffer(),
+        edgeMap: new Map(),
+    };
 }
 
 function finishMeshChunk(state: any) {
-  const { grid, ci, ck, meshes, x0, z0, x1, z1, solid, glow, edgeMap } = state;
+    const { grid, ci, ck, meshes, x0, z0, x1, z1, solid, glow, edgeMap } = state;
 
-  for (const [key, edge] of edgeMap) {
-    if (!edgeBelongsToChunk(edge, ci, ck, grid)) edgeMap.delete(key);
-  }
+    for (const [key, edge] of edgeMap) {
+        if (!edgeBelongsToChunk(edge, ci, ck, grid)) edgeMap.delete(key);
+    }
 
-  const record: { solid: any; glow: any; edges: any } = { solid: null, glow: null, edges: null };
-  if (!solid.empty) {
-    record.solid = new THREE.Mesh(solid.toGeometry(), meshes.material);
-    record.solid.name = `terrain-${ci}-${ck}`;
-    record.solid.castShadow = true;
-    record.solid.receiveShadow = true;
-    record.solid.matrixAutoUpdate = false;
-    meshes.solid.add(record.solid);
-  }
-  if (!glow.empty) {
-    record.glow = new THREE.Mesh(glow.toGeometry(), meshes.glowMaterial);
-    record.glow.name = `glow-${ci}-${ck}`;
-    record.glow.matrixAutoUpdate = false;
-    meshes.glow.add(record.glow);
-  }
-  if (edgeMap.size > 0) {
-    record.edges = buildEdgeLines(edgeMap, meshes.edgeMaterial, {
-      x0,
-      z0,
-      x1,
-      z1,
-      sx: grid.sx,
-      sz: grid.sz,
-    } as any);
-    record.edges.name = `voxel-edges-${ci}-${ck}`;
-    meshes.edges.add(record.edges);
-  }
-  return record;
+    const record: { solid: any; glow: any; edges: any } = { solid: null, glow: null, edges: null };
+    if (!solid.empty) {
+        record.solid = new THREE.Mesh(solid.toGeometry(), meshes.material);
+        record.solid.name = `terrain-${ci}-${ck}`;
+        record.solid.castShadow = true;
+        record.solid.receiveShadow = true;
+        record.solid.matrixAutoUpdate = false;
+        meshes.solid.add(record.solid);
+    }
+    if (!glow.empty) {
+        record.glow = new THREE.Mesh(glow.toGeometry(), meshes.glowMaterial);
+        record.glow.name = `glow-${ci}-${ck}`;
+        record.glow.matrixAutoUpdate = false;
+        meshes.glow.add(record.glow);
+    }
+    if (edgeMap.size > 0) {
+        record.edges = buildEdgeLines(edgeMap, meshes.edgeMaterial, {
+            x0,
+            z0,
+            x1,
+            z1,
+            sx: grid.sx,
+            sz: grid.sz,
+        } as any);
+        record.edges.name = `voxel-edges-${ci}-${ck}`;
+        meshes.edges.add(record.edges);
+    }
+    return record;
 }
 
 function stepMeshChunk(state: any, layers = 6) {
-  const y1 = Math.min(state.y + layers, state.grid.sy);
-  // Edges can be jointly owned by faces on opposite sides of a chunk plane.
-  // The one-cell halo gathers that topology without duplicating surface
-  // geometry; the ownership filter in finishMeshChunk assigns each edge once.
-  meshRegion(
-    state.grid,
-    state.x0,
-    state.z0,
-    state.x1,
-    state.z1,
-    state.solid,
-    state.glow,
-    state.edgeMap,
-    1,
-    state.y,
-    y1,
-  );
-  state.y = y1;
-  return state.y === state.grid.sy ? finishMeshChunk(state) : null;
+    const y1 = Math.min(state.y + layers, state.grid.sy);
+    // Edges can be jointly owned by faces on opposite sides of a chunk plane.
+    // The one-cell halo gathers that topology without duplicating surface
+    // geometry; the ownership filter in finishMeshChunk assigns each edge once.
+    meshRegion(
+        state.grid,
+        state.x0,
+        state.z0,
+        state.x1,
+        state.z1,
+        state.solid,
+        state.glow,
+        state.edgeMap,
+        1,
+        state.y,
+        y1,
+    );
+    state.y = y1;
+    return state.y === state.grid.sy ? finishMeshChunk(state) : null;
 }
 
 function buildMeshChunk(grid: any, ci: any, ck: any, meshes: any) {
-  return stepMeshChunk(beginMeshChunk(grid, ci, ck, meshes), grid.sy);
+    return stepMeshChunk(beginMeshChunk(grid, ci, ck, meshes), grid.sy);
 }
 
 const BLOCK_COLOR_FIELDS = new Set(['top', 'side', 'bottom', 'tint', 'topTint', 'fringeColor']);
@@ -452,202 +453,208 @@ const BLOCK_COLOR_FIELDS = new Set(['top', 'side', 'bottom', 'tint', 'topTint', 
  * completed registry into the chunk mesher before it receives any work.
  */
 function serializeBlockRegistry() {
-  return BLOCK_BY_ID.filter(Boolean).map((block: any) => {
-    const definition: Record<string, any> = {};
-    for (const [key, value] of Object.entries(block)) {
-      if (BLOCK_COLOR_FIELDS.has(key) && (value as any)?.isColor) {
-        definition[key] = [(value as any).r, (value as any).g, (value as any).b];
-      } else if (value === null || ['string', 'number', 'boolean'].includes(typeof value)) {
-        definition[key] = value;
-      }
-    }
-    return definition;
-  });
+    return BLOCK_BY_ID.filter(Boolean).map((block: any) => {
+        const definition: Record<string, any> = {};
+        for (const [key, value] of Object.entries(block)) {
+            if (BLOCK_COLOR_FIELDS.has(key) && (value as any)?.isColor) {
+                definition[key] = [(value as any).r, (value as any).g, (value as any).b];
+            } else if (value === null || ['string', 'number', 'boolean'].includes(typeof value)) {
+                definition[key] = value;
+            }
+        }
+        return definition;
+    });
 }
 
 /** Worker entrypoint: install the main thread's completed content palette. */
 export function installBlockRegistry(definitions: any[]) {
-  for (const definition of definitions) {
-    const block = { ...definition };
-    for (const key of BLOCK_COLOR_FIELDS) {
-      const value = definition[key];
-      if (!value) continue;
-      const color = new THREE.Color();
-      // Values already use Three's linear working space. Assigning components
-      // directly avoids applying an sRGB conversion a second time.
-      [color.r, color.g, color.b] = value;
-      block[key] = color;
+    for (const definition of definitions) {
+        const block = { ...definition };
+        for (const key of BLOCK_COLOR_FIELDS) {
+            const value = definition[key];
+            if (!value) continue;
+            const color = new THREE.Color();
+            // Values already use Three's linear working space. Assigning components
+            // directly avoids applying an sRGB conversion a second time.
+            [color.r, color.g, color.b] = value;
+            block[key] = color;
+        }
+        BLOCK_BY_ID[block.id] = block;
     }
-    BLOCK_BY_ID[block.id] = block;
-  }
 }
 
 function serializeBufferGeometry(geometry: any) {
-  const attributes: Record<string, any> = {};
-  for (const [name, attribute] of Object.entries(geometry.attributes)) {
-    attributes[name] = {
-      array: (attribute as any).array,
-      itemSize: (attribute as any).itemSize,
-      normalized: (attribute as any).normalized,
+    const attributes: Record<string, any> = {};
+    for (const [name, attribute] of Object.entries(geometry.attributes)) {
+        attributes[name] = {
+            array: (attribute as any).array,
+            itemSize: (attribute as any).itemSize,
+            normalized: (attribute as any).normalized,
+        };
+    }
+    return {
+        attributes,
+        index: geometry.index
+            ? {
+                  array: geometry.index.array,
+                  itemSize: geometry.index.itemSize,
+                  normalized: geometry.index.normalized,
+              }
+            : null,
     };
-  }
-  return {
-    attributes,
-    index: geometry.index
-      ? {
-          array: geometry.index.array,
-          itemSize: geometry.index.itemSize,
-          normalized: geometry.index.normalized,
-        }
-      : null,
-  };
 }
 
 function restoreBufferGeometry(payload: any) {
-  if (!payload) return null;
-  const geometry = new THREE.BufferGeometry();
-  for (const [name, attribute] of Object.entries(payload.attributes)) {
-    geometry.setAttribute(
-      name,
-      new THREE.BufferAttribute((attribute as any).array, (attribute as any).itemSize, (attribute as any).normalized),
-    );
-  }
-  if (payload.index) {
-    geometry.setIndex(new THREE.BufferAttribute(payload.index.array, payload.index.itemSize, payload.index.normalized));
-  }
-  geometry.computeBoundingSphere();
-  return geometry;
+    if (!payload) return null;
+    const geometry = new THREE.BufferGeometry();
+    for (const [name, attribute] of Object.entries(payload.attributes)) {
+        geometry.setAttribute(
+            name,
+            new THREE.BufferAttribute(
+                (attribute as any).array,
+                (attribute as any).itemSize,
+                (attribute as any).normalized,
+            ),
+        );
+    }
+    if (payload.index) {
+        geometry.setIndex(
+            new THREE.BufferAttribute(payload.index.array, payload.index.itemSize, payload.index.normalized),
+        );
+    }
+    geometry.computeBoundingSphere();
+    return geometry;
 }
 
 function serializeEdgeGeometry(edges: any) {
-  if (!edges) return null;
-  const geometry = edges.geometry;
-  const start = geometry.getAttribute('instanceStart');
-  const attribute = (name: string) => {
-    const value = geometry.getAttribute(name);
-    return {
-      array: value.array,
-      itemSize: value.itemSize,
-      normalized: value.normalized,
+    if (!edges) return null;
+    const geometry = edges.geometry;
+    const start = geometry.getAttribute('instanceStart');
+    const attribute = (name: string) => {
+        const value = geometry.getAttribute(name);
+        return {
+            array: value.array,
+            itemSize: value.itemSize,
+            normalized: value.normalized,
+        };
     };
-  };
-  return {
-    // LineSegmentsGeometry stores start/end interleaved in this one array.
-    positions: start.data.array,
-    normalA: attribute('instanceNormalA'),
-    normalB: attribute('instanceNormalB'),
-    light: attribute('instanceLightEligible'),
-    roundCaps: attribute('instanceRoundCaps'),
-  };
+    return {
+        // LineSegmentsGeometry stores start/end interleaved in this one array.
+        positions: start.data.array,
+        normalA: attribute('instanceNormalA'),
+        normalB: attribute('instanceNormalB'),
+        light: attribute('instanceLightEligible'),
+        roundCaps: attribute('instanceRoundCaps'),
+    };
 }
 
 function restoreMeshChunk(payload: any, ci: any, ck: any, meshes: any) {
-  const record: { solid: any; glow: any; edges: any } = { solid: null, glow: null, edges: null };
-  const solidGeometry = restoreBufferGeometry(payload.solid);
-  if (solidGeometry) {
-    record.solid = new THREE.Mesh(solidGeometry, meshes.material);
-    record.solid.name = `terrain-${ci}-${ck}`;
-    record.solid.castShadow = true;
-    record.solid.receiveShadow = true;
-    record.solid.matrixAutoUpdate = false;
-    meshes.solid.add(record.solid);
-  }
-  const glowGeometry = restoreBufferGeometry(payload.glow);
-  if (glowGeometry) {
-    record.glow = new THREE.Mesh(glowGeometry, meshes.glowMaterial);
-    record.glow.name = `glow-${ci}-${ck}`;
-    record.glow.matrixAutoUpdate = false;
-    meshes.glow.add(record.glow);
-  }
-  if (payload.edges) {
-    const geometry = new LineSegmentsGeometry();
-    geometry.setPositions(payload.edges.positions);
-    const set = (name: string, data: any) =>
-      geometry.setAttribute(name, new THREE.InstancedBufferAttribute(data.array, data.itemSize, data.normalized));
-    set('instanceNormalA', payload.edges.normalA);
-    set('instanceNormalB', payload.edges.normalB);
-    set('instanceLightEligible', payload.edges.light);
-    set('instanceRoundCaps', payload.edges.roundCaps);
-    record.edges = new LineSegments2(geometry, meshes.edgeMaterial as any);
-    record.edges.name = `voxel-edges-${ci}-${ck}`;
-    record.edges.matrixAutoUpdate = false;
-    prepareEdgeObject(record.edges);
-    meshes.edges.add(record.edges);
-  }
-  return record;
+    const record: { solid: any; glow: any; edges: any } = { solid: null, glow: null, edges: null };
+    const solidGeometry = restoreBufferGeometry(payload.solid);
+    if (solidGeometry) {
+        record.solid = new THREE.Mesh(solidGeometry, meshes.material);
+        record.solid.name = `terrain-${ci}-${ck}`;
+        record.solid.castShadow = true;
+        record.solid.receiveShadow = true;
+        record.solid.matrixAutoUpdate = false;
+        meshes.solid.add(record.solid);
+    }
+    const glowGeometry = restoreBufferGeometry(payload.glow);
+    if (glowGeometry) {
+        record.glow = new THREE.Mesh(glowGeometry, meshes.glowMaterial);
+        record.glow.name = `glow-${ci}-${ck}`;
+        record.glow.matrixAutoUpdate = false;
+        meshes.glow.add(record.glow);
+    }
+    if (payload.edges) {
+        const geometry = new LineSegmentsGeometry();
+        geometry.setPositions(payload.edges.positions);
+        const set = (name: string, data: any) =>
+            geometry.setAttribute(name, new THREE.InstancedBufferAttribute(data.array, data.itemSize, data.normalized));
+        set('instanceNormalA', payload.edges.normalA);
+        set('instanceNormalB', payload.edges.normalB);
+        set('instanceLightEligible', payload.edges.light);
+        set('instanceRoundCaps', payload.edges.roundCaps);
+        record.edges = new LineSegments2(geometry, meshes.edgeMaterial as any);
+        record.edges.name = `voxel-edges-${ci}-${ck}`;
+        record.edges.matrixAutoUpdate = false;
+        prepareEdgeObject(record.edges);
+        meshes.edges.add(record.edges);
+    }
+    return record;
 }
 
 function makeChunkWindow(grid: any, ci: any, ck: any, margin = 2) {
-  const x0 = Math.max(0, ci * CHUNK - margin);
-  const z0 = Math.max(0, ck * CHUNK - margin);
-  const x1 = Math.min(grid.sx, (ci + 1) * CHUNK + margin);
-  const z1 = Math.min(grid.sz, (ck + 1) * CHUNK + margin);
-  const width = x1 - x0,
-    depth = z1 - z0;
-  const data = new Uint8Array(width * grid.sy * depth);
-  let target = 0;
-  for (let y = 0; y < grid.sy; y++) {
-    for (let z = z0; z < z1; z++) {
-      const source = grid.idx(x0, y, z);
-      data.set(grid.data.subarray(source, source + width), target);
-      target += width;
+    const x0 = Math.max(0, ci * CHUNK - margin);
+    const z0 = Math.max(0, ck * CHUNK - margin);
+    const x1 = Math.min(grid.sx, (ci + 1) * CHUNK + margin);
+    const z1 = Math.min(grid.sz, (ck + 1) * CHUNK + margin);
+    const width = x1 - x0,
+        depth = z1 - z0;
+    const data = new Uint8Array(width * grid.sy * depth);
+    let target = 0;
+    for (let y = 0; y < grid.sy; y++) {
+        for (let z = z0; z < z1; z++) {
+            const source = grid.idx(x0, y, z);
+            data.set(grid.data.subarray(source, source + width), target);
+            target += width;
+        }
     }
-  }
-  return {
-    ci,
-    ck,
-    sx: grid.sx,
-    sy: grid.sy,
-    sz: grid.sz,
-    x0,
-    z0,
-    width,
-    depth,
-    data,
-  };
+    return {
+        ci,
+        ck,
+        sx: grid.sx,
+        sy: grid.sy,
+        sz: grid.sz,
+        x0,
+        z0,
+        width,
+        depth,
+        data,
+    };
 }
 
 /** Worker entrypoint: mesh one copied chunk window without DOM or WebGL. */
 export function buildChunkTransferPayload(window: any) {
-  const grid = {
-    sx: window.sx,
-    sy: window.sy,
-    sz: window.sz,
-    get(x: number, y: number, z: number) {
-      if (
-        x < window.x0 ||
-        x >= window.x0 + window.width ||
-        z < window.z0 ||
-        z >= window.z0 + window.depth ||
-        y < 0 ||
-        y >= window.sy
-      )
-        return 0;
-      return window.data[(y * window.depth + (z - window.z0)) * window.width + (x - window.x0)];
-    },
-    isSolid(x: number, y: number, z: number) {
-      return this.get(x, y, z) !== 0;
-    },
-  };
-  const meshes = createMeshRoots();
-  const record = buildMeshChunk(grid, window.ci, window.ck, meshes);
-  return {
-    solid: record!.solid ? serializeBufferGeometry(record!.solid.geometry) : null,
-    glow: record!.glow ? serializeBufferGeometry(record!.glow.geometry) : null,
-    edges: serializeEdgeGeometry(record!.edges),
-  };
+    const grid = {
+        sx: window.sx,
+        sy: window.sy,
+        sz: window.sz,
+        get(x: number, y: number, z: number) {
+            if (
+                x < window.x0 ||
+                x >= window.x0 + window.width ||
+                z < window.z0 ||
+                z >= window.z0 + window.depth ||
+                y < 0 ||
+                y >= window.sy
+            )
+                return 0;
+            return window.data[(y * window.depth + (z - window.z0)) * window.width + (x - window.x0)];
+        },
+        isSolid(x: number, y: number, z: number) {
+            return this.get(x, y, z) !== 0;
+        },
+    };
+    const meshes = createMeshRoots();
+    const record = buildMeshChunk(grid, window.ci, window.ck, meshes);
+    return {
+        solid: record!.solid ? serializeBufferGeometry(record!.solid.geometry) : null,
+        glow: record!.glow ? serializeBufferGeometry(record!.glow.geometry) : null,
+        edges: serializeEdgeGeometry(record!.edges),
+    };
 }
 
 function removeMeshChunk(meshes: any, record: any) {
-  for (const [root, object] of [
-    [meshes.solid, record.solid],
-    [meshes.glow, record.glow],
-    [meshes.edges, record.edges],
-  ]) {
-    if (!object) continue;
-    root.remove(object);
-    object.geometry.dispose();
-  }
+    for (const [root, object] of [
+        [meshes.solid, record.solid],
+        [meshes.glow, record.glow],
+        [meshes.edges, record.edges],
+    ]) {
+        if (!object) continue;
+        root.remove(object);
+        object.geometry.dispose();
+    }
 }
 
 /**
@@ -655,22 +662,22 @@ function removeMeshChunk(meshes: any, record: any) {
  * render mesh; gameplay uses createWorldChunkStreamer below.
  */
 export function buildWorldMeshes(grid: any, { onProgress }: { onProgress?: (p: number) => void } = {}) {
-  const meshes = createMeshRoots();
+    const meshes = createMeshRoots();
 
-  const cx = Math.ceil(grid.sx / CHUNK);
-  const cz = Math.ceil(grid.sz / CHUNK);
-  const total = cx * cz;
-  let done = 0;
+    const cx = Math.ceil(grid.sx / CHUNK);
+    const cz = Math.ceil(grid.sz / CHUNK);
+    const total = cx * cz;
+    let done = 0;
 
-  for (let ci = 0; ci < cx; ci++) {
-    for (let ck = 0; ck < cz; ck++) {
-      buildMeshChunk(grid, ci, ck, meshes);
-      done++;
-      if (onProgress) onProgress(done / total);
+    for (let ci = 0; ci < cx; ci++) {
+        for (let ck = 0; ck < cz; ck++) {
+            buildMeshChunk(grid, ci, ck, meshes);
+            done++;
+            if (onProgress) onProgress(done / total);
+        }
     }
-  }
 
-  return meshes;
+    return meshes;
 }
 
 /**
@@ -678,516 +685,531 @@ export function buildWorldMeshes(grid: any, { onProgress }: { onProgress?: (p: n
  * Collision, map queries and procedural data continue to use the full CPU
  * grid, so unloading a visual chunk can never change gameplay.
  */
-export function createWorldChunkStreamer(grid: any, { loadRadius = DEFAULT_STREAM_RADIUS, unloadPadding = 1, wrapBuffer = 0, toroidalWrap = false } = {}) {
-  const meshes = createMeshRoots();
-  const chunksX = Math.ceil(grid.sx / CHUNK);
-  const chunksZ = Math.ceil(grid.sz / CHUNK);
-  const loaded = new Map<string, any>();
-  const fadingMeshes = new Set<any>(); // only meshes actively fading in
-  let loadQueue: any[] = [];
-  let unloadQueue: string[] = [];
-  let desiredLoadKeys = new Set<string>();
-  let activeLoad: any = null;
-  let meshWorker: Worker | null = null;
-  let workerBusy: any = null;
-  let viewKey = '';
-  let idleHandle: any = null;
-  let disposed = false;
-  let currentLoadRadius = Math.max(1, loadRadius);
-  const currentUnloadPadding = Math.max(1, unloadPadding);
-  let lastPlayer: any = null;
-  let lastCamera: any = null;
+export function createWorldChunkStreamer(
+    grid: any,
+    { loadRadius = DEFAULT_STREAM_RADIUS, unloadPadding = 1, wrapBuffer = 0, toroidalWrap = false } = {},
+) {
+    const meshes = createMeshRoots();
+    const chunksX = Math.ceil(grid.sx / CHUNK);
+    const chunksZ = Math.ceil(grid.sz / CHUNK);
+    const loaded = new Map<string, any>();
+    const fadingMeshes = new Set<any>(); // only meshes actively fading in
+    let loadQueue: any[] = [];
+    let unloadQueue: string[] = [];
+    let desiredLoadKeys = new Set<string>();
+    let activeLoad: any = null;
+    let meshWorker: Worker | null = null;
+    let workerBusy: any = null;
+    let viewKey = '';
+    let idleHandle: any = null;
+    let disposed = false;
+    let currentLoadRadius = Math.max(1, loadRadius);
+    const currentUnloadPadding = Math.max(1, unloadPadding);
+    let lastPlayer: any = null;
+    let lastCamera: any = null;
 
-  if (typeof globalThis.Worker === 'function') {
-    try {
-      meshWorker = new Worker(new URL('./voxel-worker.ts', import.meta.url), {
-        type: 'module',
-        name: 'VoxelWorld-chunk-mesher',
-      });
-      // Worker messages are processed in order, so every subsequent chunk
-      // sees the same runtime-registered materials as the main-thread preload.
-      meshWorker.postMessage({
-        type: 'block-registry',
-        definitions: serializeBlockRegistry(),
-      });
-    } catch {
-      meshWorker = null;
-    }
-  }
-
-  const keyOf = (ci: any, ck: any) => `${ci},${ck}`;
-  const frameYield = () => new Promise((resolve) => setTimeout(resolve, 0));
-
-  /** Wire up per-chunk lodAlpha fade-in for a freshly built record. */
-  const initChunkFade = (record: any) => {
-    const uniforms = meshes.material.userData.uniforms;
-    for (const mesh of [record.solid, record.glow]) {
-      if (!mesh) continue;
-      mesh.userData.lodAlpha = 0.0;
-      mesh.userData.lodFading = true;
-      fadingMeshes.add(mesh);
-      mesh.onBeforeRender = () => {
-        uniforms.uLodAlpha.value = mesh.userData.lodAlpha;
-      };
-      mesh.onAfterRender = () => {
-        uniforms.uLodAlpha.value = 1.0;
-      };
-    }
-    if (record.edges) {
-      const edgeUniforms = (meshes.edgeMaterial as any).uniforms;
-      const resolveCb = record.edges.onBeforeRender; // resolution callback from prepareEdgeObject
-      record.edges.userData.lodAlpha = 0.0;
-      record.edges.userData.lodFading = true;
-      fadingMeshes.add(record.edges);
-      record.edges.userData.resolveCb = resolveCb;
-      record.edges.onBeforeRender = (renderer: any) => {
-        resolveCb.call(record.edges, renderer);
-        edgeUniforms.uLodAlpha.value = record.edges.userData.lodAlpha;
-      };
-      record.edges.onAfterRender = () => {
-        edgeUniforms.uLodAlpha.value = 1.0;
-      };
-    }
-  };
-
-  const loadChunk = (ci: any, ck: any) => {
-    const key = keyOf(ci, ck);
-    if (loaded.has(key) || disposed) return;
-    const record = buildMeshChunk(grid, ci, ck, meshes);
-    initChunkFade(record);
-    loaded.set(key, record);
-  };
-
-  const unloadChunk = (key: any) => {
-    const record = loaded.get(key);
-    if (!record) return;
-    for (const mesh of [record.solid, record.glow, record.edges]) {
-      if (mesh) fadingMeshes.delete(mesh);
-    }
-    removeMeshChunk(meshes, record);
-    loaded.delete(key);
-  };
-
-  const drainUnloads = (limit: any) => {
-    for (let i = 0; i < limit && unloadQueue.length; i++) {
-      unloadChunk(unloadQueue.shift());
-    }
-  };
-
-  const distanceToSegmentSq = (x: any, z: any, ax: any, az: any, bx: any, bz: any) => {
-    const dx = bx - ax,
-      dz = bz - az;
-    const lengthSq = dx * dx + dz * dz;
-    const t = lengthSq > 0 ? THREE.MathUtils.clamp(((x - ax) * dx + (z - az) * dz) / lengthSq, 0, 1) : 0;
-    const px = ax + dx * t,
-      pz = az + dz * t;
-    const ox = x - px,
-      oz = z - pz;
-    return ox * ox + oz * oz;
-  };
-
-  const schedule = () => {
-    const canLoad = meshWorker ? !workerBusy && loadQueue.length > 0 : Boolean(activeLoad || loadQueue.length);
-    if (idleHandle !== null || disposed || (!canLoad && !unloadQueue.length)) return;
-    if (typeof globalThis.requestIdleCallback === 'function') {
-      idleHandle = globalThis.requestIdleCallback(pump, { timeout: 120 });
-    } else {
-      idleHandle = setTimeout(() => pump({ didTimeout: false, timeRemaining: () => 8 }), 0);
-    }
-  };
-
-  const pump = (deadline: any) => {
-    idleHandle = null;
-    if (disposed) return;
-
-    // Releasing stale buffers is cheap, but cap it so crossing a boundary
-    // cannot turn one idle callback into a long garbage-collection spike.
-    drainUnloads(3);
-
-    if (meshWorker) {
-      while (!workerBusy && loadQueue.length) {
-        const next = loadQueue.shift();
-        const key = keyOf(next.ci, next.ck);
-        if (loaded.has(key) || !desiredLoadKeys.has(key)) continue;
-        const window = makeChunkWindow(grid, next.ci, next.ck);
-        workerBusy = { key, ci: next.ci, ck: next.ck };
-        meshWorker.postMessage({ key, window }, [window.data.buffer]);
-      }
-      schedule();
-      return;
-    }
-
-    // A timed-out idle callback still performs one small vertical slice, so a
-    // busy 4k-shadow frame cannot starve a developer-requested radius change.
-    // Genuine idle time can consume up to four slices without monopolising it.
-    const maxSteps = deadline.didTimeout ? 1 : 4;
-    for (let step = 0; step < maxSteps; step++) {
-      if (!deadline.didTimeout && deadline.timeRemaining() <= 2) break;
-      while (!activeLoad && loadQueue.length) {
-        const next = loadQueue.shift();
-        const key = keyOf(next.ci, next.ck);
-        if (loaded.has(key) || !desiredLoadKeys.has(key)) continue;
-        activeLoad = { key, state: beginMeshChunk(grid, next.ci, next.ck, meshes) };
-      }
-      if (!activeLoad) break;
-      const record = stepMeshChunk(activeLoad.state);
-      if (record) {
-        initChunkFade(record);
-        loaded.set(activeLoad.key, record);
-        activeLoad = null;
-      }
-    }
-    schedule();
-  };
-
-  const disableWorker = () => {
-    const interrupted = workerBusy;
-    meshWorker?.terminate();
-    meshWorker = null;
-    workerBusy = null;
-    if (interrupted && desiredLoadKeys.has(interrupted.key)) {
-      loadQueue.unshift({ ci: interrupted.ci, ck: interrupted.ck, distanceSq: 0 });
-    }
-    schedule();
-  };
-
-  if (meshWorker) {
-    meshWorker.onmessage = ({ data }) => {
-      const completed = workerBusy;
-      workerBusy = null;
-      if (data.error) {
-        if (completed && desiredLoadKeys.has(completed.key)) {
-          loadQueue.unshift({
-            ci: completed.ci,
-            ck: completed.ck,
-            distanceSq: 0,
-          });
+    if (typeof globalThis.Worker === 'function') {
+        try {
+            meshWorker = new Worker(new URL('./voxel-worker.ts', import.meta.url), {
+                type: 'module',
+                name: 'VoxelWorld-chunk-mesher',
+            });
+            // Worker messages are processed in order, so every subsequent chunk
+            // sees the same runtime-registered materials as the main-thread preload.
+            meshWorker.postMessage({
+                type: 'block-registry',
+                definitions: serializeBlockRegistry(),
+            });
+        } catch {
+            meshWorker = null;
         }
-        meshWorker!.terminate();
-        meshWorker = null;
-      } else if (completed?.key === data.key && desiredLoadKeys.has(data.key) && !loaded.has(data.key)) {
-        const record = restoreMeshChunk(data.payload, data.ci, data.ck, meshes);
-        initChunkFade(record);
-        loaded.set(data.key, record);
-      }
-      schedule();
+    }
+
+    const keyOf = (ci: any, ck: any) => `${ci},${ck}`;
+    const frameYield = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+    /** Wire up per-chunk lodAlpha fade-in for a freshly built record. */
+    const initChunkFade = (record: any) => {
+        const uniforms = meshes.material.userData.uniforms;
+        for (const mesh of [record.solid, record.glow]) {
+            if (!mesh) continue;
+            mesh.userData.lodAlpha = 0.0;
+            mesh.userData.lodFading = true;
+            fadingMeshes.add(mesh);
+            mesh.onBeforeRender = () => {
+                uniforms.uLodAlpha.value = mesh.userData.lodAlpha;
+            };
+            mesh.onAfterRender = () => {
+                uniforms.uLodAlpha.value = 1.0;
+            };
+        }
+        if (record.edges) {
+            const edgeUniforms = (meshes.edgeMaterial as any).uniforms;
+            const resolveCb = record.edges.onBeforeRender; // resolution callback from prepareEdgeObject
+            record.edges.userData.lodAlpha = 0.0;
+            record.edges.userData.lodFading = true;
+            fadingMeshes.add(record.edges);
+            record.edges.userData.resolveCb = resolveCb;
+            record.edges.onBeforeRender = (renderer: any) => {
+                resolveCb.call(record.edges, renderer);
+                edgeUniforms.uLodAlpha.value = record.edges.userData.lodAlpha;
+            };
+            record.edges.onAfterRender = () => {
+                edgeUniforms.uLodAlpha.value = 1.0;
+            };
+        }
     };
-    meshWorker.onerror = disableWorker;
-  }
 
-  const update = (player: any, camera = player, trimToRadius = false, dt = 0) => {
-    if (disposed || !player) return;
-    // Advance LOD fade-in for newly loaded chunks.
-    // Only meshes actively fading are in fadingMeshes, so this is O(fading) not O(all loaded).
-    if (dt > 0 && fadingMeshes.size > 0) {
-      for (const mesh of fadingMeshes) {
-        mesh.userData.lodAlpha = Math.min(1.0, mesh.userData.lodAlpha + dt * 1.5);
-        if (mesh.userData.lodAlpha >= 1.0) {
-          mesh.userData.lodFading = false;
-          mesh.onBeforeRender = mesh.userData.resolveCb ?? (() => {});
-          mesh.onAfterRender = () => {};
-          fadingMeshes.delete(mesh);
-        }
-      }
-    }
-    // Unloading is intentionally frame-driven rather than idle-driven. A busy
-    // GPU can starve requestIdleCallback, but stale GPU buffers must still be
-    // released promptly as the player crosses the world.
-    drainUnloads(4);
-    const ax = player.x,
-      az = player.z;
-    const bx = camera?.x ?? ax,
-      bz = camera?.z ?? az;
-    lastPlayer = { x: ax, z: az };
-    lastCamera = { x: bx, z: bz };
-    const nextViewKey = [
-      Math.floor(ax / CHUNK),
-      Math.floor(az / CHUNK),
-      Math.floor(bx / CHUNK),
-      Math.floor(bz / CHUNK),
-    ].join(',');
-    if (nextViewKey === viewKey) return;
-    viewKey = nextViewKey;
-
-    const desired = [];
-    const keep = new Set();
-    const loadMargin = currentLoadRadius * CHUNK;
-    const unloadMargin = (currentLoadRadius + currentUnloadPadding) * CHUNK;
-    const loadSq = loadMargin * loadMargin;
-    const unloadSq = (trimToRadius ? loadMargin : unloadMargin) ** 2;
-
-    // Toroidal pre-loading: when the player is within the stream radius of a
-    // world edge, also evaluate chunk distances from the ±worldSize-shifted
-    // "ghost" positions. This is equivalent to computing wrapped distance on a
-    // torus and ensures the opposite-side chunks are loaded before the modulo
-    // wrap fires.
-    const mirrorOffsets: [number, number][] = [[0, 0]];
-    if (toroidalWrap) {
-      const Sx = grid.sx, Sz = grid.sz;
-      mirrorOffsets.push([Sx, 0], [-Sx, 0], [0, Sz], [0, -Sz]);
-    }
-
-    for (let ci = 0; ci < chunksX; ci++) {
-      const x = Math.min((ci + 0.5) * CHUNK, grid.sx);
-      for (let ck = 0; ck < chunksZ; ck++) {
-        const z = Math.min((ck + 0.5) * CHUNK, grid.sz);
-        let distanceSq = Infinity;
-        for (const [dx, dz] of mirrorOffsets) {
-          const d = distanceToSegmentSq(x, z, ax + dx, az + dz, bx + dx, bz + dz);
-          if (d < distanceSq) distanceSq = d;
-        }
+    const loadChunk = (ci: any, ck: any) => {
         const key = keyOf(ci, ck);
-        if (distanceSq <= unloadSq) keep.add(key);
-        if (distanceSq <= loadSq && !loaded.has(key)) {
-          desired.push({ ci, ck, distanceSq });
-        }
-      }
-    }
+        if (loaded.has(key) || disposed) return;
+        const record = buildMeshChunk(grid, ci, ck, meshes);
+        initChunkFade(record);
+        loaded.set(key, record);
+    };
 
-    desired.sort((a, b) => a.distanceSq - b.distanceSq);
-    loadQueue = desired;
-    desiredLoadKeys = new Set(desired.map(({ ci, ck }) => keyOf(ci, ck)));
-    if (activeLoad && !desiredLoadKeys.has(activeLoad.key)) activeLoad = null;
-    unloadQueue = [...loaded.keys()].filter((key) => !keep.has(key));
-    schedule();
-  };
-
-  const setLoadRadius = (radius: any) => {
-    const next = THREE.MathUtils.clamp(Math.round(radius), 1, 16);
-    if (next === currentLoadRadius) return;
-    currentLoadRadius = next;
-    // The view position has not changed, but both desired sets have. Force a
-    // fresh queue immediately so the developer control is genuinely live.
-    viewKey = '';
-    if (lastPlayer) update(lastPlayer, lastCamera, true);
-  };
-
-  const preload = async (
-    position: any,
-    { radius = 2, onProgress }: { radius?: number; onProgress?: (p: number) => void } = {},
-  ) => {
-    const centerI = THREE.MathUtils.clamp(Math.floor(position.x / CHUNK), 0, chunksX - 1);
-    const centerK = THREE.MathUtils.clamp(Math.floor(position.z / CHUNK), 0, chunksZ - 1);
-    const initial = [];
-    for (let di = -radius; di <= radius; di++) {
-      for (let dk = -radius; dk <= radius; dk++) {
-        const ci = centerI + di,
-          ck = centerK + dk;
-        if (ci < 0 || ck < 0 || ci >= chunksX || ck >= chunksZ) continue;
-        if (di * di + dk * dk > radius * radius) continue;
-        initial.push({ ci, ck, distanceSq: di * di + dk * dk });
-      }
-    }
-    initial.sort((a, b) => a.distanceSq - b.distanceSq);
-    for (let i = 0; i < initial.length; i++) {
-      loadChunk(initial[i].ci, initial[i].ck);
-      // Preloaded spawn chunks appear fully opaque immediately — no screen-door on start.
-      const record = loaded.get(keyOf(initial[i].ci, initial[i].ck));
-      if (record) {
+    const unloadChunk = (key: any) => {
+        const record = loaded.get(key);
+        if (!record) return;
         for (const mesh of [record.solid, record.glow, record.edges]) {
-          if (!mesh) continue;
-          mesh.userData.lodAlpha = 1.0;
-          mesh.userData.lodFading = false;
+            if (mesh) fadingMeshes.delete(mesh);
         }
-      }
-      onProgress?.((i + 1) / initial.length);
-      await frameYield();
-    }
-  };
+        removeMeshChunk(meshes, record);
+        loaded.delete(key);
+    };
 
-  const dispose = () => {
-    disposed = true;
-    activeLoad = null;
-    workerBusy = null;
-    meshWorker?.terminate();
-    meshWorker = null;
-    if (idleHandle !== null) {
-      if (typeof globalThis.cancelIdleCallback === 'function') {
-        globalThis.cancelIdleCallback(idleHandle);
-      } else {
-        clearTimeout(idleHandle);
-      }
-      idleHandle = null;
-    }
-    for (const key of [...loaded.keys()]) unloadChunk(key);
-    meshes.material.dispose();
-    meshes.glowMaterial.dispose();
-    meshes.edgeMaterial.dispose();
-  };
+    const drainUnloads = (limit: any) => {
+        for (let i = 0; i < limit && unloadQueue.length; i++) {
+            unloadChunk(unloadQueue.shift());
+        }
+    };
 
-  const invalidateAll = () => {
-    // Unload every loaded chunk so they get re-meshed with the current block registry.
-    for (const key of [...loaded.keys()]) unloadChunk(key);
-    viewKey = ''; // force update() to re-queue everything
-    if (lastPlayer) update(lastPlayer, lastCamera);
-    // Push the updated block registry to the worker if one is running.
+    const distanceToSegmentSq = (x: any, z: any, ax: any, az: any, bx: any, bz: any) => {
+        const dx = bx - ax,
+            dz = bz - az;
+        const lengthSq = dx * dx + dz * dz;
+        const t = lengthSq > 0 ? THREE.MathUtils.clamp(((x - ax) * dx + (z - az) * dz) / lengthSq, 0, 1) : 0;
+        const px = ax + dx * t,
+            pz = az + dz * t;
+        const ox = x - px,
+            oz = z - pz;
+        return ox * ox + oz * oz;
+    };
+
+    const schedule = () => {
+        const canLoad = meshWorker ? !workerBusy && loadQueue.length > 0 : Boolean(activeLoad || loadQueue.length);
+        if (idleHandle !== null || disposed || (!canLoad && !unloadQueue.length)) return;
+        if (typeof globalThis.requestIdleCallback === 'function') {
+            idleHandle = globalThis.requestIdleCallback(pump, { timeout: 120 });
+        } else {
+            idleHandle = setTimeout(() => pump({ didTimeout: false, timeRemaining: () => 8 }), 0);
+        }
+    };
+
+    const pump = (deadline: any) => {
+        idleHandle = null;
+        if (disposed) return;
+
+        // Releasing stale buffers is cheap, but cap it so crossing a boundary
+        // cannot turn one idle callback into a long garbage-collection spike.
+        drainUnloads(3);
+
+        if (meshWorker) {
+            while (!workerBusy && loadQueue.length) {
+                const next = loadQueue.shift();
+                const key = keyOf(next.ci, next.ck);
+                if (loaded.has(key) || !desiredLoadKeys.has(key)) continue;
+                const window = makeChunkWindow(grid, next.ci, next.ck);
+                workerBusy = { key, ci: next.ci, ck: next.ck };
+                meshWorker.postMessage({ key, window }, [window.data.buffer]);
+            }
+            schedule();
+            return;
+        }
+
+        // A timed-out idle callback still performs one small vertical slice, so a
+        // busy 4k-shadow frame cannot starve a developer-requested radius change.
+        // Genuine idle time can consume up to four slices without monopolising it.
+        const maxSteps = deadline.didTimeout ? 1 : 4;
+        for (let step = 0; step < maxSteps; step++) {
+            if (!deadline.didTimeout && deadline.timeRemaining() <= 2) break;
+            while (!activeLoad && loadQueue.length) {
+                const next = loadQueue.shift();
+                const key = keyOf(next.ci, next.ck);
+                if (loaded.has(key) || !desiredLoadKeys.has(key)) continue;
+                activeLoad = { key, state: beginMeshChunk(grid, next.ci, next.ck, meshes) };
+            }
+            if (!activeLoad) break;
+            const record = stepMeshChunk(activeLoad.state);
+            if (record) {
+                initChunkFade(record);
+                loaded.set(activeLoad.key, record);
+                activeLoad = null;
+            }
+        }
+        schedule();
+    };
+
+    const disableWorker = () => {
+        const interrupted = workerBusy;
+        meshWorker?.terminate();
+        meshWorker = null;
+        workerBusy = null;
+        if (interrupted && desiredLoadKeys.has(interrupted.key)) {
+            loadQueue.unshift({ ci: interrupted.ci, ck: interrupted.ck, distanceSq: 0 });
+        }
+        schedule();
+    };
+
     if (meshWorker) {
-      meshWorker.postMessage({ type: 'block-registry', definitions: serializeBlockRegistry() });
+        meshWorker.onmessage = ({ data }) => {
+            const completed = workerBusy;
+            workerBusy = null;
+            if (data.error) {
+                if (completed && desiredLoadKeys.has(completed.key)) {
+                    loadQueue.unshift({
+                        ci: completed.ci,
+                        ck: completed.ck,
+                        distanceSq: 0,
+                    });
+                }
+                meshWorker!.terminate();
+                meshWorker = null;
+            } else if (completed?.key === data.key && desiredLoadKeys.has(data.key) && !loaded.has(data.key)) {
+                const record = restoreMeshChunk(data.payload, data.ci, data.ck, meshes);
+                initChunkFade(record);
+                loaded.set(data.key, record);
+            }
+            schedule();
+        };
+        meshWorker.onerror = disableWorker;
     }
-  };
 
-  return {
-    meshes,
-    update,
-    setLoadRadius,
-    preload,
-    dispose,
-    invalidateAll,
-    /** Planet-bend uniforms for the terrain material — update each frame. */
-    get planetUnis() {
-      return meshes.material.userData.uniforms;
-    },
-    get loadRadius() {
-      return currentLoadRadius;
-    },
-    get loadedCount() {
-      return loaded.size;
-    },
-    get pendingCount() {
-      return loadQueue.length + unloadQueue.length + (activeLoad ? 1 : 0) + (workerBusy ? 1 : 0);
-    },
-  };
+    const update = (player: any, camera = player, trimToRadius = false, dt = 0) => {
+        if (disposed || !player) return;
+        // Advance LOD fade-in for newly loaded chunks.
+        // Only meshes actively fading are in fadingMeshes, so this is O(fading) not O(all loaded).
+        if (dt > 0 && fadingMeshes.size > 0) {
+            for (const mesh of fadingMeshes) {
+                mesh.userData.lodAlpha = Math.min(1.0, mesh.userData.lodAlpha + dt * 1.5);
+                if (mesh.userData.lodAlpha >= 1.0) {
+                    mesh.userData.lodFading = false;
+                    mesh.onBeforeRender = mesh.userData.resolveCb ?? (() => {});
+                    mesh.onAfterRender = () => {};
+                    fadingMeshes.delete(mesh);
+                }
+            }
+        }
+        // Unloading is intentionally frame-driven rather than idle-driven. A busy
+        // GPU can starve requestIdleCallback, but stale GPU buffers must still be
+        // released promptly as the player crosses the world.
+        drainUnloads(4);
+        const ax = player.x,
+            az = player.z;
+        const bx = camera?.x ?? ax,
+            bz = camera?.z ?? az;
+        lastPlayer = { x: ax, z: az };
+        lastCamera = { x: bx, z: bz };
+        const nextViewKey = [
+            Math.floor(ax / CHUNK),
+            Math.floor(az / CHUNK),
+            Math.floor(bx / CHUNK),
+            Math.floor(bz / CHUNK),
+        ].join(',');
+        if (nextViewKey === viewKey) return;
+        viewKey = nextViewKey;
+
+        const desired = [];
+        const keep = new Set();
+        const loadMargin = currentLoadRadius * CHUNK;
+        const unloadMargin = (currentLoadRadius + currentUnloadPadding) * CHUNK;
+        const loadSq = loadMargin * loadMargin;
+        const unloadSq = (trimToRadius ? loadMargin : unloadMargin) ** 2;
+
+        // Toroidal pre-loading: when the player is within the stream radius of a
+        // world edge, also evaluate chunk distances from the ±worldSize-shifted
+        // "ghost" positions. This is equivalent to computing wrapped distance on a
+        // torus and ensures the opposite-side chunks are loaded before the modulo
+        // wrap fires.
+        const mirrorOffsets: [number, number][] = [[0, 0]];
+        if (toroidalWrap) {
+            const Sx = grid.sx,
+                Sz = grid.sz;
+            mirrorOffsets.push([Sx, 0], [-Sx, 0], [0, Sz], [0, -Sz]);
+        }
+
+        for (let ci = 0; ci < chunksX; ci++) {
+            const x = Math.min((ci + 0.5) * CHUNK, grid.sx);
+            for (let ck = 0; ck < chunksZ; ck++) {
+                const z = Math.min((ck + 0.5) * CHUNK, grid.sz);
+                let distanceSq = Infinity;
+                for (const [dx, dz] of mirrorOffsets) {
+                    const d = distanceToSegmentSq(x, z, ax + dx, az + dz, bx + dx, bz + dz);
+                    if (d < distanceSq) distanceSq = d;
+                }
+                const key = keyOf(ci, ck);
+                if (distanceSq <= unloadSq) keep.add(key);
+                if (distanceSq <= loadSq && !loaded.has(key)) {
+                    desired.push({ ci, ck, distanceSq });
+                }
+            }
+        }
+
+        desired.sort((a, b) => a.distanceSq - b.distanceSq);
+        loadQueue = desired;
+        desiredLoadKeys = new Set(desired.map(({ ci, ck }) => keyOf(ci, ck)));
+        if (activeLoad && !desiredLoadKeys.has(activeLoad.key)) activeLoad = null;
+        unloadQueue = [...loaded.keys()].filter((key) => !keep.has(key));
+        schedule();
+    };
+
+    const setLoadRadius = (radius: any) => {
+        const next = THREE.MathUtils.clamp(Math.round(radius), 1, 16);
+        if (next === currentLoadRadius) return;
+        currentLoadRadius = next;
+        // The view position has not changed, but both desired sets have. Force a
+        // fresh queue immediately so the developer control is genuinely live.
+        viewKey = '';
+        if (lastPlayer) update(lastPlayer, lastCamera, true);
+    };
+
+    const preload = async (
+        position: any,
+        { radius = 2, onProgress }: { radius?: number; onProgress?: (p: number) => void } = {},
+    ) => {
+        const centerI = THREE.MathUtils.clamp(Math.floor(position.x / CHUNK), 0, chunksX - 1);
+        const centerK = THREE.MathUtils.clamp(Math.floor(position.z / CHUNK), 0, chunksZ - 1);
+        const initial = [];
+        for (let di = -radius; di <= radius; di++) {
+            for (let dk = -radius; dk <= radius; dk++) {
+                const ci = centerI + di,
+                    ck = centerK + dk;
+                if (ci < 0 || ck < 0 || ci >= chunksX || ck >= chunksZ) continue;
+                if (di * di + dk * dk > radius * radius) continue;
+                initial.push({ ci, ck, distanceSq: di * di + dk * dk });
+            }
+        }
+        initial.sort((a, b) => a.distanceSq - b.distanceSq);
+        for (let i = 0; i < initial.length; i++) {
+            loadChunk(initial[i].ci, initial[i].ck);
+            // Preloaded spawn chunks appear fully opaque immediately — no screen-door on start.
+            const record = loaded.get(keyOf(initial[i].ci, initial[i].ck));
+            if (record) {
+                for (const mesh of [record.solid, record.glow, record.edges]) {
+                    if (!mesh) continue;
+                    mesh.userData.lodAlpha = 1.0;
+                    mesh.userData.lodFading = false;
+                }
+            }
+            onProgress?.((i + 1) / initial.length);
+            await frameYield();
+        }
+    };
+
+    const dispose = () => {
+        disposed = true;
+        activeLoad = null;
+        workerBusy = null;
+        meshWorker?.terminate();
+        meshWorker = null;
+        if (idleHandle !== null) {
+            if (typeof globalThis.cancelIdleCallback === 'function') {
+                globalThis.cancelIdleCallback(idleHandle);
+            } else {
+                clearTimeout(idleHandle);
+            }
+            idleHandle = null;
+        }
+        for (const key of [...loaded.keys()]) unloadChunk(key);
+        meshes.material.dispose();
+        meshes.glowMaterial.dispose();
+        meshes.edgeMaterial.dispose();
+    };
+
+    const invalidateAll = () => {
+        // Unload every loaded chunk so they get re-meshed with the current block registry.
+        for (const key of [...loaded.keys()]) unloadChunk(key);
+        viewKey = ''; // force update() to re-queue everything
+        if (lastPlayer) update(lastPlayer, lastCamera);
+        // Push the updated block registry to the worker if one is running.
+        if (meshWorker) {
+            meshWorker.postMessage({ type: 'block-registry', definitions: serializeBlockRegistry() });
+        }
+    };
+
+    return {
+        meshes,
+        update,
+        setLoadRadius,
+        preload,
+        dispose,
+        invalidateAll,
+        /** Planet-bend uniforms for the terrain material — update each frame. */
+        get planetUnis() {
+            return meshes.material.userData.uniforms;
+        },
+        get loadRadius() {
+            return currentLoadRadius;
+        },
+        get loadedCount() {
+            return loaded.size;
+        },
+        get pendingCount() {
+            return loadQueue.length + unloadQueue.length + (activeLoad ? 1 : 0) + (workerBusy ? 1 : 0);
+        },
+    };
 }
 
 function meshRegion(
-  grid: any,
-  x0: any,
-  z0: any,
-  x1: any,
-  z1: any,
-  solid: any,
-  glow: any,
-  edgeMap: any,
-  edgeHalo = 0,
-  y0 = 0,
-  y1 = grid.sy,
+    grid: any,
+    x0: any,
+    z0: any,
+    x1: any,
+    z1: any,
+    solid: any,
+    glow: any,
+    edgeMap: any,
+    edgeHalo = 0,
+    y0 = 0,
+    y1 = grid.sy,
 ) {
-  const aoOf = (occ: any) => {
-    // occ = [side1, side2, corner] booleans
-    if (occ[0] && occ[1]) return 0;
-    return (3 - (occ[0] + occ[1] + occ[2])) / 3;
-  };
+    const aoOf = (occ: any) => {
+        // occ = [side1, side2, corner] booleans
+        if (occ[0] && occ[1]) return 0;
+        return (3 - (occ[0] + occ[1] + occ[2])) / 3;
+    };
 
-  const ao = new Array(4);
-  const localV = new Array(4);
-  const uvs = [
-    [0, 0],
-    [0, 0],
-    [0, 0],
-    [0, 0],
-  ];
-  const verts = [
-    [0, 0, 0],
-    [0, 0, 0],
-    [0, 0, 0],
-    [0, 0, 0],
-  ];
+    const ao = new Array(4);
+    const localV = new Array(4);
+    const uvs = [
+        [0, 0],
+        [0, 0],
+        [0, 0],
+        [0, 0],
+    ];
+    const verts = [
+        [0, 0, 0],
+        [0, 0, 0],
+        [0, 0, 0],
+        [0, 0, 0],
+    ];
 
-  const scanX0 = Math.max(0, x0 - edgeHalo);
-  const scanZ0 = Math.max(0, z0 - edgeHalo);
-  const scanX1 = Math.min(grid.sx, x1 + edgeHalo);
-  const scanZ1 = Math.min(grid.sz, z1 + edgeHalo);
+    const scanX0 = Math.max(0, x0 - edgeHalo);
+    const scanZ0 = Math.max(0, z0 - edgeHalo);
+    const scanX1 = Math.min(grid.sx, x1 + edgeHalo);
+    const scanZ1 = Math.min(grid.sz, z1 + edgeHalo);
 
-  for (let y = y0; y < y1; y++) {
-    for (let z = scanZ0; z < scanZ1; z++) {
-      for (let x = scanX0; x < scanX1; x++) {
-        const id = grid.get(x, y, z);
-        if (id === 0) continue;
-        const block = BLOCK_BY_ID[id];
-        if (!block) continue;
-        const target = block.emissive ? glow : solid;
-        const emitGeometry = x >= x0 && x < x1 && z >= z0 && z < z1;
+    for (let y = y0; y < y1; y++) {
+        for (let z = scanZ0; z < scanZ1; z++) {
+            for (let x = scanX0; x < scanX1; x++) {
+                const id = grid.get(x, y, z);
+                if (id === 0) continue;
+                const block = BLOCK_BY_ID[id];
+                if (!block) continue;
+                const target = block.emissive ? glow : solid;
+                const emitGeometry = x >= x0 && x < x1 && z >= z0 && z < z1;
 
-        for (let f = 0; f < 6; f++) {
-          const F = FACES[f];
-          const nx = x + F.n[0],
-            ny = y + F.n[1],
-            nz = z + F.n[2];
-          if (grid.isSolid(nx, ny, nz)) continue;
+                for (let f = 0; f < 6; f++) {
+                    const F = FACES[f];
+                    const nx = x + F.n[0],
+                        ny = y + F.n[1],
+                        nz = z + F.n[2];
+                    if (grid.isSolid(nx, ny, nz)) continue;
 
-          const isTop = F.n[1] === 1;
-          const isBottom = F.n[1] === -1;
-          const baseCol = isTop ? block.top : isBottom ? block.bottom || block.side : block.side;
-          const pattern = isTop ? (block.topPattern ?? block.pattern) : block.pattern;
-          const tintCol = (isTop ? block.topTint || block.tint : block.tint) || baseCol;
-          const fringeCol = block.fringeColor || block.top || baseCol;
+                    const isTop = F.n[1] === 1;
+                    const isBottom = F.n[1] === -1;
+                    const baseCol = isTop ? block.top : isBottom ? block.bottom || block.side : block.side;
+                    const pattern = isTop ? (block.topPattern ?? block.pattern) : block.pattern;
+                    const tintCol = (isTop ? block.topTint || block.tint : block.tint) || baseCol;
+                    const fringeCol = block.fringeColor || block.top || baseCol;
 
-          const uA = AXIS_VEC[F.uAxis],
-            vA = AXIS_VEC[F.vAxis];
+                    const uA = AXIS_VEC[F.uAxis],
+                        vA = AXIS_VEC[F.vAxis];
 
-          /**
-           * Which of this face's four borders are REAL cube edges.
-           *
-           * Two adjacent grass blocks on a flat shelf both emit a top face,
-           * and the seam between them is not an edge at all — it is the middle
-           * of a continuous surface. Inking every quad border would engrave
-           * a waffle grid across every lawn. A border is only a genuine convex
-           * edge when the in-plane neighbour block is absent. These masks now
-           * feed the explicit shared edge graph; they are never painted into
-           * an individual face.
-           */
-          let convexMask = 0,
-            concaveMask = 0;
-          {
-            const dirs = [
-              [-uA[0], -uA[1], -uA[2], 1],
-              [uA[0], uA[1], uA[2], 2],
-              [-vA[0], -vA[1], -vA[2], 4],
-              [vA[0], vA[1], vA[2], 8],
-            ];
-            for (const [dx, dy, dz, bit] of dirs) {
-              if (!grid.isSolid(x + dx, y + dy, z + dz)) {
-                // nothing beside us: an outer corner of the solid
-                convexMask |= bit;
-              } else if (grid.isSolid(x + dx + F.n[0], y + dy + F.n[1], z + dz + F.n[2])) {
-                // neighbour is there AND it rises in front of this face:
-                // an inner corner, where the surface folds back on itself
-                concaveMask |= bit;
-              }
-              // otherwise the neighbour's face continues ours — a flat seam,
-              // which is not an edge and must never be drawn.
+                    /**
+                     * Which of this face's four borders are REAL cube edges.
+                     *
+                     * Two adjacent grass blocks on a flat shelf both emit a top face,
+                     * and the seam between them is not an edge at all — it is the middle
+                     * of a continuous surface. Inking every quad border would engrave
+                     * a waffle grid across every lawn. A border is only a genuine convex
+                     * edge when the in-plane neighbour block is absent. These masks now
+                     * feed the explicit shared edge graph; they are never painted into
+                     * an individual face.
+                     */
+                    let convexMask = 0,
+                        concaveMask = 0;
+                    {
+                        const dirs = [
+                            [-uA[0], -uA[1], -uA[2], 1],
+                            [uA[0], uA[1], uA[2], 2],
+                            [-vA[0], -vA[1], -vA[2], 4],
+                            [vA[0], vA[1], vA[2], 8],
+                        ];
+                        for (const [dx, dy, dz, bit] of dirs) {
+                            if (!grid.isSolid(x + dx, y + dy, z + dz)) {
+                                // nothing beside us: an outer corner of the solid
+                                convexMask |= bit;
+                            } else if (grid.isSolid(x + dx + F.n[0], y + dy + F.n[1], z + dz + F.n[2])) {
+                                // neighbour is there AND it rises in front of this face:
+                                // an inner corner, where the surface folds back on itself
+                                concaveMask |= bit;
+                            }
+                            // otherwise the neighbour's face continues ours — a flat seam,
+                            // which is not an edge and must never be drawn.
+                        }
+                    }
+
+                    const forceLightEdge = isTop && block.lightEdge === true;
+                    collectFaceEdges(edgeMap, x, y, z, F, convexMask, baseCol, false, forceLightEdge);
+                    collectFaceEdges(edgeMap, x, y, z, F, concaveMask, baseCol, true, forceLightEdge);
+
+                    if (!emitGeometry) continue;
+
+                    for (let i = 0; i < 4; i++) {
+                        const c = F.corners[i];
+                        verts[i][0] = x + c[0];
+                        verts[i][1] = y + c[1];
+                        verts[i][2] = z + c[2];
+
+                        // AO: sample the two in-plane neighbours and the diagonal, all in
+                        // the layer of air directly in front of this face.
+                        const su = c[F.uAxis] === 1 ? 1 : -1;
+                        const sv = c[F.vAxis] === 1 ? 1 : -1;
+                        const s1 = grid.isSolid(nx + uA[0] * su, ny + uA[1] * su, nz + uA[2] * su);
+                        const s2 = grid.isSolid(nx + vA[0] * sv, ny + vA[1] * sv, nz + vA[2] * sv);
+                        const cn = grid.isSolid(
+                            nx + uA[0] * su + vA[0] * sv,
+                            ny + uA[1] * su + vA[1] * sv,
+                            nz + uA[2] * su + vA[2] * sv,
+                        );
+                        ao[i] = aoOf([s1, s2, cn]);
+
+                        // World-space UVs so patterns tile across block seams.
+                        uvs[i][0] = verts[i][F.uAxis];
+                        uvs[i][1] = verts[i][F.vAxis];
+                        // Local height within THIS block, for the grass fringe.
+                        localV[i] = isTop ? 1 : isBottom ? 0 : c[1];
+                    }
+
+                    // Bit 3 of the pattern byte signals wind sway; mod(aData.y, 8) in the frag shader strips it.
+                    const patternPacked = (pattern || 0) | (block.sway ? 8 : 0);
+                    target.quad(
+                        verts,
+                        F.n,
+                        baseCol,
+                        tintCol,
+                        fringeCol,
+                        uvs,
+                        ao,
+                        patternPacked,
+                        block.fringe || 0,
+                        localV,
+                    );
+                }
             }
-          }
-
-          const forceLightEdge = isTop && block.lightEdge === true;
-          collectFaceEdges(edgeMap, x, y, z, F, convexMask, baseCol, false, forceLightEdge);
-          collectFaceEdges(edgeMap, x, y, z, F, concaveMask, baseCol, true, forceLightEdge);
-
-          if (!emitGeometry) continue;
-
-          for (let i = 0; i < 4; i++) {
-            const c = F.corners[i];
-            verts[i][0] = x + c[0];
-            verts[i][1] = y + c[1];
-            verts[i][2] = z + c[2];
-
-            // AO: sample the two in-plane neighbours and the diagonal, all in
-            // the layer of air directly in front of this face.
-            const su = c[F.uAxis] === 1 ? 1 : -1;
-            const sv = c[F.vAxis] === 1 ? 1 : -1;
-            const s1 = grid.isSolid(nx + uA[0] * su, ny + uA[1] * su, nz + uA[2] * su);
-            const s2 = grid.isSolid(nx + vA[0] * sv, ny + vA[1] * sv, nz + vA[2] * sv);
-            const cn = grid.isSolid(
-              nx + uA[0] * su + vA[0] * sv,
-              ny + uA[1] * su + vA[1] * sv,
-              nz + uA[2] * su + vA[2] * sv,
-            );
-            ao[i] = aoOf([s1, s2, cn]);
-
-            // World-space UVs so patterns tile across block seams.
-            uvs[i][0] = verts[i][F.uAxis];
-            uvs[i][1] = verts[i][F.vAxis];
-            // Local height within THIS block, for the grass fringe.
-            localV[i] = isTop ? 1 : isBottom ? 0 : c[1];
-          }
-
-          // Bit 3 of the pattern byte signals wind sway; mod(aData.y, 8) in the frag shader strips it.
-          const patternPacked = (pattern || 0) | (block.sway ? 8 : 0);
-          target.quad(verts, F.n, baseCol, tintCol, fringeCol, uvs, ao, patternPacked, block.fringe || 0, localV);
         }
-      }
     }
-  }
 }
 
 /* ================================================================== *
@@ -1199,191 +1221,191 @@ const LIGHT_FACE_LUMA = 0.61;
 const faceLightCache = new WeakMap();
 
 function isLightFace(color: any) {
-  const cached = faceLightCache.get(color);
-  if (cached !== undefined) return cached;
-  const hex = color.getHex(THREE.SRGBColorSpace);
-  const r = ((hex >> 16) & 255) / 255;
-  const g = ((hex >> 8) & 255) / 255;
-  const b = (hex & 255) / 255;
-  const light = r * 0.2126 + g * 0.7152 + b * 0.0722 >= LIGHT_FACE_LUMA;
-  faceLightCache.set(color, light);
-  return light;
+    const cached = faceLightCache.get(color);
+    if (cached !== undefined) return cached;
+    const hex = color.getHex(THREE.SRGBColorSpace);
+    const r = ((hex >> 16) & 255) / 255;
+    const g = ((hex >> 8) & 255) / 255;
+    const b = (hex & 255) / 255;
+    const light = r * 0.2126 + g * 0.7152 + b * 0.0722 >= LIGHT_FACE_LUMA;
+    faceLightCache.set(color, light);
+    return light;
 }
 
 function pointOrder(a: any, b: any) {
-  for (let i = 0; i < 3; i++) {
-    if (a[i] !== b[i]) return a[i] - b[i];
-  }
-  return 0;
+    for (let i = 0; i < 3; i++) {
+        if (a[i] !== b[i]) return a[i] - b[i];
+    }
+    return 0;
 }
 
 /** Add one face's ownership of a unit edge, deduplicated across both faces. */
 function addEdgeFace(edgeMap: any, p0: any, p1: any, normal: any, light: any, concave: any, forceLight: any) {
-  let start = p0,
-    end = p1;
-  if (pointOrder(start, end) > 0) [start, end] = [end, start];
-  const key = `${start.join(',')}|${end.join(',')}`;
-  let edge = edgeMap.get(key);
-  if (!edge) {
-    edge = { start, end, faces: [], concave: false };
-    edgeMap.set(key, edge);
-  }
-  // If either owning face identifies this as an inward fold, the shared edge
-  // is concave. Concave edges always use the dark ink.
-  edge.concave ||= concave;
+    let start = p0,
+        end = p1;
+    if (pointOrder(start, end) > 0) [start, end] = [end, start];
+    const key = `${start.join(',')}|${end.join(',')}`;
+    let edge = edgeMap.get(key);
+    if (!edge) {
+        edge = { start, end, faces: [], concave: false };
+        edgeMap.set(key, edge);
+    }
+    // If either owning face identifies this as an inward fold, the shared edge
+    // is concave. Concave edges always use the dark ink.
+    edge.concave ||= concave;
 
-  const normalKey = normal.join(',');
-  const existing = edge.faces.find((face: any) => face.key === normalKey);
-  if (existing) {
-    // A material boundary can contribute the same plane twice. Be
-    // conservative: both contributors must be pale for the face to be pale.
-    existing.light = existing.light && light;
-    existing.forceLight ||= forceLight;
-  } else {
-    edge.faces.push({ key: normalKey, normal: [...normal], light, forceLight });
-  }
+    const normalKey = normal.join(',');
+    const existing = edge.faces.find((face: any) => face.key === normalKey);
+    if (existing) {
+        // A material boundary can contribute the same plane twice. Be
+        // conservative: both contributors must be pale for the face to be pale.
+        existing.light = existing.light && light;
+        existing.forceLight ||= forceLight;
+    } else {
+        edge.faces.push({ key: normalKey, normal: [...normal], light, forceLight });
+    }
 }
 
 function collectFaceEdges(
-  edgeMap: any,
-  x: any,
-  y: any,
-  z: any,
-  face: any,
-  mask: any,
-  color: any,
-  concave: any,
-  forceLight = false,
+    edgeMap: any,
+    x: any,
+    y: any,
+    z: any,
+    face: any,
+    mask: any,
+    color: any,
+    concave: any,
+    forceLight = false,
 ) {
-  if (mask === 0) return;
-  const borders = [
-    [1, face.uAxis, 0],
-    [2, face.uAxis, 1],
-    [4, face.vAxis, 0],
-    [8, face.vAxis, 1],
-  ];
-  const light = isLightFace(color);
+    if (mask === 0) return;
+    const borders = [
+        [1, face.uAxis, 0],
+        [2, face.uAxis, 1],
+        [4, face.vAxis, 0],
+        [8, face.vAxis, 1],
+    ];
+    const light = isLightFace(color);
 
-  for (const [bit, axis, value] of borders) {
-    if ((mask & bit) === 0) continue;
-    const corners = face.corners.filter((corner: any) => corner[axis] === value);
-    const p0 = [x + corners[0][0], y + corners[0][1], z + corners[0][2]];
-    const p1 = [x + corners[1][0], y + corners[1][1], z + corners[1][2]];
-    addEdgeFace(edgeMap, p0, p1, face.n, light, concave, forceLight);
-  }
+    for (const [bit, axis, value] of borders) {
+        if ((mask & bit) === 0) continue;
+        const corners = face.corners.filter((corner: any) => corner[axis] === value);
+        const p0 = [x + corners[0][0], y + corners[0][1], z + corners[0][2]];
+        const p1 = [x + corners[1][0], y + corners[1][1], z + corners[1][2]];
+        addEdgeFace(edgeMap, p0, p1, face.n, light, concave, forceLight);
+    }
 }
 
 /** Merge adjacent unit edges with identical topology into clean long runs. */
 function mergeEdgeRuns(edgeMap: any) {
-  const groups = new Map();
+    const groups = new Map();
 
-  for (const edge of edgeMap.values()) {
-    const faces = [...edge.faces].sort((a, b) => a.key.localeCompare(b.key));
-    const normalA = faces[0]?.normal || [0, 0, 0];
-    const normalB = faces[1]?.normal || [0, 0, 0];
-    // A grass top explicitly promotes its convex perimeter to the light ink;
-    // otherwise both owning faces must belong to the pale palette. Concave
-    // and non-manifold connections remain dark without exception.
-    const light =
-      faces.length === 2 &&
-      !edge.concave &&
-      ((faces[0].light && faces[1].light) || faces.some((face) => face.forceLight));
-    const axis = edge.start.findIndex((value: any, i: any) => value !== edge.end[i]);
-    const fixed = edge.start.filter((_: any, i: any) => i !== axis);
-    const style = `${axis}|${fixed.join(',')}|${normalA.join(',')}|${normalB.join(',')}|${light ? 1 : 0}`;
-    let group = groups.get(style);
-    if (!group) {
-      group = { axis, fixed, normalA, normalB, light, units: [] };
-      groups.set(style, group);
-    }
-    group.units.push([edge.start[axis], edge.end[axis]]);
-  }
-
-  const runs: any[] = [];
-  for (const group of groups.values()) {
-    group.units.sort((a: any, b: any) => a[0] - b[0]);
-    let start = group.units[0][0];
-    let end = group.units[0][1];
-    const push = () => {
-      const p0 = [0, 0, 0],
-        p1 = [0, 0, 0];
-      let f = 0;
-      for (let axis = 0; axis < 3; axis++) {
-        if (axis === group.axis) {
-          p0[axis] = start;
-          p1[axis] = end;
-        } else {
-          p0[axis] = p1[axis] = group.fixed[f++];
+    for (const edge of edgeMap.values()) {
+        const faces = [...edge.faces].sort((a, b) => a.key.localeCompare(b.key));
+        const normalA = faces[0]?.normal || [0, 0, 0];
+        const normalB = faces[1]?.normal || [0, 0, 0];
+        // A grass top explicitly promotes its convex perimeter to the light ink;
+        // otherwise both owning faces must belong to the pale palette. Concave
+        // and non-manifold connections remain dark without exception.
+        const light =
+            faces.length === 2 &&
+            !edge.concave &&
+            ((faces[0].light && faces[1].light) || faces.some((face) => face.forceLight));
+        const axis = edge.start.findIndex((value: any, i: any) => value !== edge.end[i]);
+        const fixed = edge.start.filter((_: any, i: any) => i !== axis);
+        const style = `${axis}|${fixed.join(',')}|${normalA.join(',')}|${normalB.join(',')}|${light ? 1 : 0}`;
+        let group = groups.get(style);
+        if (!group) {
+            group = { axis, fixed, normalA, normalB, light, units: [] };
+            groups.set(style, group);
         }
-      }
-      runs.push({ ...group, start: p0, end: p1 });
-    };
+        group.units.push([edge.start[axis], edge.end[axis]]);
+    }
 
-    for (let i = 1; i < group.units.length; i++) {
-      const unit = group.units[i];
-      if (unit[0] === end) {
-        end = unit[1];
-      } else {
+    const runs: any[] = [];
+    for (const group of groups.values()) {
+        group.units.sort((a: any, b: any) => a[0] - b[0]);
+        let start = group.units[0][0];
+        let end = group.units[0][1];
+        const push = () => {
+            const p0 = [0, 0, 0],
+                p1 = [0, 0, 0];
+            let f = 0;
+            for (let axis = 0; axis < 3; axis++) {
+                if (axis === group.axis) {
+                    p0[axis] = start;
+                    p1[axis] = end;
+                } else {
+                    p0[axis] = p1[axis] = group.fixed[f++];
+                }
+            }
+            runs.push({ ...group, start: p0, end: p1 });
+        };
+
+        for (let i = 1; i < group.units.length; i++) {
+            const unit = group.units[i];
+            if (unit[0] === end) {
+                end = unit[1];
+            } else {
+                push();
+                start = unit[0];
+                end = unit[1];
+            }
+        }
         push();
-        start = unit[0];
-        end = unit[1];
-      }
     }
-    push();
-  }
 
-  // A round cap is normally what closes small cracks where several runs meet.
-  // At a mixed-colour joint, however, a dark cap protrudes half a stroke past
-  // the vertex and visibly bites into the pale run. Give the pale run ownership
-  // of that joint and terminate every incident dark run at the vertex plane.
-  const joints = new Map();
-  const addJoint = (run: any, cap: any) => {
-    const point = cap === 'roundStart' ? run.start : run.end;
-    const key = point.join(',');
-    let joint = joints.get(key);
-    if (!joint) {
-      joint = [];
-      joints.set(key, joint);
+    // A round cap is normally what closes small cracks where several runs meet.
+    // At a mixed-colour joint, however, a dark cap protrudes half a stroke past
+    // the vertex and visibly bites into the pale run. Give the pale run ownership
+    // of that joint and terminate every incident dark run at the vertex plane.
+    const joints = new Map();
+    const addJoint = (run: any, cap: any) => {
+        const point = cap === 'roundStart' ? run.start : run.end;
+        const key = point.join(',');
+        let joint = joints.get(key);
+        if (!joint) {
+            joint = [];
+            joints.set(key, joint);
+        }
+        joint.push({ run, cap });
+    };
+    for (const run of runs) {
+        run.roundStart = true;
+        run.roundEnd = true;
+        addJoint(run, 'roundStart');
+        addJoint(run, 'roundEnd');
     }
-    joint.push({ run, cap });
-  };
-  for (const run of runs) {
-    run.roundStart = true;
-    run.roundEnd = true;
-    addJoint(run, 'roundStart');
-    addJoint(run, 'roundEnd');
-  }
-  for (const joint of joints.values()) {
-    if (!joint.some(({ run }: any) => run.light)) continue;
-    for (const { run, cap } of joint) {
-      if (!run.light) run[cap] = false;
+    for (const joint of joints.values()) {
+        if (!joint.some(({ run }: any) => run.light)) continue;
+        for (const { run, cap } of joint) {
+            if (!run.light) run[cap] = false;
+        }
     }
-  }
-  return runs;
+    return runs;
 }
 
 function makeEdgeMaterial() {
-  const CORE_WIDTH = 0.7;
-  const AA_PAD = 0.8;
-  const material = new THREE.ShaderMaterial({
-    uniforms: {
-      resolution: { value: new THREE.Vector2(1, 1) },
-      // The geometry extends past the visible stroke so the fragment shader
-      // has a full pixel in which to resolve analytic coverage.
-      linewidth: { value: CORE_WIDTH + AA_PAD * 2.0 },
-      uCoreWidth: { value: CORE_WIDTH },
-      uFogDensity: { value: 0.0 },
-      uWaterLevel: { value: WATER.level },
-      /** How much of a stroke survives below the waterline. */
-      uSubmergedInk: { value: 0.0 },
-      uMistBase: { value: 6.0 },
-      uMistH: { value: 8.0 },
-      uMistDens: { value: 0.022 },
-      uMistMax: { value: 0.55 },
-      tSceneDepth: { value: null },
-      uLodAlpha: { value: 1.0 },
-    },
-    vertexShader: /* glsl */ `
+    const CORE_WIDTH = 0.7;
+    const AA_PAD = 0.8;
+    const material = new THREE.ShaderMaterial({
+        uniforms: {
+            resolution: { value: new THREE.Vector2(1, 1) },
+            // The geometry extends past the visible stroke so the fragment shader
+            // has a full pixel in which to resolve analytic coverage.
+            linewidth: { value: CORE_WIDTH + AA_PAD * 2.0 },
+            uCoreWidth: { value: CORE_WIDTH },
+            uFogDensity: { value: 0.0 },
+            uWaterLevel: { value: WATER.level },
+            /** How much of a stroke survives below the waterline. */
+            uSubmergedInk: { value: 0.0 },
+            uMistBase: { value: 6.0 },
+            uMistH: { value: 8.0 },
+            uMistDens: { value: 0.022 },
+            uMistMax: { value: 0.55 },
+            tSceneDepth: { value: null },
+            uLodAlpha: { value: 1.0 },
+        },
+        vertexShader: /* glsl */ `
       uniform vec2 resolution;
       uniform float linewidth;
       uniform float uFogDensity;
@@ -1487,7 +1509,7 @@ function makeEdgeMaterial() {
         vFogVisibility = aerialVisibility * (1.0 - mist);
       }
     `,
-    fragmentShader: /* glsl */ `
+        fragmentShader: /* glsl */ `
       uniform sampler2D tSceneDepth;
       uniform vec2 resolution;
       uniform float uCoreWidth;
@@ -1582,102 +1604,102 @@ function makeEdgeMaterial() {
                             coverage);
       }
     `,
-    // Hidden-line removal is performed against the already-rendered scene
-    // depth at the edge centerline. Fixed-function testing would let sloping
-    // owner faces cut a zoom-dependent amount from the coverage quad.
-    depthTest: false,
-    depthWrite: false,
-    transparent: true,
-    toneMapped: false,
-    blending: THREE.CustomBlending,
-    blendEquation: THREE.MaxEquation,
-    blendSrc: THREE.OneFactor,
-    blendDst: THREE.OneFactor,
-    blendEquationAlpha: THREE.MaxEquation,
-    blendSrcAlpha: THREE.OneFactor,
-    blendDstAlpha: THREE.OneFactor,
-    extensions: { derivatives: true } as any,
-  });
+        // Hidden-line removal is performed against the already-rendered scene
+        // depth at the edge centerline. Fixed-function testing would let sloping
+        // owner faces cut a zoom-dependent amount from the coverage quad.
+        depthTest: false,
+        depthWrite: false,
+        transparent: true,
+        toneMapped: false,
+        blending: THREE.CustomBlending,
+        blendEquation: THREE.MaxEquation,
+        blendSrc: THREE.OneFactor,
+        blendDst: THREE.OneFactor,
+        blendEquationAlpha: THREE.MaxEquation,
+        blendSrcAlpha: THREE.OneFactor,
+        blendDstAlpha: THREE.OneFactor,
+        extensions: { derivatives: true } as any,
+    });
 
-  // Preserve the small public surface used by settings and LineSegments2,
-  // while keeping the authored width separate from the invisible AA skirt.
-  let coreWidth = CORE_WIDTH;
-  let pixelRatio = 1.0;
-  const syncPhysicalWidth = () => {
-    const physicalWidth = coreWidth * pixelRatio;
-    material.uniforms.uCoreWidth.value = physicalWidth;
-    material.uniforms.linewidth.value = physicalWidth + AA_PAD * 2.0;
-  };
-  Object.defineProperties(material, {
-    linewidth: {
-      get: () => coreWidth,
-      set: (value) => {
-        coreWidth = Math.max(0.35, value);
+    // Preserve the small public surface used by settings and LineSegments2,
+    // while keeping the authored width separate from the invisible AA skirt.
+    let coreWidth = CORE_WIDTH;
+    let pixelRatio = 1.0;
+    const syncPhysicalWidth = () => {
+        const physicalWidth = coreWidth * pixelRatio;
+        material.uniforms.uCoreWidth.value = physicalWidth;
+        material.uniforms.linewidth.value = physicalWidth + AA_PAD * 2.0;
+    };
+    Object.defineProperties(material, {
+        linewidth: {
+            get: () => coreWidth,
+            set: (value) => {
+                coreWidth = Math.max(0.35, value);
+                syncPhysicalWidth();
+            },
+        },
+        resolution: {
+            get: () => material.uniforms.resolution.value,
+        },
+    });
+    (material as any).worldUnits = false;
+    material.userData.setPixelRatio = (value: any) => {
+        const next = Math.max(0.25, value || 1.0);
+        if (next === pixelRatio) return;
+        pixelRatio = next;
         syncPhysicalWidth();
-      },
-    },
-    resolution: {
-      get: () => material.uniforms.resolution.value,
-    },
-  });
-  (material as any).worldUnits = false;
-  material.userData.setPixelRatio = (value: any) => {
-    const next = Math.max(0.25, value || 1.0);
-    if (next === pixelRatio) return;
-    pixelRatio = next;
-    syncPhysicalWidth();
-  };
-  return material;
+    };
+    return material;
 }
 
 function buildEdgeLines(edgeMap: any, material = makeEdgeMaterial(), chunkBounds: any = null) {
-  const runs = mergeEdgeRuns(edgeMap);
+    const runs = mergeEdgeRuns(edgeMap);
 
-  if (chunkBounds) {
-    // Runs parallel to a chunk axis continue in the neighbouring chunk. A
-    // flat endpoint lets the two analytic strokes meet at the exact vertex;
-    // round caps would overlap there and create a dark bead at every seam.
-    for (const run of runs) {
-      if (run.axis === 0) {
-        if (chunkBounds.x0 > 0 && run.start[0] === chunkBounds.x0) run.roundStart = false;
-        if (chunkBounds.x1 < chunkBounds.sx && run.end[0] === chunkBounds.x1) run.roundEnd = false;
-      } else if (run.axis === 2) {
-        if (chunkBounds.z0 > 0 && run.start[2] === chunkBounds.z0) run.roundStart = false;
-        if (chunkBounds.z1 < chunkBounds.sz && run.end[2] === chunkBounds.z1) run.roundEnd = false;
-      }
+    if (chunkBounds) {
+        // Runs parallel to a chunk axis continue in the neighbouring chunk. A
+        // flat endpoint lets the two analytic strokes meet at the exact vertex;
+        // round caps would overlap there and create a dark bead at every seam.
+        for (const run of runs) {
+            if (run.axis === 0) {
+                if (chunkBounds.x0 > 0 && run.start[0] === chunkBounds.x0) run.roundStart = false;
+                if (chunkBounds.x1 < chunkBounds.sx && run.end[0] === chunkBounds.x1) run.roundEnd = false;
+            } else if (run.axis === 2) {
+                if (chunkBounds.z0 > 0 && run.start[2] === chunkBounds.z0) run.roundStart = false;
+                if (chunkBounds.z1 < chunkBounds.sz && run.end[2] === chunkBounds.z1) run.roundEnd = false;
+            }
+        }
     }
-  }
 
-  const positions = new Float32Array(runs.length * 6);
-  const normalsA = new Int8Array(runs.length * 3);
-  const normalsB = new Int8Array(runs.length * 3);
-  const light = new Uint8Array(runs.length);
-  const roundCaps = new Uint8Array(runs.length * 2);
+    const positions = new Float32Array(runs.length * 6);
+    const normalsA = new Int8Array(runs.length * 3);
+    const normalsB = new Int8Array(runs.length * 3);
+    const light = new Uint8Array(runs.length);
+    const roundCaps = new Uint8Array(runs.length * 2);
 
-  for (let i = 0; i < runs.length; i++) {
-    const run = runs[i];
-    positions.set([...run.start, ...run.end], i * 6);
-    for (let axis = 0; axis < 3; axis++) {
-      normalsA[i * 3 + axis] = run.normalA[axis] * 127;
-      normalsB[i * 3 + axis] = run.normalB[axis] * 127;
+    for (let i = 0; i < runs.length; i++) {
+        const run = runs[i];
+        positions.set([...run.start, ...run.end], i * 6);
+        for (let axis = 0; axis < 3; axis++) {
+            normalsA[i * 3 + axis] = run.normalA[axis] * 127;
+            normalsB[i * 3 + axis] = run.normalB[axis] * 127;
+        }
+        light[i] = run.light ? 255 : 0;
+        roundCaps[i * 2] = run.roundStart ? 255 : 0;
+        roundCaps[i * 2 + 1] = run.roundEnd ? 255 : 0;
     }
-    light[i] = run.light ? 255 : 0;
-    roundCaps[i * 2] = run.roundStart ? 255 : 0;
-    roundCaps[i * 2 + 1] = run.roundEnd ? 255 : 0;
-  }
 
-  const geometry = new LineSegmentsGeometry();
-  geometry.setPositions(positions);
-  geometry.setAttribute('instanceNormalA', new THREE.InstancedBufferAttribute(normalsA, 3, true));
-  geometry.setAttribute('instanceNormalB', new THREE.InstancedBufferAttribute(normalsB, 3, true));
-  geometry.setAttribute('instanceLightEligible', new THREE.InstancedBufferAttribute(light, 1, true));
-  geometry.setAttribute('instanceRoundCaps', new THREE.InstancedBufferAttribute(roundCaps, 2, true));
+    const geometry = new LineSegmentsGeometry();
+    geometry.setPositions(positions);
+    geometry.setAttribute('instanceNormalA', new THREE.InstancedBufferAttribute(normalsA, 3, true));
+    geometry.setAttribute('instanceNormalB', new THREE.InstancedBufferAttribute(normalsB, 3, true));
+    geometry.setAttribute('instanceLightEligible', new THREE.InstancedBufferAttribute(light, 1, true));
+    geometry.setAttribute('instanceRoundCaps', new THREE.InstancedBufferAttribute(roundCaps, 2, true));
 
-  const edges = new LineSegments2(geometry, material as any);
-  edges.name = 'voxel-edges';
-  edges.matrixAutoUpdate = false;
-  prepareEdgeObject(edges);
-  return edges;
+    const edges = new LineSegments2(geometry, material as any);
+    edges.name = 'voxel-edges';
+    edges.matrixAutoUpdate = false;
+    prepareEdgeObject(edges);
+    return edges;
 }
 
 /**
@@ -1690,19 +1712,19 @@ function buildEdgeLines(edgeMap: any, material = makeEdgeMaterial(), chunkBounds
  * still arrive with a correct world matrix.
  */
 function prepareEdgeObject(edges: any) {
-  edges.castShadow = false;
-  edges.receiveShadow = false;
-  edges.renderOrder = 2;
-  edges.layers.set(EDGE_LAYER);
-  // LineSegments2's default callback reports the renderer's logical viewport,
-  // not the active offscreen target. Use the physical target viewport so the
-  // SDF and gl_FragCoord stay in the same pixel coordinate system at any DPR.
-  const edgeViewport = new THREE.Vector4();
-  edges.onBeforeRender = (renderer: any) => {
-    renderer.getCurrentViewport(edgeViewport);
-    edges.material.resolution.set(edgeViewport.z, edgeViewport.w);
-  };
-  return edges;
+    edges.castShadow = false;
+    edges.receiveShadow = false;
+    edges.renderOrder = 2;
+    edges.layers.set(EDGE_LAYER);
+    // LineSegments2's default callback reports the renderer's logical viewport,
+    // not the active offscreen target. Use the physical target viewport so the
+    // SDF and gl_FragCoord stay in the same pixel coordinate system at any DPR.
+    const edgeViewport = new THREE.Vector4();
+    edges.onBeforeRender = (renderer: any) => {
+        renderer.getCurrentViewport(edgeViewport);
+        edges.material.resolution.set(edgeViewport.z, edgeViewport.w);
+    };
+    return edges;
 }
 
 /**
@@ -1716,71 +1738,71 @@ function prepareEdgeObject(edges: any) {
  * the pale ink per frame unless both faces face the camera.
  */
 export function createBoxEdges(width: any, height: any, depth: any, color: any, material: any) {
-  const h = [width * 0.5, height * 0.5, depth * 0.5];
-  const positions = [];
-  const normalsA = [];
-  const normalsB = [];
+    const h = [width * 0.5, height * 0.5, depth * 0.5];
+    const positions = [];
+    const normalsA = [];
+    const normalsB = [];
 
-  // For each axis, the four edges running along it sit at the corners of the
-  // other two, and are shared by one face from each of those two axes.
-  for (let axis = 0; axis < 3; axis++) {
-    const u = (axis + 1) % 3,
-      v = (axis + 2) % 3;
-    for (const su of [-1, 1]) {
-      for (const sv of [-1, 1]) {
-        const p0 = [0, 0, 0],
-          p1 = [0, 0, 0];
-        const nA = [0, 0, 0],
-          nB = [0, 0, 0];
-        p0[axis] = -h[axis];
-        p1[axis] = h[axis];
-        p0[u] = p1[u] = su * h[u];
-        p0[v] = p1[v] = sv * h[v];
-        nA[u] = su;
-        nB[v] = sv;
-        positions.push(...p0, ...p1);
-        normalsA.push(...nA);
-        normalsB.push(...nB);
-      }
+    // For each axis, the four edges running along it sit at the corners of the
+    // other two, and are shared by one face from each of those two axes.
+    for (let axis = 0; axis < 3; axis++) {
+        const u = (axis + 1) % 3,
+            v = (axis + 2) % 3;
+        for (const su of [-1, 1]) {
+            for (const sv of [-1, 1]) {
+                const p0 = [0, 0, 0],
+                    p1 = [0, 0, 0];
+                const nA = [0, 0, 0],
+                    nB = [0, 0, 0];
+                p0[axis] = -h[axis];
+                p1[axis] = h[axis];
+                p0[u] = p1[u] = su * h[u];
+                p0[v] = p1[v] = sv * h[v];
+                nA[u] = su;
+                nB[v] = sv;
+                positions.push(...p0, ...p1);
+                normalsA.push(...nA);
+                normalsB.push(...nB);
+            }
+        }
     }
-  }
 
-  const count = positions.length / 6;
-  const geometry = new LineSegmentsGeometry();
-  geometry.setPositions(new Float32Array(positions));
-  geometry.setAttribute(
-    'instanceNormalA',
-    new THREE.InstancedBufferAttribute(
-      Int8Array.from(normalsA, (n) => n * 127),
-      3,
-      true,
-    ),
-  );
-  geometry.setAttribute(
-    'instanceNormalB',
-    new THREE.InstancedBufferAttribute(
-      Int8Array.from(normalsB, (n) => n * 127),
-      3,
-      true,
-    ),
-  );
-  geometry.setAttribute(
-    'instanceLightEligible',
-    new THREE.InstancedBufferAttribute(new Uint8Array(count).fill(isLightFace(color) ? 255 : 0), 1, true),
-  );
-  // No mixed-colour joints on a single box, so every end keeps its round cap.
-  geometry.setAttribute(
-    'instanceRoundCaps',
-    new THREE.InstancedBufferAttribute(new Uint8Array(count * 2).fill(255), 2, true),
-  );
+    const count = positions.length / 6;
+    const geometry = new LineSegmentsGeometry();
+    geometry.setPositions(new Float32Array(positions));
+    geometry.setAttribute(
+        'instanceNormalA',
+        new THREE.InstancedBufferAttribute(
+            Int8Array.from(normalsA, (n) => n * 127),
+            3,
+            true,
+        ),
+    );
+    geometry.setAttribute(
+        'instanceNormalB',
+        new THREE.InstancedBufferAttribute(
+            Int8Array.from(normalsB, (n) => n * 127),
+            3,
+            true,
+        ),
+    );
+    geometry.setAttribute(
+        'instanceLightEligible',
+        new THREE.InstancedBufferAttribute(new Uint8Array(count).fill(isLightFace(color) ? 255 : 0), 1, true),
+    );
+    // No mixed-colour joints on a single box, so every end keeps its round cap.
+    geometry.setAttribute(
+        'instanceRoundCaps',
+        new THREE.InstancedBufferAttribute(new Uint8Array(count * 2).fill(255), 2, true),
+    );
 
-  const edges = new LineSegments2(geometry, material);
-  edges.name = 'box-edges';
-  // The parts are small and always near the camera, and their bounds move
-  // every frame with the animation; culling them per-part is not worth the
-  // matrix work.
-  edges.frustumCulled = false;
-  return prepareEdgeObject(edges);
+    const edges = new LineSegments2(geometry, material);
+    edges.name = 'box-edges';
+    // The parts are small and always near the camera, and their bounds move
+    // every frame with the animation; culling them per-part is not worth the
+    // matrix work.
+    edges.frustumCulled = false;
+    return prepareEdgeObject(edges);
 }
 
 /* ================================================================== *
@@ -2062,64 +2084,67 @@ const FRAG_BODY = /* glsl */ `
  * waterline. Called once the world and the water both exist.
  */
 export function setVoxelWaterline(material: any, depthMap: any, worldSize: any, range: any) {
-  const u = material.userData.uniforms;
-  if (!u) return;
-  u.uWaterMap.value = depthMap;
-  u.uWorldSize.value = worldSize;
-  u.uWaterRange.value = range;
+    const u = material.userData.uniforms;
+    if (!u) return;
+    u.uWaterMap.value = depthMap;
+    u.uWorldSize.value = worldSize;
+    u.uWaterRange.value = range;
 }
 
 export function makeVoxelMaterial() {
-  const mat = new THREE.MeshLambertMaterial({
-    vertexColors: true,
-    dithering: false,
-  });
-  mat.userData.uniforms = {
-    uLodAlpha: { value: 1.0 },
-    uAoStrength: { value: 0.25 },
-    uAoTint: { value: new THREE.Color(0.64, 0.59, 0.74) },
-    uShadowHue: { value: new THREE.Vector3(1.05, 0.9, 1.18) },
-    uShadowTintStrength: { value: 0.82 },
-    uSunDir: { value: LIGHT.sunDir.clone() },
-    uSunAmbient: { value: 0.14 },  // diffuse lift on sun-facing sides
-    uFillAmbient: { value: 0.06 }, // flat lift on shadow sides
-    uSunTint: { value: new THREE.Vector3(1.0, 1.0, 1.0) },
-    uAmbientTint: { value: new THREE.Vector3(1.0, 1.0, 1.0) },
+    const mat = new THREE.MeshLambertMaterial({
+        vertexColors: true,
+        dithering: false,
+    });
+    mat.userData.uniforms = {
+        uLodAlpha: { value: 1.0 },
+        uAoStrength: { value: 0.25 },
+        uAoTint: { value: new THREE.Color(0.64, 0.59, 0.74) },
+        uShadowHue: { value: new THREE.Vector3(1.05, 0.9, 1.18) },
+        uShadowTintStrength: { value: 0.82 },
+        uSunDir: { value: LIGHT.sunDir.clone() },
+        uSunAmbient: { value: 0.14 }, // diffuse lift on sun-facing sides
+        uFillAmbient: { value: 0.06 }, // flat lift on shadow sides
+        uSunTint: { value: new THREE.Vector3(1.0, 1.0, 1.0) },
+        uAmbientTint: { value: new THREE.Vector3(1.0, 1.0, 1.0) },
 
-    /* --- waterline ---------------------------------------------------- */
-    /** Signed depth field, handed over by setVoxelWaterline once the world exists. */
-    uWaterMap: { value: null },
-    uWaterLevel: { value: WATER.level },
-    uWaterRange: { value: 20.0 },
-    uWorldSize: { value: 192.0 },
-    uWaterInk: { value: WATER.edge.clone() },
-    /** Stroke width in pixels. */
-    uWaterInkWidth: { value: 1.5 },
-    uWaterInkStrength: { value: 0.85 },
+        /* --- waterline ---------------------------------------------------- */
+        /** Signed depth field, handed over by setVoxelWaterline once the world exists. */
+        uWaterMap: { value: null },
+        uWaterLevel: { value: WATER.level },
+        uWaterRange: { value: 20.0 },
+        uWorldSize: { value: 192.0 },
+        uWaterInk: { value: WATER.edge.clone() },
+        /** Stroke width in pixels. */
+        uWaterInkWidth: { value: 1.5 },
+        uWaterInkStrength: { value: 0.85 },
 
-    /* --- wind sway ---------------------------------------------------- */
-    uWindTime:     { value: 0.0 },
-    uWindDir:      { value: new THREE.Vector2(1.0, 0.3).normalize() },
-    uWindStrength: { value: 0.0 },
+        /* --- wind sway ---------------------------------------------------- */
+        uWindTime: { value: 0.0 },
+        uWindDir: { value: new THREE.Vector2(1.0, 0.3).normalize() },
+        uWindStrength: { value: 0.0 },
 
-    /* --- planet bend -------------------------------------------------- */
-    ...planetUniformValues(new THREE.Vector3()),
-  };
-  mat.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, mat.userData.uniforms);
-    shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', `#include <common>\n${VERT_DECL}\n${PLANET_UNIFORMS_GLSL}\n${PLANET_BEND_GLSL}`)
-      .replace(
-        '#include <begin_vertex>',
-        `#include <begin_vertex>\n${VERT_BODY}\n  applyPlanetBend(transformed, vNrmW);\n  vPosW = transformed;`,
-      );
-    shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>\n${COMMON_GLSL}\n${FRAG_DECL}`)
-      .replace('void main() {', `void main() {\n${BAYER_DITHER_GLSL}`)
-      .replace('#include <color_fragment>', `#include <color_fragment>\n${FRAG_BODY}`)
-      .replace(
-        'vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + totalEmissiveRadiance;',
-        `vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + totalEmissiveRadiance;
+        /* --- planet bend -------------------------------------------------- */
+        ...planetUniformValues(new THREE.Vector3()),
+    };
+    mat.onBeforeCompile = (shader) => {
+        Object.assign(shader.uniforms, mat.userData.uniforms);
+        shader.vertexShader = shader.vertexShader
+            .replace(
+                '#include <common>',
+                `#include <common>\n${VERT_DECL}\n${PLANET_UNIFORMS_GLSL}\n${PLANET_BEND_GLSL}`,
+            )
+            .replace(
+                '#include <begin_vertex>',
+                `#include <begin_vertex>\n${VERT_BODY}\n  applyPlanetBend(transformed, vNrmW);\n  vPosW = transformed;`,
+            );
+        shader.fragmentShader = shader.fragmentShader
+            .replace('#include <common>', `#include <common>\n${COMMON_GLSL}\n${FRAG_DECL}`)
+            .replace('void main() {', `void main() {\n${BAYER_DITHER_GLSL}`)
+            .replace('#include <color_fragment>', `#include <color_fragment>\n${FRAG_BODY}`)
+            .replace(
+                'vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + totalEmissiveRadiance;',
+                `vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + totalEmissiveRadiance;
         #if defined( USE_SHADOWMAP ) && NUM_DIR_LIGHT_SHADOWS > 0
           DirectionalLightShadow petalShadow = directionalLightShadows[0];
           float petalVisibility = getShadow(
@@ -2131,49 +2156,49 @@ export function makeVoxelMaterial() {
           vec3 petalCool = vec3(petalLum) * uShadowHue;
           outgoingLight = mix(outgoingLight, petalCool, petalShade);
         #endif`,
-      );
-    mat.userData.shader = shader;
-  };
-  mat.customProgramCacheKey = () => 'VoxelWorld-voxel-v8';
-  return mat;
+            );
+        mat.userData.shader = shader;
+    };
+    mat.customProgramCacheKey = () => 'VoxelWorld-voxel-v8';
+    return mat;
 }
 
 /** Emissive blocks (lanterns, crystals) — unlit, bright, bloom bait. */
 export function makeGlowMaterial() {
-  const mat = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: true });
-  const planetUnis = planetUniformValues(new THREE.Vector3());
-  // Minimal vertex/fragment declarations — glow geometry only has position/normal/color.
-  // Using the full VERT_DECL/FRAG_DECL (terrain-specific attributes aTint/aFringe/aUv/aData)
-  // caused driver-level issues on some WebGL implementations when those attributes were
-  // missing from glow geometry, leading to visual flickering.
-  const GLOW_VERT_DECL = /* glsl */ `varying vec3 vNrmW;\n${PLANET_UNIFORMS_GLSL}\n${PLANET_BEND_GLSL}`;
-  const GLOW_FRAG_DECL = /* glsl */ `varying vec3 vNrmW;`;
-  mat.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, planetUnis);
-    shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', `#include <common>\n${GLOW_VERT_DECL}`)
-      .replace(
-        '#include <begin_vertex>',
-        `#include <begin_vertex>
+    const mat = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: true });
+    const planetUnis = planetUniformValues(new THREE.Vector3());
+    // Minimal vertex/fragment declarations — glow geometry only has position/normal/color.
+    // Using the full VERT_DECL/FRAG_DECL (terrain-specific attributes aTint/aFringe/aUv/aData)
+    // caused driver-level issues on some WebGL implementations when those attributes were
+    // missing from glow geometry, leading to visual flickering.
+    const GLOW_VERT_DECL = /* glsl */ `varying vec3 vNrmW;\n${PLANET_UNIFORMS_GLSL}\n${PLANET_BEND_GLSL}`;
+    const GLOW_FRAG_DECL = /* glsl */ `varying vec3 vNrmW;`;
+    mat.onBeforeCompile = (shader) => {
+        Object.assign(shader.uniforms, planetUnis);
+        shader.vertexShader = shader.vertexShader
+            .replace('#include <common>', `#include <common>\n${GLOW_VERT_DECL}`)
+            .replace(
+                '#include <begin_vertex>',
+                `#include <begin_vertex>
   vNrmW = normal;
   applyPlanetBend(transformed, vNrmW);`,
-      );
-    shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>\n${GLOW_FRAG_DECL}`)
-      .replace(
-        '#include <color_fragment>',
-        `#include <color_fragment>
+            );
+        shader.fragmentShader = shader.fragmentShader
+            .replace('#include <common>', `#include <common>\n${GLOW_FRAG_DECL}`)
+            .replace(
+                '#include <color_fragment>',
+                `#include <color_fragment>
         {
           float faceShade = vNrmW.y > 0.5 ? 1.06 : (vNrmW.y < -0.5 ? 0.8 : 0.94);
           diffuseColor.rgb *= faceShade * 1.5;
         }`,
-      );
-  };
-  mat.userData.uniforms = {
-    uAoStrength: { value: 0 },
-    uAoTint: { value: new THREE.Color(1, 1, 1) },
-  };
-  mat.userData.planetUnis = planetUnis;
-  mat.customProgramCacheKey = () => 'VoxelWorld-glow-v3';
-  return mat;
+            );
+    };
+    mat.userData.uniforms = {
+        uAoStrength: { value: 0 },
+        uAoTint: { value: new THREE.Color(1, 1, 1) },
+    };
+    mat.userData.planetUnis = planetUnis;
+    mat.customProgramCacheKey = () => 'VoxelWorld-glow-v3';
+    return mat;
 }

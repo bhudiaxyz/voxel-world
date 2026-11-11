@@ -1,24 +1,24 @@
 {
-  "name": "voxel-world",
-  "version": "1.0.0",
-  "description": "First-person procedural voxel planet wilderness explorer.",
-  "license": "MIT",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "dev": "vite --port 5180 --strictPort",
-    "build": "tsc --noEmit && vite build",
-    "typecheck": "tsc --noEmit",
-    "preview": "vite preview --port 5180"
-  },
-  "dependencies": {
-    "nipplejs": "^1.0.4",
-    "three": "^0.185.1"
-  },
-  "devDependencies": {
-    "@types/three": "^0.185.4",
-    "prettier": "^3.9.10",
-    "typescript": "^5.9.3",
-    "vite": "^8.2.2"
-  }
+    "name": "voxel-world",
+    "version": "1.0.0",
+    "description": "First-person procedural voxel planet wilderness explorer.",
+    "license": "MIT",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "dev": "vite --port 5180 --strictPort",
+        "build": "tsc --noEmit && vite build",
+        "typecheck": "tsc --noEmit",
+        "preview": "vite preview --port 5180"
+    },
+    "dependencies": {
+        "nipplejs": "^1.0.4",
+        "three": "^0.185.1"
+    },
+    "devDependencies": {
+        "@types/three": "^0.185.4",
+        "prettier": "^3.9.10",
+        "typescript": "^5.9.3",
+        "vite": "^8.2.2"
+    }
 }

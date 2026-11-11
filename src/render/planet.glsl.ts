@@ -39,13 +39,13 @@ export const PLANET_BEND_GLSL = /* glsl */ `
  * Call once; update .value each frame (see updatePlanetUniforms).
  */
 export function planetUniformValues(playerPos: THREE.Vector3): {
-  uPlanetRadius: { value: number };
-  uPlayerXZ: { value: THREE.Vector2 };
+    uPlanetRadius: { value: number };
+    uPlayerXZ: { value: THREE.Vector2 };
 } {
-  return {
-    uPlanetRadius: { value: PLANET_RADIUS_DEFAULT },
-    uPlayerXZ: { value: new THREE.Vector2(playerPos.x, playerPos.z) },
-  };
+    return {
+        uPlanetRadius: { value: PLANET_RADIUS_DEFAULT },
+        uPlayerXZ: { value: new THREE.Vector2(playerPos.x, playerPos.z) },
+    };
 }
 
 /**
@@ -53,10 +53,10 @@ export function planetUniformValues(playerPos: THREE.Vector3): {
  * unis = the object returned by planetUniformValues (or the material.uniforms).
  */
 export function updatePlanetUniforms(
-  unis: { uPlanetRadius: { value: number }; uPlayerXZ: { value: THREE.Vector2 } },
-  playerPos: THREE.Vector3,
-  radius?: number,
+    unis: { uPlanetRadius: { value: number }; uPlayerXZ: { value: THREE.Vector2 } },
+    playerPos: THREE.Vector3,
+    radius?: number,
 ): void {
-  unis.uPlayerXZ.value.set(playerPos.x, playerPos.z);
-  if (radius !== undefined) unis.uPlanetRadius.value = radius;
+    unis.uPlayerXZ.value.set(playerPos.x, playerPos.z);
+    if (radius !== undefined) unis.uPlanetRadius.value = radius;
 }

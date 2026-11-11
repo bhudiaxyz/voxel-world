@@ -68,149 +68,149 @@ const CSS = `
  *   wrong place the moment the canvas is inset or letterboxed.
  */
 export function createBubbles({ camera, container = document.body, viewport = null }: any) {
-  const style = document.createElement('style');
-  style.textContent = CSS;
-  document.head.appendChild(style);
+    const style = document.createElement('style');
+    style.textContent = CSS;
+    document.head.appendChild(style);
 
-  const root = document.createElement('div');
-  root.id = 'bubbles';
-  container.appendChild(root);
+    const root = document.createElement('div');
+    root.id = 'bubbles';
+    container.appendChild(root);
 
-  /* The clip-space rectangle is cached rather than measured per frame.
-   * `getBoundingClientRect` inside the render loop forces a layout every frame
-   * for numbers that only change on resize. The overlay is fixed-positioned,
-   * so the offsets are viewport-relative and match. */
-  const box = viewport || root;
-  let vx = 0,
-    vy = 0,
-    vw = 1,
-    vh = 1;
-  const measure = () => {
-    const r = box.getBoundingClientRect();
-    vx = r.left;
-    vy = r.top;
-    vw = r.width || 1;
-    vh = r.height || 1;
-  };
-  measure();
-  addEventListener('resize', measure);
+    /* The clip-space rectangle is cached rather than measured per frame.
+     * `getBoundingClientRect` inside the render loop forces a layout every frame
+     * for numbers that only change on resize. The overlay is fixed-positioned,
+     * so the offsets are viewport-relative and match. */
+    const box = viewport || root;
+    let vx = 0,
+        vy = 0,
+        vw = 1,
+        vh = 1;
+    const measure = () => {
+        const r = box.getBoundingClientRect();
+        vx = r.left;
+        vy = r.top;
+        vw = r.width || 1;
+        vh = r.height || 1;
+    };
+    measure();
+    addEventListener('resize', measure);
 
-  const live: any[] = [];
-  const pool: any[] = [];
-  const v = new THREE.Vector3();
-  const world = new THREE.Vector3();
+    const live: any[] = [];
+    const pool: any[] = [];
+    const v = new THREE.Vector3();
+    const world = new THREE.Vector3();
 
-  const takeEl = () => {
-    const el = pool.pop();
-    if (el) return el;
-    const made = document.createElement('div');
-    made.className = 'bubble';
-    root.appendChild(made);
-    return made;
-  };
+    const takeEl = () => {
+        const el = pool.pop();
+        if (el) return el;
+        const made = document.createElement('div');
+        made.className = 'bubble';
+        root.appendChild(made);
+        return made;
+    };
 
-  const release = (b: any) => {
-    b.el.style.opacity = '0';
-    b.el.style.transform = 'translate3d(-9999px,-9999px,0)';
-    pool.push(b.el);
-  };
+    const release = (b: any) => {
+        b.el.style.opacity = '0';
+        b.el.style.transform = 'translate3d(-9999px,-9999px,0)';
+        pool.push(b.el);
+    };
 
-  /**
-   * Show a label.
-   *
-   * @param anchor  Object3D to follow, or a fixed {x, y, z}
-   * @param text    the line to show
-   * @param tone    'command' | 'soft' | 'alert' | 'hush'
-   * @param height  world units above the anchor's origin
-   * @param hold    seconds at full opacity
-   * @param channel labels on the same anchor and channel replace each other
-   */
-  function say(
-    anchor: any,
-    text: any,
-    { tone = 'command', height = 0, hold = DEFAULT_HOLD, channel = 'default' } = {},
-  ) {
-    /* One label per anchor per channel.
+    /**
+     * Show a label.
      *
-     * Toggling sit/stand quickly should read as the latest thing you said, not
-     * as a stack of contradictions climbing the screen. Separate channels let
-     * unrelated systems talk over the same head without fighting. */
-    for (const b of live) {
-      if (b.anchor === anchor && b.channel === channel) b.age = Math.max(b.age, b.life - FADE_OUT);
+     * @param anchor  Object3D to follow, or a fixed {x, y, z}
+     * @param text    the line to show
+     * @param tone    'command' | 'soft' | 'alert' | 'hush'
+     * @param height  world units above the anchor's origin
+     * @param hold    seconds at full opacity
+     * @param channel labels on the same anchor and channel replace each other
+     */
+    function say(
+        anchor: any,
+        text: any,
+        { tone = 'command', height = 0, hold = DEFAULT_HOLD, channel = 'default' } = {},
+    ) {
+        /* One label per anchor per channel.
+         *
+         * Toggling sit/stand quickly should read as the latest thing you said, not
+         * as a stack of contradictions climbing the screen. Separate channels let
+         * unrelated systems talk over the same head without fighting. */
+        for (const b of live) {
+            if (b.anchor === anchor && b.channel === channel) b.age = Math.max(b.age, b.life - FADE_OUT);
+        }
+
+        const el = takeEl();
+        el.className = `bubble ${tone}`;
+        el.textContent = text;
+        const b = {
+            el,
+            anchor,
+            channel,
+            height,
+            text,
+            age: 0,
+            life: FADE_IN + hold + FADE_OUT,
+        };
+        live.push(b);
+        return b;
     }
 
-    const el = takeEl();
-    el.className = `bubble ${tone}`;
-    el.textContent = text;
-    const b = {
-      el,
-      anchor,
-      channel,
-      height,
-      text,
-      age: 0,
-      life: FADE_IN + hold + FADE_OUT,
+    return {
+        say,
+        /** Re-read the canvas rectangle. Call if it moves for any reason other
+         *  than a window resize — a layout change, a panel opening. */
+        resize: measure,
+        /** Drop everything immediately — scene changes, teleports, resets. */
+        clear() {
+            for (const b of live) release(b);
+            live.length = 0;
+        },
+        get count() {
+            return live.length;
+        },
+
+        update(dt: any) {
+            if (!live.length) return;
+            for (let i = live.length - 1; i >= 0; i--) {
+                const b = live[i];
+                b.age += dt;
+                if (b.age >= b.life) {
+                    release(b);
+                    live.splice(i, 1);
+                    continue;
+                }
+
+                // Anchor position, this frame. Following a moving object is the whole
+                // point of anchoring to one rather than to a coordinate.
+                if (b.anchor.isObject3D) b.anchor.getWorldPosition(world);
+                else world.set(b.anchor.x, b.anchor.y, b.anchor.z);
+                world.y += b.height;
+
+                v.copy(world).project(camera);
+                // Behind the camera, or off the sides: nothing sensible to draw.
+                if (v.z > 1 || v.x < -1.6 || v.x > 1.6 || v.y < -1.6 || v.y > 1.6) {
+                    b.el.style.opacity = '0';
+                    continue;
+                }
+
+                const t = b.age;
+                const alpha = t < FADE_IN ? t / FADE_IN : t > b.life - FADE_OUT ? (b.life - t) / FADE_OUT : 1;
+
+                // Drift: quick at first, easing off, so it decelerates as it fades
+                // instead of sliding out of frame at constant speed.
+                const p = t / b.life;
+                const drift = RISE * (1 - (1 - p) * (1 - p));
+
+                const dist = camera.position.distanceTo(world);
+                const scale = THREE.MathUtils.clamp(REF_DISTANCE / Math.max(dist, 0.01), MIN_SCALE, MAX_SCALE);
+
+                const sx = vx + (v.x * 0.5 + 0.5) * vw;
+                const sy = vy + (-v.y * 0.5 + 0.5) * vh - drift;
+                b.el.style.opacity = alpha.toFixed(3);
+                b.el.style.transform =
+                    `translate3d(${sx.toFixed(1)}px, ${sy.toFixed(1)}px, 0)` +
+                    ` translate(-50%, -100%) scale(${scale.toFixed(3)})`;
+            }
+        },
     };
-    live.push(b);
-    return b;
-  }
-
-  return {
-    say,
-    /** Re-read the canvas rectangle. Call if it moves for any reason other
-     *  than a window resize — a layout change, a panel opening. */
-    resize: measure,
-    /** Drop everything immediately — scene changes, teleports, resets. */
-    clear() {
-      for (const b of live) release(b);
-      live.length = 0;
-    },
-    get count() {
-      return live.length;
-    },
-
-    update(dt: any) {
-      if (!live.length) return;
-      for (let i = live.length - 1; i >= 0; i--) {
-        const b = live[i];
-        b.age += dt;
-        if (b.age >= b.life) {
-          release(b);
-          live.splice(i, 1);
-          continue;
-        }
-
-        // Anchor position, this frame. Following a moving object is the whole
-        // point of anchoring to one rather than to a coordinate.
-        if (b.anchor.isObject3D) b.anchor.getWorldPosition(world);
-        else world.set(b.anchor.x, b.anchor.y, b.anchor.z);
-        world.y += b.height;
-
-        v.copy(world).project(camera);
-        // Behind the camera, or off the sides: nothing sensible to draw.
-        if (v.z > 1 || v.x < -1.6 || v.x > 1.6 || v.y < -1.6 || v.y > 1.6) {
-          b.el.style.opacity = '0';
-          continue;
-        }
-
-        const t = b.age;
-        const alpha = t < FADE_IN ? t / FADE_IN : t > b.life - FADE_OUT ? (b.life - t) / FADE_OUT : 1;
-
-        // Drift: quick at first, easing off, so it decelerates as it fades
-        // instead of sliding out of frame at constant speed.
-        const p = t / b.life;
-        const drift = RISE * (1 - (1 - p) * (1 - p));
-
-        const dist = camera.position.distanceTo(world);
-        const scale = THREE.MathUtils.clamp(REF_DISTANCE / Math.max(dist, 0.01), MIN_SCALE, MAX_SCALE);
-
-        const sx = vx + (v.x * 0.5 + 0.5) * vw;
-        const sy = vy + (-v.y * 0.5 + 0.5) * vh - drift;
-        b.el.style.opacity = alpha.toFixed(3);
-        b.el.style.transform =
-          `translate3d(${sx.toFixed(1)}px, ${sy.toFixed(1)}px, 0)` +
-          ` translate(-50%, -100%) scale(${scale.toFixed(3)})`;
-      }
-    },
-  };
 }

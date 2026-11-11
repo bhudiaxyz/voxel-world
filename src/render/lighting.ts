@@ -37,8 +37,8 @@ import { TIER_SETTINGS } from './gpu-tier';
  * override; gameplay defaults to 3k.
  */
 const SHADOW_RES = (() => {
-  const q = new URLSearchParams(location.search).get('shadow');
-  return q ? parseInt(q, 10) : 3072;
+    const q = new URLSearchParams(location.search).get('shadow');
+    return q ? parseInt(q, 10) : 3072;
 })();
 export const DEFAULT_SHADOW_RESOLUTION = 3072;
 
@@ -82,18 +82,18 @@ const FOG_NEAR = 96;
  * editing it here is what keeps terrain, water, foliage and particles agreeing
  * on where the air begins. Doing it per material would guarantee they drift. */
 {
-  const chunk = THREE.ShaderChunk.fog_fragment;
-  const target = 'float fogFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );';
-  if (chunk.includes(target)) {
-    THREE.ShaderChunk.fog_fragment = chunk.replace(
-      target,
-      `float fogDepthFar = max( vFogDepth - ${FOG_NEAR.toFixed(1)}, 0.0 );\n` +
-        '\tfloat fogFactor = 1.0 - exp( - fogDensity * fogDensity * fogDepthFar * fogDepthFar );',
-    );
-  } else if (typeof console !== 'undefined') {
-    // Fail loudly rather than silently reverting to the washed look.
-    console.warn('fog_fragment chunk changed shape; near-plane patch not applied');
-  }
+    const chunk = THREE.ShaderChunk.fog_fragment;
+    const target = 'float fogFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );';
+    if (chunk.includes(target)) {
+        THREE.ShaderChunk.fog_fragment = chunk.replace(
+            target,
+            `float fogDepthFar = max( vFogDepth - ${FOG_NEAR.toFixed(1)}, 0.0 );\n` +
+                '\tfloat fogFactor = 1.0 - exp( - fogDensity * fogDensity * fogDepthFar * fogDepthFar );',
+        );
+    } else if (typeof console !== 'undefined') {
+        // Fail loudly rather than silently reverting to the washed look.
+        console.warn('fog_fragment chunk changed shape; near-plane patch not applied');
+    }
 }
 
 /**
@@ -102,184 +102,184 @@ const FOG_NEAR = 96;
  * changed what every number means. Hues still come from the palette.
  */
 const RIG = {
-  sun: 1.85, // warm key gives top faces the reference's peach highlight
-  hemi: 1.08, // broad lilac sky lifts the reference's coloured side faces
-  fill: 0.22, // camera-side lavender keeps shadow hue without bleaching it
-  amb: 0.12, // a soft floor; trunks and occlusion can still carry depth
+    sun: 1.85, // warm key gives top faces the reference's peach highlight
+    hemi: 1.08, // broad lilac sky lifts the reference's coloured side faces
+    fill: 0.22, // camera-side lavender keeps shadow hue without bleaching it
+    amb: 0.12, // a soft floor; trunks and occlusion can still carry depth
 };
 
 export class Atmosphere {
-  declare scene: any;
-  declare worldSize: any;
-  declare time: any;
-  declare aerialD: any;
-  declare fogEnabled: any;
-  declare hazeColor: any;
-  declare sky: any;
-  declare shadowExtent: any;
-  declare sun: any;
-  declare shadowResolution: any;
-  declare hemi: any;
-  declare fill: any;
-  constructor(scene: any, worldSize: any, tier: GpuTier = 'high') {
-    this.scene = scene;
-    this.worldSize = worldSize;
-    this.time = 0;
-    this.aerialD = AERIAL_D;
-    this.fogEnabled = true;
-    const ts = TIER_SETTINGS[tier];
+    declare scene: any;
+    declare worldSize: any;
+    declare time: any;
+    declare aerialD: any;
+    declare fogEnabled: any;
+    declare hazeColor: any;
+    declare sky: any;
+    declare shadowExtent: any;
+    declare sun: any;
+    declare shadowResolution: any;
+    declare hemi: any;
+    declare fill: any;
+    constructor(scene: any, worldSize: any, tier: GpuTier = 'high') {
+        this.scene = scene;
+        this.worldSize = worldSize;
+        this.time = 0;
+        this.aerialD = AERIAL_D;
+        this.fogEnabled = true;
+        const ts = TIER_SETTINGS[tier];
 
-    /* ---- the air ------------------------------------------------- */
-    // Fog colour is the skyline colour, because that is where most of the
-    // dissolving happens; postfx nudges it per-pixel toward the true
-    // directional sky value to finish the job.
-    this.hazeColor = SKY.haze.clone().lerp(SKY.horizon, 0.35);
-    scene.fog = new THREE.FogExp2(this.hazeColor, 1 / AERIAL_D);
-    scene.fog.aerialD = AERIAL_D; // postfx reads this back
+        /* ---- the air ------------------------------------------------- */
+        // Fog colour is the skyline colour, because that is where most of the
+        // dissolving happens; postfx nudges it per-pixel toward the true
+        // directional sky value to finish the job.
+        this.hazeColor = SKY.haze.clone().lerp(SKY.horizon, 0.35);
+        scene.fog = new THREE.FogExp2(this.hazeColor, 1 / AERIAL_D);
+        scene.fog.aerialD = AERIAL_D; // postfx reads this back
 
-    /* ---- sky dome ------------------------------------------------ */
-    this.sky = makeSkyDome(worldSize * 2.6, LIGHT.sunDir);
-    this.sky.material.uniforms.uNightSkyFull.value = ts.nightSkyFull ? 1.0 : 0.0;
-    scene.add(this.sky);
+        /* ---- sky dome ------------------------------------------------ */
+        this.sky = makeSkyDome(worldSize * 2.6, LIGHT.sunDir);
+        this.sky.material.uniforms.uNightSkyFull.value = ts.nightSkyFull ? 1.0 : 0.0;
+        scene.add(this.sky);
 
-    /* ---- key light ----------------------------------------------- */
-    const sun = new THREE.DirectionalLight(LIGHT.sunColor.clone(), RIG.sun);
-    sun.position.copy(LIGHT.sunDir).multiplyScalar(worldSize * 1.1);
-    sun.castShadow = true;
+        /* ---- key light ----------------------------------------------- */
+        const sun = new THREE.DirectionalLight(LIGHT.sunColor.clone(), RIG.sun);
+        sun.position.copy(LIGHT.sunDir).multiplyScalar(worldSize * 1.1);
+        sun.castShadow = true;
 
-    // The frustum follows the player, so a fixed view-sized extent keeps the
-    // same crisp texel density even as the generated world grows.
-    const S = Math.min(worldSize * 0.42, ts.shadowExtent ?? SHADOW_EXTENT);
-    this.shadowExtent = S;
-    sun.shadow.camera.left = -S;
-    sun.shadow.camera.right = S;
-    sun.shadow.camera.top = S;
-    sun.shadow.camera.bottom = -S;
-    sun.shadow.camera.near = 1;
-    sun.shadow.camera.far = worldSize * 3.2;
-    const requestedRes = ts.shadowRes > 0 ? ts.shadowRes : SHADOW_RES;
-    // Cap to MAX_TEXTURE_SIZE so old mobile GPUs don't silently fail or clamp.
-    const gl = (document.createElement('canvas').getContext('webgl2') ||
-                document.createElement('canvas').getContext('webgl')) as WebGLRenderingContext | null;
-    const maxTex = gl ? (gl.getParameter(gl.MAX_TEXTURE_SIZE) as number) : 2048;
-    const shadowRes = Math.min(requestedRes, maxTex);
-    sun.shadow.mapSize.set(shadowRes, shadowRes);
-    // Voxels are 1 unit. The old normalBias of 0.5 was half a block, which
-    // slid every shadow half a block off its caster (peter-panning at every
-    // terrace lip). A tenth of a block kills acne without visible detachment.
-    sun.shadow.bias = -0.00018;
-    sun.shadow.normalBias = 0.1;
-    // VSM's separable blur: enough softness to match the painted reference,
-    // with enough samples that the penumbra is smooth rather than speckled.
-    sun.shadow.radius = 2.25;
-    sun.shadow.blurSamples = ts.shadowBlurSamples ?? 12;
-    sun.shadow.intensity = 0.48;
-    // Keep this fully dynamic. A day/night system can animate the sun every
-    // frame and both terrain and player shadows will respond immediately.
-    sun.shadow.autoUpdate = true;
-    sun.shadow.needsUpdate = true;
-    scene.add(sun);
-    scene.add(sun.target);
-    this.sun = sun;
-    this.shadowResolution = shadowRes;
+        // The frustum follows the player, so a fixed view-sized extent keeps the
+        // same crisp texel density even as the generated world grows.
+        const S = Math.min(worldSize * 0.42, ts.shadowExtent ?? SHADOW_EXTENT);
+        this.shadowExtent = S;
+        sun.shadow.camera.left = -S;
+        sun.shadow.camera.right = S;
+        sun.shadow.camera.top = S;
+        sun.shadow.camera.bottom = -S;
+        sun.shadow.camera.near = 1;
+        sun.shadow.camera.far = worldSize * 3.2;
+        const requestedRes = ts.shadowRes > 0 ? ts.shadowRes : SHADOW_RES;
+        // Cap to MAX_TEXTURE_SIZE so old mobile GPUs don't silently fail or clamp.
+        const gl = (document.createElement('canvas').getContext('webgl2') ||
+            document.createElement('canvas').getContext('webgl')) as WebGLRenderingContext | null;
+        const maxTex = gl ? (gl.getParameter(gl.MAX_TEXTURE_SIZE) as number) : 2048;
+        const shadowRes = Math.min(requestedRes, maxTex);
+        sun.shadow.mapSize.set(shadowRes, shadowRes);
+        // Voxels are 1 unit. The old normalBias of 0.5 was half a block, which
+        // slid every shadow half a block off its caster (peter-panning at every
+        // terrace lip). A tenth of a block kills acne without visible detachment.
+        sun.shadow.bias = -0.00018;
+        sun.shadow.normalBias = 0.1;
+        // VSM's separable blur: enough softness to match the painted reference,
+        // with enough samples that the penumbra is smooth rather than speckled.
+        sun.shadow.radius = 2.25;
+        sun.shadow.blurSamples = ts.shadowBlurSamples ?? 12;
+        sun.shadow.intensity = 0.48;
+        // Keep this fully dynamic. A day/night system can animate the sun every
+        // frame and both terrain and player shadows will respond immediately.
+        sun.shadow.autoUpdate = true;
+        sun.shadow.needsUpdate = true;
+        scene.add(sun);
+        scene.add(sun.target);
+        this.sun = sun;
+        this.shadowResolution = shadowRes;
 
-    /* ---- hemisphere fill ----------------------------------------- */
-    const hemi = new THREE.HemisphereLight(LIGHT.skyColor.clone(), LIGHT.groundColor.clone(), RIG.hemi);
-    scene.add(hemi);
-    this.hemi = hemi;
+        /* ---- hemisphere fill ----------------------------------------- */
+        const hemi = new THREE.HemisphereLight(LIGHT.skyColor.clone(), LIGHT.groundColor.clone(), RIG.hemi);
+        scene.add(hemi);
+        this.hemi = hemi;
 
-    /* ---- camera-side bounce -------------------------------------- */
-    const fill = new THREE.DirectionalLight(LIGHT.fillColor.clone(), RIG.fill);
-    fill.position.set(worldSize * 0.7, worldSize * 0.35, worldSize * 0.9);
-    scene.add(fill);
-    this.fill = fill;
+        /* ---- camera-side bounce -------------------------------------- */
+        const fill = new THREE.DirectionalLight(LIGHT.fillColor.clone(), RIG.fill);
+        fill.position.set(worldSize * 0.7, worldSize * 0.35, worldSize * 0.9);
+        scene.add(fill);
+        this.fill = fill;
 
-    scene.add(new THREE.AmbientLight(this.hazeColor.clone(), RIG.amb));
-  }
-
-  /**
-   * Move the distance at which the aerial fog reaches ~63%. Larger = the
-   * world stays clear further out. postfx reads `fog.aerialD` back every
-   * frame, so this keeps the material fog and the post pass in agreement.
-   */
-  setAerialD(d: any) {
-    this.aerialD = d;
-    this.scene.fog.density = this.fogEnabled ? 1 / d : 0;
-    this.scene.fog.aerialD = d;
-  }
-
-  /** Enable or disable every fog contribution without losing its settings. */
-  setFogEnabled(enabled: any) {
-    this.fogEnabled = Boolean(enabled);
-    this.scene.fog.enabled = this.fogEnabled;
-    this.scene.fog.density = this.fogEnabled ? 1 / this.aerialD : 0;
-  }
-
-  /** Reallocate the VSM targets at a developer-selected resolution. */
-  setShadowResolution(resolution: any) {
-    const requested = Number(resolution);
-    const next = requested <= 0 ? 0 : THREE.MathUtils.clamp(Math.round(requested / 1024) * 1024, 1024, 4096);
-    if (next === this.shadowResolution) return;
-
-    const shadow = this.sun.shadow;
-    shadow.map?.dispose();
-    shadow.mapPass?.dispose();
-    shadow.map = null;
-    shadow.mapPass = null;
-
-    this.shadowResolution = next;
-    this.sun.castShadow = next > 0;
-    if (next > 0) {
-      shadow.mapSize.set(next, next);
-      shadow.needsUpdate = true;
+        scene.add(new THREE.AmbientLight(this.hazeColor.clone(), RIG.amb));
     }
-  }
 
-  /**
-   * Keep the shadow frustum exactly centred on the player. Translate the sun
-   * and target by the same delta instead of reconstructing the direction from
-   * a constant; this preserves any live day/night rotation applied elsewhere.
-   */
-  followTarget(x: any, z: any) {
-    const s = this.sun;
-    const dx = x - s.target.position.x;
-    const dz = z - s.target.position.z;
-    s.target.position.x = x;
-    s.target.position.z = z;
-    s.position.x += dx;
-    s.position.z += dz;
-    s.target.updateMatrixWorld();
-    s.updateMatrixWorld();
-  }
-
-  update(dt: any, camera: any) {
-    this.time += dt;
-    if (this.sky) {
-      this.sky.position.set(camera.position.x, 0, camera.position.z);
-      this.sky.material.uniforms.uTime.value = this.time;
-      this.sky.updateMatrixWorld();
+    /**
+     * Move the distance at which the aerial fog reaches ~63%. Larger = the
+     * world stays clear further out. postfx reads `fog.aerialD` back every
+     * frame, so this keeps the material fog and the post pass in agreement.
+     */
+    setAerialD(d: any) {
+        this.aerialD = d;
+        this.scene.fog.density = this.fogEnabled ? 1 / d : 0;
+        this.scene.fog.aerialD = d;
     }
-  }
+
+    /** Enable or disable every fog contribution without losing its settings. */
+    setFogEnabled(enabled: any) {
+        this.fogEnabled = Boolean(enabled);
+        this.scene.fog.enabled = this.fogEnabled;
+        this.scene.fog.density = this.fogEnabled ? 1 / this.aerialD : 0;
+    }
+
+    /** Reallocate the VSM targets at a developer-selected resolution. */
+    setShadowResolution(resolution: any) {
+        const requested = Number(resolution);
+        const next = requested <= 0 ? 0 : THREE.MathUtils.clamp(Math.round(requested / 1024) * 1024, 1024, 4096);
+        if (next === this.shadowResolution) return;
+
+        const shadow = this.sun.shadow;
+        shadow.map?.dispose();
+        shadow.mapPass?.dispose();
+        shadow.map = null;
+        shadow.mapPass = null;
+
+        this.shadowResolution = next;
+        this.sun.castShadow = next > 0;
+        if (next > 0) {
+            shadow.mapSize.set(next, next);
+            shadow.needsUpdate = true;
+        }
+    }
+
+    /**
+     * Keep the shadow frustum exactly centred on the player. Translate the sun
+     * and target by the same delta instead of reconstructing the direction from
+     * a constant; this preserves any live day/night rotation applied elsewhere.
+     */
+    followTarget(x: any, z: any) {
+        const s = this.sun;
+        const dx = x - s.target.position.x;
+        const dz = z - s.target.position.z;
+        s.target.position.x = x;
+        s.target.position.z = z;
+        s.position.x += dx;
+        s.position.z += dz;
+        s.target.updateMatrixWorld();
+        s.updateMatrixWorld();
+    }
+
+    update(dt: any, camera: any) {
+        this.time += dt;
+        if (this.sky) {
+            this.sky.position.set(camera.position.x, 0, camera.position.z);
+            this.sky.material.uniforms.uTime.value = this.time;
+            this.sky.updateMatrixWorld();
+        }
+    }
 }
 
 function makeSkyDome(radius: any, sunDir: any) {
-  const geo = new THREE.SphereGeometry(radius, 32, 20);
-  const mat = new THREE.ShaderMaterial({
-    side: THREE.BackSide,
-    depthWrite: false,
-    fog: false,
-    uniforms: {
-      ...skyUniformValues(SKY, sunDir, THREE),
-      uTime: { value: 0 },
-    },
-    vertexShader: /* glsl */ `
+    const geo = new THREE.SphereGeometry(radius, 32, 20);
+    const mat = new THREE.ShaderMaterial({
+        side: THREE.BackSide,
+        depthWrite: false,
+        fog: false,
+        uniforms: {
+            ...skyUniformValues(SKY, sunDir, THREE),
+            uTime: { value: 0 },
+        },
+        vertexShader: /* glsl */ `
       varying vec3 vDir;
       void main() {
         vDir = normalize(position);
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
       }
     `,
-    fragmentShader: /* glsl */ `
+        fragmentShader: /* glsl */ `
       ${SKY_UNIFORMS_GLSL}
       uniform float uTime;
       varying vec3 vDir;
@@ -310,11 +310,11 @@ function makeSkyDome(radius: any, sunDir: any) {
         gl_FragColor = vec4(col, 1.0);
       }
     `,
-  });
-  const m = new THREE.Mesh(geo, mat);
-  m.renderOrder = -1000;
-  m.frustumCulled = false;
-  return m;
+    });
+    const m = new THREE.Mesh(geo, mat);
+    m.renderOrder = -1000;
+    m.frustumCulled = false;
+    return m;
 }
 
 export { AERIAL_D, FOG_NEAR, FOG };

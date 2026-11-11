@@ -79,19 +79,19 @@ const CSS = `
 `;
 
 interface HudDeps {
-  dayNight: DayNight;
-  drone: DroneMode;
-  camera: THREE.PerspectiveCamera;
+    dayNight: DayNight;
+    drone: DroneMode;
+    camera: THREE.PerspectiveCamera;
 }
 
 export function createHud({ dayNight, drone, camera }: HudDeps) {
-  const style = document.createElement('style');
-  style.textContent = CSS;
-  document.head.appendChild(style);
+    const style = document.createElement('style');
+    style.textContent = CSS;
+    document.head.appendChild(style);
 
-  const root = document.createElement('div');
-  root.id = 'hud';
-  root.innerHTML = `
+    const root = document.createElement('div');
+    root.id = 'hud';
+    root.innerHTML = `
     <div class="place show" id="hud-place">VoxelWorld</div>
     <button class="settings-btn" id="hud-settings" type="button" aria-label="Settings">⚙</button>
     <div class="shortcuts" id="hud-shortcuts">
@@ -104,47 +104,51 @@ export function createHud({ dayNight, drone, camera }: HudDeps) {
       <div class="status-chip" id="hud-drone" style="display:none">↑ -- m  -- u/s</div>
     </div>
   `;
-  document.body.appendChild(root);
+    document.body.appendChild(root);
 
-  const place = root.querySelector('#hud-place') as HTMLElement;
-  const shortcuts = root.querySelector('#hud-shortcuts') as HTMLElement;
-  const settingsBtn = root.querySelector('#hud-settings') as HTMLButtonElement;
-  const timeEl = root.querySelector('#hud-time') as HTMLElement;
-  const droneEl = root.querySelector('#hud-drone') as HTMLElement;
+    const place = root.querySelector('#hud-place') as HTMLElement;
+    const shortcuts = root.querySelector('#hud-shortcuts') as HTMLElement;
+    const settingsBtn = root.querySelector('#hud-settings') as HTMLButtonElement;
+    const timeEl = root.querySelector('#hud-time') as HTMLElement;
+    const droneEl = root.querySelector('#hud-drone') as HTMLElement;
 
-  setTimeout(() => place.classList.remove('show'), 3200);
-  setTimeout(() => shortcuts.classList.add('show'), 900);
+    setTimeout(() => place.classList.remove('show'), 3200);
+    setTimeout(() => shortcuts.classList.add('show'), 900);
 
-  return {
-    onSettingsClick(cb: () => void) { settingsBtn.addEventListener('click', cb); },
-    showSettingsBtn() { settingsBtn.classList.add('visible'); },
-    update() {
-      // Time of day — always visible
-      const tod = dayNight.timeOfDay;
-      const totalH = tod * 24;
-      const hour = Math.floor(totalH);
-      const min = Math.floor((totalH - hour) * 60);
-      const icon = hour >= 6 && hour < 20 ? '☀' : '🌙';
-      timeEl.textContent = `${icon} ${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
+    return {
+        onSettingsClick(cb: () => void) {
+            settingsBtn.addEventListener('click', cb);
+        },
+        showSettingsBtn() {
+            settingsBtn.classList.add('visible');
+        },
+        update() {
+            // Time of day — always visible
+            const tod = dayNight.timeOfDay;
+            const totalH = tod * 24;
+            const hour = Math.floor(totalH);
+            const min = Math.floor((totalH - hour) * 60);
+            const icon = hour >= 6 && hour < 20 ? '☀' : '🌙';
+            timeEl.textContent = `${icon} ${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
 
-      // Drone stats — only when active
-      if (drone.active) {
-        droneEl.style.display = 'flex';
-        const alt = Math.round(drone.getAltitude(camera));
-        const spd = Math.round(drone.getSpeed());
-        droneEl.textContent = `↑ ${alt} m  ${spd} u/s`;
-      } else {
-        droneEl.style.display = 'none';
-      }
-    },
-    announce(name: string) {
-      place.textContent = name;
-      place.classList.add('show');
-      clearTimeout((place as HTMLElement & { _t?: ReturnType<typeof setTimeout> })._t);
-      (place as HTMLElement & { _t?: ReturnType<typeof setTimeout> })._t = setTimeout(
-        () => place.classList.remove('show'),
-        2600,
-      );
-    },
-  };
+            // Drone stats — only when active
+            if (drone.active) {
+                droneEl.style.display = 'flex';
+                const alt = Math.round(drone.getAltitude(camera));
+                const spd = Math.round(drone.getSpeed());
+                droneEl.textContent = `↑ ${alt} m  ${spd} u/s`;
+            } else {
+                droneEl.style.display = 'none';
+            }
+        },
+        announce(name: string) {
+            place.textContent = name;
+            place.classList.add('show');
+            clearTimeout((place as HTMLElement & { _t?: ReturnType<typeof setTimeout> })._t);
+            (place as HTMLElement & { _t?: ReturnType<typeof setTimeout> })._t = setTimeout(
+                () => place.classList.remove('show'),
+                2600,
+            );
+        },
+    };
 }

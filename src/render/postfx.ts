@@ -51,39 +51,39 @@ import { SKY_UNIFORMS_GLSL, SKY_FN_GLSL, skyUniformValues } from './sky';
  * Grade — display space. Taste only.
  * ------------------------------------------------------------------ */
 const GradeShader = {
-  uniforms: {
-    tDiffuse: { value: null },
-    uLift: { value: GRADE.lift.clone() },
-    uGamma: { value: GRADE.gamma.clone() },
-    uGain: { value: GRADE.gain.clone() },
-    uSat: { value: GRADE.saturation },
-    uContrast: { value: GRADE.contrast },
-    uVignette: { value: GRADE.vignette },
-    uTime: { value: 0 },
-    uGrain: { value: 0.006 },
-    uAberration: { value: 0.0008 },
-    tEdges: { value: null },
-    // Display-space ink. It is mixed, never added, after bloom and tone
-    // mapping, so the pale stroke cannot become an emitter.
-    uEdgeDark: { value: new THREE.Vector3(0.39, 0.32, 0.43) },
-    uEdgeLight: { value: new THREE.Vector3(0.94, 0.91, 0.93) },
-    uEdgeDarkOpacity: { value: 0.0 },
-    uEdgeLightOpacity: { value: 0.0 },
-    // "Milk": a flat mix toward a bright lilac across the whole frame. The
-    // reference frames are clean and confidently coloured, so this stays low
-    // — just enough to keep the darkest values from going heavy.
-    uMilk: { value: 0.01 },
-    uMilkColor: { value: new THREE.Vector3(0.855, 0.845, 0.925) },
-    // Highlight rolloff. ACES already shoulders, but pastels sit high enough
-    // that a second, gentler knee is what stops blossom tops clipping to white.
-    uKnee: { value: 0.8 },
-    toneMappingExposure: { value: GRADE.exposure },
-  },
-  vertexShader: /* glsl */ `
+    uniforms: {
+        tDiffuse: { value: null },
+        uLift: { value: GRADE.lift.clone() },
+        uGamma: { value: GRADE.gamma.clone() },
+        uGain: { value: GRADE.gain.clone() },
+        uSat: { value: GRADE.saturation },
+        uContrast: { value: GRADE.contrast },
+        uVignette: { value: GRADE.vignette },
+        uTime: { value: 0 },
+        uGrain: { value: 0.006 },
+        uAberration: { value: 0.0008 },
+        tEdges: { value: null },
+        // Display-space ink. It is mixed, never added, after bloom and tone
+        // mapping, so the pale stroke cannot become an emitter.
+        uEdgeDark: { value: new THREE.Vector3(0.39, 0.32, 0.43) },
+        uEdgeLight: { value: new THREE.Vector3(0.94, 0.91, 0.93) },
+        uEdgeDarkOpacity: { value: 0.0 },
+        uEdgeLightOpacity: { value: 0.0 },
+        // "Milk": a flat mix toward a bright lilac across the whole frame. The
+        // reference frames are clean and confidently coloured, so this stays low
+        // — just enough to keep the darkest values from going heavy.
+        uMilk: { value: 0.01 },
+        uMilkColor: { value: new THREE.Vector3(0.855, 0.845, 0.925) },
+        // Highlight rolloff. ACES already shoulders, but pastels sit high enough
+        // that a second, gentler knee is what stops blossom tops clipping to white.
+        uKnee: { value: 0.8 },
+        toneMappingExposure: { value: GRADE.exposure },
+    },
+    vertexShader: /* glsl */ `
     varying vec2 vUv;
     void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }
   `,
-  fragmentShader: /* glsl */ `
+    fragmentShader: /* glsl */ `
     uniform sampler2D tDiffuse, tEdges;
     uniform vec3 uLift, uGamma, uGain, uMilkColor;
     uniform vec3 uEdgeDark, uEdgeLight;
@@ -181,84 +181,84 @@ const GradeShader = {
  * glow, or open a one-pixel crack.
  */
 class EdgeMaskPass extends Pass {
-  /**
-   * Edge objects live in the main scene on EDGE_LAYER rather than in a private
-   * scene of their own, and this pass simply re-renders that scene with the
-   * camera looking at nothing else. The scene camera never sees the layer, so
-   * the strokes stay out of the beauty pass.
-   *
-   * The reason for the layer rather than a separate scene: an object has one
-   * parent. Keeping edges in the main graph is what allows a character part's
-   * outline to hang off the animated node it belongs to and inherit its
-   * world matrix for free, instead of needing a mirrored hierarchy kept in
-   * sync by hand every frame.
-   */
-  camera: THREE.Camera;
-  target: THREE.WebGLRenderTarget;
-  sourceScene: THREE.Scene;
-  material: THREE.Material | null;
-  clearColor: THREE.Color;
+    /**
+     * Edge objects live in the main scene on EDGE_LAYER rather than in a private
+     * scene of their own, and this pass simply re-renders that scene with the
+     * camera looking at nothing else. The scene camera never sees the layer, so
+     * the strokes stay out of the beauty pass.
+     *
+     * The reason for the layer rather than a separate scene: an object has one
+     * parent. Keeping edges in the main graph is what allows a character part's
+     * outline to hang off the animated node it belongs to and inherit its
+     * world matrix for free, instead of needing a mirrored hierarchy kept in
+     * sync by hand every frame.
+     */
+    camera: THREE.Camera;
+    target: THREE.WebGLRenderTarget;
+    sourceScene: THREE.Scene;
+    material: THREE.Material | null;
+    clearColor: THREE.Color;
 
-  constructor(
-    material: THREE.Material | null,
-    camera: THREE.Camera,
-    target: THREE.WebGLRenderTarget,
-    scene: THREE.Scene,
-  ) {
-    super();
-    this.needsSwap = false;
-    this.camera = camera;
-    this.target = target;
-    this.sourceScene = scene;
-    this.material = material;
-    this.clearColor = new THREE.Color();
-  }
-
-  render(renderer: THREE.WebGLRenderer) {
-    const previousTarget = renderer.getRenderTarget();
-    const previousAlpha = renderer.getClearAlpha();
-    renderer.getClearColor(this.clearColor);
-    const previousAutoClear = renderer.autoClear;
-
-    const material = this.material as THREE.ShaderMaterial | null;
-    (material?.userData as { setPixelRatio?: (r: number) => void })?.setPixelRatio?.(renderer.getPixelRatio());
-    const fog = this.sourceScene.fog as (THREE.FogExp2 & { enabled?: boolean }) | null;
-    if (material?.uniforms?.['uFogDensity'] && fog?.isFogExp2) {
-      const fogEnabled = fog.enabled !== false;
-      material.uniforms['uFogDensity'].value = fogEnabled ? fog.density : 0;
-      material.uniforms['uMistDens'].value = fogEnabled ? 0.012 : 0;
+    constructor(
+        material: THREE.Material | null,
+        camera: THREE.Camera,
+        target: THREE.WebGLRenderTarget,
+        scene: THREE.Scene,
+    ) {
+        super();
+        this.needsSwap = false;
+        this.camera = camera;
+        this.target = target;
+        this.sourceScene = scene;
+        this.material = material;
+        this.clearColor = new THREE.Color();
     }
 
-    // Rendering the scene a second time would otherwise re-run the whole
-    // shadow map, which the beauty pass has already produced this frame.
-    const previousShadowAuto = renderer.shadowMap.autoUpdate;
-    const previousShadowNeeds = renderer.shadowMap.needsUpdate;
-    renderer.shadowMap.autoUpdate = false;
-    renderer.shadowMap.needsUpdate = false;
+    render(renderer: THREE.WebGLRenderer) {
+        const previousTarget = renderer.getRenderTarget();
+        const previousAlpha = renderer.getClearAlpha();
+        renderer.getClearColor(this.clearColor);
+        const previousAutoClear = renderer.autoClear;
 
-    // Dynamic matrices are current before the composer runs, and RenderPass
-    // immediately precedes this pass. Repeating a full hierarchy walk for an
-    // edge-only layer is pure CPU work once terrain and detail are chunked.
-    const previousMatrixAuto = this.sourceScene.matrixWorldAutoUpdate;
-    this.sourceScene.matrixWorldAutoUpdate = false;
+        const material = this.material as THREE.ShaderMaterial | null;
+        (material?.userData as { setPixelRatio?: (r: number) => void })?.setPixelRatio?.(renderer.getPixelRatio());
+        const fog = this.sourceScene.fog as (THREE.FogExp2 & { enabled?: boolean }) | null;
+        if (material?.uniforms?.['uFogDensity'] && fog?.isFogExp2) {
+            const fogEnabled = fog.enabled !== false;
+            material.uniforms['uFogDensity'].value = fogEnabled ? fog.density : 0;
+            material.uniforms['uMistDens'].value = fogEnabled ? 0.012 : 0;
+        }
 
-    const previousLayers = this.camera.layers.mask;
-    this.camera.layers.set(EDGE_LAYER);
+        // Rendering the scene a second time would otherwise re-run the whole
+        // shadow map, which the beauty pass has already produced this frame.
+        const previousShadowAuto = renderer.shadowMap.autoUpdate;
+        const previousShadowNeeds = renderer.shadowMap.needsUpdate;
+        renderer.shadowMap.autoUpdate = false;
+        renderer.shadowMap.needsUpdate = false;
 
-    renderer.autoClear = false;
-    renderer.setRenderTarget(this.target);
-    renderer.setClearColor(0x000000, 0);
-    renderer.clear(true, false, false);
-    renderer.render(this.sourceScene, this.camera);
+        // Dynamic matrices are current before the composer runs, and RenderPass
+        // immediately precedes this pass. Repeating a full hierarchy walk for an
+        // edge-only layer is pure CPU work once terrain and detail are chunked.
+        const previousMatrixAuto = this.sourceScene.matrixWorldAutoUpdate;
+        this.sourceScene.matrixWorldAutoUpdate = false;
 
-    this.camera.layers.mask = previousLayers;
-    this.sourceScene.matrixWorldAutoUpdate = previousMatrixAuto;
-    renderer.shadowMap.autoUpdate = previousShadowAuto;
-    renderer.shadowMap.needsUpdate = previousShadowNeeds;
-    renderer.setRenderTarget(previousTarget);
-    renderer.setClearColor(this.clearColor, previousAlpha);
-    renderer.autoClear = previousAutoClear;
-  }
+        const previousLayers = this.camera.layers.mask;
+        this.camera.layers.set(EDGE_LAYER);
+
+        renderer.autoClear = false;
+        renderer.setRenderTarget(this.target);
+        renderer.setClearColor(0x000000, 0);
+        renderer.clear(true, false, false);
+        renderer.render(this.sourceScene, this.camera);
+
+        this.camera.layers.mask = previousLayers;
+        this.sourceScene.matrixWorldAutoUpdate = previousMatrixAuto;
+        renderer.shadowMap.autoUpdate = previousShadowAuto;
+        renderer.shadowMap.needsUpdate = previousShadowNeeds;
+        renderer.setRenderTarget(previousTarget);
+        renderer.setClearColor(this.clearColor, previousAlpha);
+        renderer.autoClear = previousAutoClear;
+    }
 }
 
 /**
@@ -273,103 +273,103 @@ class EdgeMaskPass extends Pass {
  * depth texture attached, so every pass that samples it is writing elsewhere.
  */
 class SceneDepthPass extends Pass {
-  private _scene: THREE.Scene;
-  private _camera: THREE.Camera;
-  private _fbo: THREE.WebGLRenderTarget;
-  private _quad: FullScreenQuad;
+    private _scene: THREE.Scene;
+    private _camera: THREE.Camera;
+    private _fbo: THREE.WebGLRenderTarget;
+    private _quad: FullScreenQuad;
 
-  constructor(scene: THREE.Scene, camera: THREE.Camera, fbo: THREE.WebGLRenderTarget) {
-    super();
-    this.needsSwap = false;
-    this._scene = scene;
-    this._camera = camera;
-    this._fbo = fbo;
-    this._quad = new FullScreenQuad(
-      new THREE.ShaderMaterial({
-        uniforms: { tDiffuse: { value: fbo.texture } },
-        vertexShader: `varying vec2 vUv;
+    constructor(scene: THREE.Scene, camera: THREE.Camera, fbo: THREE.WebGLRenderTarget) {
+        super();
+        this.needsSwap = false;
+        this._scene = scene;
+        this._camera = camera;
+        this._fbo = fbo;
+        this._quad = new FullScreenQuad(
+            new THREE.ShaderMaterial({
+                uniforms: { tDiffuse: { value: fbo.texture } },
+                vertexShader: `varying vec2 vUv;
                        void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
-        fragmentShader: `uniform sampler2D tDiffuse; varying vec2 vUv;
+                fragmentShader: `uniform sampler2D tDiffuse; varying vec2 vUv;
                        void main(){ gl_FragColor=texture2D(tDiffuse,vUv); }`,
-        depthTest: false,
-        depthWrite: false,
-        toneMapped: false,
-      }),
-    );
-  }
+                depthTest: false,
+                depthWrite: false,
+                toneMapped: false,
+            }),
+        );
+    }
 
-  render(renderer: THREE.WebGLRenderer, _write: THREE.WebGLRenderTarget, read: THREE.WebGLRenderTarget) {
-    renderer.setRenderTarget(this._fbo);
-    renderer.render(this._scene, this._camera);
+    render(renderer: THREE.WebGLRenderer, _write: THREE.WebGLRenderTarget, read: THREE.WebGLRenderTarget) {
+        renderer.setRenderTarget(this._fbo);
+        renderer.render(this._scene, this._camera);
 
-    renderer.setRenderTarget(read);
-    renderer.clear();
-    this._quad.render(renderer);
-  }
+        renderer.setRenderTarget(read);
+        renderer.clear();
+        this._quad.render(renderer);
+    }
 
-  setSize(w: number, h: number) {
-    this._fbo.setSize(w, h);
-  }
+    setSize(w: number, h: number) {
+        this._fbo.setSize(w, h);
+    }
 
-  dispose() {
-    (this._quad.material as THREE.Material).dispose();
-    this._quad.dispose();
-  }
+    dispose() {
+        (this._quad.material as THREE.Material).dispose();
+        this._quad.dispose();
+    }
 }
 
 /* ------------------------------------------------------------------ *
  * Atmosphere — linear HDR. Physics (or a convincing impression of it).
  * ------------------------------------------------------------------ */
 function makeAtmosphereShader(sunDir: THREE.Vector3) {
-  return {
-    uniforms: {
-      tDiffuse: { value: null },
-      tDepth: { value: null },
-      uNear: { value: 1 },
-      uFar: { value: 620 },
-      uInvProj: { value: new THREE.Matrix4() },
-      uInvView: { value: new THREE.Matrix4() },
-      uCamPos: { value: new THREE.Vector3() },
-      uResolution: { value: new THREE.Vector2(1600, 900) },
-      uFocal: { value: 900.0 },
-      uTime: { value: 0 },
+    return {
+        uniforms: {
+            tDiffuse: { value: null },
+            tDepth: { value: null },
+            uNear: { value: 1 },
+            uFar: { value: 620 },
+            uInvProj: { value: new THREE.Matrix4() },
+            uInvView: { value: new THREE.Matrix4() },
+            uCamPos: { value: new THREE.Vector3() },
+            uResolution: { value: new THREE.Vector2(1600, 900) },
+            uFocal: { value: 900.0 },
+            uTime: { value: 0 },
 
-      ...skyUniformValues(SKY, sunDir, THREE),
+            ...skyUniformValues(SKY, sunDir, THREE),
 
-      /** must match scene.fog's 1/density so the two agree */
-      uAerialD: { value: 196 },
-      /** Must match the near plane patched into three's fog chunk. */
-      uFogNear: { value: FOG_NEAR },
-      /** how much residual chroma distance eats, on top of the fog mix */
-      uDesat: { value: 0.58 },
-      /** how far a fogged pixel is pulled toward its true directional sky colour */
-      uSkyBlend: { value: 0.62 },
+            /** must match scene.fog's 1/density so the two agree */
+            uAerialD: { value: 196 },
+            /** Must match the near plane patched into three's fog chunk. */
+            uFogNear: { value: FOG_NEAR },
+            /** how much residual chroma distance eats, on top of the fog mix */
+            uDesat: { value: 0.58 },
+            /** how far a fogged pixel is pulled toward its true directional sky colour */
+            uSkyBlend: { value: 0.62 },
 
-      /* ---- valley mist ---- */
-      uMistColor: { value: new THREE.Color(0.8, 0.79, 0.9) },
-      uMistBase: { value: 8.0 }, // waterline-ish
-      uMistH: { value: 9.0 }, // e-folding height
-      uMistDens: { value: 0.012 },
-      uMistMax: { value: 0.34 },
+            /* ---- valley mist ---- */
+            uMistColor: { value: new THREE.Color(0.8, 0.79, 0.9) },
+            uMistBase: { value: 8.0 }, // waterline-ish
+            uMistH: { value: 9.0 }, // e-folding height
+            uMistDens: { value: 0.012 },
+            uMistMax: { value: 0.34 },
 
-      /* ---- large-scale AO ---- */
-      uAOStrength: { value: 0.24 },
-      uAORadius: { value: 2.4 }, // world units (tuned for the ~40u play camera)
-      uAORange: { value: 4.5 }, // depth delta that counts as fully occluding
-      uAOTint: { value: new THREE.Color(0.61, 0.57, 0.72) },
+            /* ---- large-scale AO ---- */
+            uAOStrength: { value: 0.24 },
+            uAORadius: { value: 2.4 }, // world units (tuned for the ~40u play camera)
+            uAORange: { value: 4.5 }, // depth delta that counts as fully occluding
+            uAOTint: { value: new THREE.Color(0.61, 0.57, 0.72) },
 
-      /* ---- extras ---- */
-      uInscatter: { value: 0.28 },
-      uDof: { value: 1.2 },         // pixels of defocus at full haze (0 = disabled)
-      uAOTaps: { value: 8 },        // rosette taps (0 = skip AO)
-      uCloud: { value: 0.055 },
-      uCloudShadow: { value: 1.0 }, // 1 = cloud shadow noise on, 0 = disabled
-    },
-    vertexShader: /* glsl */ `
+            /* ---- extras ---- */
+            uInscatter: { value: 0.28 },
+            uDof: { value: 1.2 }, // pixels of defocus at full haze (0 = disabled)
+            uAOTaps: { value: 8 }, // rosette taps (0 = skip AO)
+            uCloud: { value: 0.055 },
+            uCloudShadow: { value: 1.0 }, // 1 = cloud shadow noise on, 0 = disabled
+        },
+        vertexShader: /* glsl */ `
       varying vec2 vUv;
       void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }
     `,
-    fragmentShader: /* glsl */ `
+        fragmentShader: /* glsl */ `
       #include <packing>
       uniform sampler2D tDiffuse, tDepth;
       uniform float uNear, uFar, uAerialD, uFogNear, uDesat, uSkyBlend;
@@ -508,98 +508,98 @@ function makeAtmosphereShader(sunDir: THREE.Vector3) {
         gl_FragColor = vec4(col, src.a);
       }
     `,
-  };
+    };
 }
 
 export function createPostFX(
-  renderer: THREE.WebGLRenderer,
-  scene: THREE.Scene,
-  camera: THREE.PerspectiveCamera,
-  edgeMaterial: THREE.ShaderMaterial,
-  tier: GpuTier = 'high',
+    renderer: THREE.WebGLRenderer,
+    scene: THREE.Scene,
+    camera: THREE.PerspectiveCamera,
+    edgeMaterial: THREE.ShaderMaterial,
+    tier: GpuTier = 'high',
 ) {
-  const size = renderer.getSize(new THREE.Vector2());
-  const dpr = renderer.getPixelRatio();
+    const size = renderer.getSize(new THREE.Vector2());
+    const dpr = renderer.getPixelRatio();
 
-  const target = new THREE.WebGLRenderTarget(size.x * dpr, size.y * dpr, {
-    type: THREE.HalfFloatType,
-    // SMAA is the final pass. Multisampling this HDR target as well consumed
-    // four times the colour/depth bandwidth for nearly identical edges.
-    samples: 0,
-  });
-  const depthTexture = new THREE.DepthTexture(size.x * dpr, size.y * dpr);
-  depthTexture.type = THREE.UnsignedIntType;
-  const edgeMask = new THREE.WebGLRenderTarget(size.x * dpr, size.y * dpr, {
-    type: THREE.UnsignedByteType,
-    depthBuffer: false,
-    stencilBuffer: false,
-    minFilter: THREE.LinearFilter,
-    magFilter: THREE.LinearFilter,
-    generateMipmaps: false,
-  });
-  edgeMask.texture.name = 'edge-coverage-mask';
-  edgeMask.texture.colorSpace = THREE.NoColorSpace;
+    const target = new THREE.WebGLRenderTarget(size.x * dpr, size.y * dpr, {
+        type: THREE.HalfFloatType,
+        // SMAA is the final pass. Multisampling this HDR target as well consumed
+        // four times the colour/depth bandwidth for nearly identical edges.
+        samples: 0,
+    });
+    const depthTexture = new THREE.DepthTexture(size.x * dpr, size.y * dpr);
+    depthTexture.type = THREE.UnsignedIntType;
+    const edgeMask = new THREE.WebGLRenderTarget(size.x * dpr, size.y * dpr, {
+        type: THREE.UnsignedByteType,
+        depthBuffer: false,
+        stencilBuffer: false,
+        minFilter: THREE.LinearFilter,
+        magFilter: THREE.LinearFilter,
+        generateMipmaps: false,
+    });
+    edgeMask.texture.name = 'edge-coverage-mask';
+    edgeMask.texture.colorSpace = THREE.NoColorSpace;
 
-  const composer = new EffectComposer(renderer, target);
-  composer.setPixelRatio(dpr);
-  composer.setSize(size.x, size.y);
+    const composer = new EffectComposer(renderer, target);
+    composer.setPixelRatio(dpr);
+    composer.setSize(size.x, size.y);
 
-  // sceneFBO owns the depthTexture and is never part of the composer's
-  // ping-pong chain, so no pass ever writes to it while sampling depthTexture.
-  const sceneFBO = new THREE.WebGLRenderTarget(size.x * dpr, size.y * dpr, {
-    type: THREE.HalfFloatType,
-    samples: 0,
-    depthTexture,
-  });
+    // sceneFBO owns the depthTexture and is never part of the composer's
+    // ping-pong chain, so no pass ever writes to it while sampling depthTexture.
+    const sceneFBO = new THREE.WebGLRenderTarget(size.x * dpr, size.y * dpr, {
+        type: THREE.HalfFloatType,
+        samples: 0,
+        depthTexture,
+    });
 
-  const ts = TIER_SETTINGS[tier];
+    const ts = TIER_SETTINGS[tier];
 
-  composer.addPass(new SceneDepthPass(scene, camera, sceneFBO));
-  edgeMaterial.uniforms.tSceneDepth.value = depthTexture;
-  const edgePass = new EdgeMaskPass(edgeMaterial, camera, edgeMask, scene);
-  if (ts.edgeMask) composer.addPass(edgePass);
+    composer.addPass(new SceneDepthPass(scene, camera, sceneFBO));
+    edgeMaterial.uniforms.tSceneDepth.value = depthTexture;
+    const edgePass = new EdgeMaskPass(edgeMaterial, camera, edgeMask, scene);
+    if (ts.edgeMask) composer.addPass(edgePass);
 
-  const haze = new ShaderPass(makeAtmosphereShader(LIGHT.sunDir));
-  haze.uniforms.tDepth.value = depthTexture;
-  haze.uniforms.uAOTaps.value = ts.aoTaps;
-  haze.uniforms.uDof.value = ts.dof ? 1.2 : 0.0;
-  haze.uniforms.uCloudShadow.value = ts.cloudShadow ? 1.0 : 0.0;
-  haze.uniforms.uNightSkyFull = { value: ts.nightSkyFull ? 1.0 : 0.0 };
-  const authoredMistMax = haze.uniforms.uMistMax.value;
-  composer.addPass(haze);
+    const haze = new ShaderPass(makeAtmosphereShader(LIGHT.sunDir));
+    haze.uniforms.tDepth.value = depthTexture;
+    haze.uniforms.uAOTaps.value = ts.aoTaps;
+    haze.uniforms.uDof.value = ts.dof ? 1.2 : 0.0;
+    haze.uniforms.uCloudShadow.value = ts.cloudShadow ? 1.0 : 0.0;
+    haze.uniforms.uNightSkyFull = { value: ts.nightSkyFull ? 1.0 : 0.0 };
+    const authoredMistMax = haze.uniforms.uMistMax.value;
+    composer.addPass(haze);
 
-  // Bloom runs *after* the atmosphere on purpose: the haze is a light source
-  // in its own right, and letting it feed the bloom is what gives the far
-  // field that soft luminous edge instead of a flat wash.
-  const bloom = new UnrealBloomPass(
-    new THREE.Vector2(size.x, size.y),
-    GRADE.bloom.strength,
-    GRADE.bloom.radius,
-    GRADE.bloom.threshold,
-  );
-  // The palette's numbers are display-space intuitions, but this pass sees
-  // linear HDR, where a threshold of 0.72 catches most of a pastel palette
-  // outright. Only genuine emitters and specular hits should bloom.
-  bloom.threshold = 1.25;
-  bloom.strength = 0.22;
-  bloom.radius = 0.9;
-  if (ts.bloom) composer.addPass(bloom);
+    // Bloom runs *after* the atmosphere on purpose: the haze is a light source
+    // in its own right, and letting it feed the bloom is what gives the far
+    // field that soft luminous edge instead of a flat wash.
+    const bloom = new UnrealBloomPass(
+        new THREE.Vector2(size.x, size.y),
+        GRADE.bloom.strength,
+        GRADE.bloom.radius,
+        GRADE.bloom.threshold,
+    );
+    // The palette's numbers are display-space intuitions, but this pass sees
+    // linear HDR, where a threshold of 0.72 catches most of a pastel palette
+    // outright. Only genuine emitters and specular hits should bloom.
+    bloom.threshold = 1.25;
+    bloom.strength = 0.22;
+    bloom.radius = 0.9;
+    if (ts.bloom) composer.addPass(bloom);
 
-  const CrepuscularShader = {
-    uniforms: {
-      tDiffuse: { value: null as THREE.Texture | null },
-      uSunScreen: { value: new THREE.Vector2(0.5, 0.5) },
-      uSunVisible: { value: 0.0 },
-      uDecay: { value: 0.96 },
-      uDensity: { value: 0.96 },
-      uWeight: { value: 0.35 },
-      uTaps: { value: 8.0 }, // 0 = disabled, 4 = half-quality, 8 = full
-    },
-    vertexShader: /* glsl */ `
+    const CrepuscularShader = {
+        uniforms: {
+            tDiffuse: { value: null as THREE.Texture | null },
+            uSunScreen: { value: new THREE.Vector2(0.5, 0.5) },
+            uSunVisible: { value: 0.0 },
+            uDecay: { value: 0.96 },
+            uDensity: { value: 0.96 },
+            uWeight: { value: 0.35 },
+            uTaps: { value: 8.0 }, // 0 = disabled, 4 = half-quality, 8 = full
+        },
+        vertexShader: /* glsl */ `
       varying vec2 vUv;
       void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.); }
     `,
-    fragmentShader: /* glsl */ `
+        fragmentShader: /* glsl */ `
       uniform sampler2D tDiffuse;
       uniform vec2  uSunScreen;
       uniform float uSunVisible;
@@ -624,95 +624,95 @@ export function createPostFX(
         gl_FragColor = texture2D(tDiffuse, vUv) + vec4(accum, 0.0);
       }
     `,
-  };
-  const crepPass = new ShaderPass(CrepuscularShader);
-  crepPass.uniforms['uTaps'].value = ts.crepuscularTaps;
-  composer.addPass(crepPass);
+    };
+    const crepPass = new ShaderPass(CrepuscularShader);
+    crepPass.uniforms['uTaps'].value = ts.crepuscularTaps;
+    composer.addPass(crepPass);
 
-  const grade = new ShaderPass(GradeShader);
-  // This shader performs ACES and the sRGB transfer itself. Prevent Three from
-  // injecting a second tone-mapping prelude if this pass is ever temporarily
-  // made the final screen pass by profiling or debugging tools.
-  grade.material.toneMapped = false;
-  grade.uniforms.tEdges.value = edgeMask.texture;
-  grade.uniforms.toneMappingExposure.value = renderer.toneMappingExposure;
-  grade.uniforms.uAberration.value = 0.0008;
-  // When EdgeMaskPass is skipped, zero the opacities so the black fallback
-  // texture fed to tEdges is invisible in the grade pass.
-  if (!ts.edgeMask) {
-    grade.uniforms.uEdgeDarkOpacity.value = 0.0;
-    grade.uniforms.uEdgeLightOpacity.value = 0.0;
-  }
-  composer.addPass(grade);
+    const grade = new ShaderPass(GradeShader);
+    // This shader performs ACES and the sRGB transfer itself. Prevent Three from
+    // injecting a second tone-mapping prelude if this pass is ever temporarily
+    // made the final screen pass by profiling or debugging tools.
+    grade.material.toneMapped = false;
+    grade.uniforms.tEdges.value = edgeMask.texture;
+    grade.uniforms.toneMappingExposure.value = renderer.toneMappingExposure;
+    grade.uniforms.uAberration.value = 0.0008;
+    // When EdgeMaskPass is skipped, zero the opacities so the black fallback
+    // texture fed to tEdges is invisible in the grade pass.
+    if (!ts.edgeMask) {
+        grade.uniforms.uEdgeDarkOpacity.value = 0.0;
+        grade.uniforms.uEdgeLightOpacity.value = 0.0;
+    }
+    composer.addPass(grade);
 
-  // AA pass — SMAA (high/mid), FXAA (low), or none (very-low).
-  // All paths: needsSwap=false keeps RenderPass from alternating rt1/rt2,
-  // which caused the atmosphere depth texture mismatch and full-screen flash.
-  let aaResolutionUniforms: { value: THREE.Vector2 } | null = null;
-  if (ts.aaQuality === 'smaa') {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const smaa = new (SMAAPass as any)(size.x * dpr, size.y * dpr) as SMAAPass;
-    smaa.needsSwap = false;
-    composer.addPass(smaa);
-    const smaaAny = smaa as unknown as { uniforms?: { resolution: { value: THREE.Vector2 } } };
-    if (smaaAny.uniforms?.resolution) aaResolutionUniforms = smaaAny.uniforms.resolution;
-  } else if (ts.aaQuality === 'fxaa') {
-    const fxaa = new ShaderPass(FXAAShader);
-    fxaa.needsSwap = false;
-    fxaa.uniforms['resolution'].value.set(1 / (size.x * dpr), 1 / (size.y * dpr));
-    composer.addPass(fxaa);
-    aaResolutionUniforms = fxaa.uniforms['resolution'];
-  }
-  // 'none': no AA pass added — fastest path for very-low tier
+    // AA pass — SMAA (high/mid), FXAA (low), or none (very-low).
+    // All paths: needsSwap=false keeps RenderPass from alternating rt1/rt2,
+    // which caused the atmosphere depth texture mismatch and full-screen flash.
+    let aaResolutionUniforms: { value: THREE.Vector2 } | null = null;
+    if (ts.aaQuality === 'smaa') {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const smaa = new (SMAAPass as any)(size.x * dpr, size.y * dpr) as SMAAPass;
+        smaa.needsSwap = false;
+        composer.addPass(smaa);
+        const smaaAny = smaa as unknown as { uniforms?: { resolution: { value: THREE.Vector2 } } };
+        if (smaaAny.uniforms?.resolution) aaResolutionUniforms = smaaAny.uniforms.resolution;
+    } else if (ts.aaQuality === 'fxaa') {
+        const fxaa = new ShaderPass(FXAAShader);
+        fxaa.needsSwap = false;
+        fxaa.uniforms['resolution'].value.set(1 / (size.x * dpr), 1 / (size.y * dpr));
+        composer.addPass(fxaa);
+        aaResolutionUniforms = fxaa.uniforms['resolution'];
+    }
+    // 'none': no AA pass added — fastest path for very-low tier
 
-  const setRes = (w: number, h: number) => {
-    const p = renderer.getPixelRatio();
-    haze.uniforms.uResolution.value.set(w * p, h * p);
-    // focal length in pixels — converts a world-space radius at a given view
-    // depth into a screen-space one
-    haze.uniforms.uFocal.value = camera.projectionMatrix.elements[5] * h * p * 0.5;
-    if (aaResolutionUniforms) aaResolutionUniforms.value.set(1 / (w * p), 1 / (h * p));
-  };
-  setRes(size.x, size.y);
+    const setRes = (w: number, h: number) => {
+        const p = renderer.getPixelRatio();
+        haze.uniforms.uResolution.value.set(w * p, h * p);
+        // focal length in pixels — converts a world-space radius at a given view
+        // depth into a screen-space one
+        haze.uniforms.uFocal.value = camera.projectionMatrix.elements[5] * h * p * 0.5;
+        if (aaResolutionUniforms) aaResolutionUniforms.value.set(1 / (w * p), 1 / (h * p));
+    };
+    setRes(size.x, size.y);
 
-  return {
-    composer,
-    bloom,
-    grade,
-    haze,
-    target,
-    edgeMask,
-    edgePass,
-    setSunScreenPos(x: number, y: number, visible: number): void {
-      crepPass.uniforms['uSunScreen'].value.set(x, y);
-      crepPass.uniforms['uSunVisible'].value = visible;
-    },
-    render(dt: number) {
-      grade.uniforms.uTime.value += dt;
-      const u = haze.uniforms;
-      u.uTime.value += dt;
-      u.uNear.value = camera.near;
-      u.uFar.value = camera.far;
-      u.uInvProj.value.copy(camera.projectionMatrixInverse);
-      u.uInvView.value.copy(camera.matrixWorld);
-      u.uCamPos.value.copy(camera.position);
-      type ExtFog = THREE.FogExp2 & { enabled?: boolean; aerialD?: number };
-      const extFog = scene.fog as ExtFog | null;
-      const fogEnabled = extFog?.enabled !== false;
-      if (extFog?.aerialD) {
-        u.uAerialD.value = fogEnabled ? extFog.aerialD : 1e9;
-      }
-      u.uMistMax.value = fogEnabled ? authoredMistMax : 0;
-      composer.render(dt);
-    },
-    setSize(w: number, h: number) {
-      const dpr = renderer.getPixelRatio();
-      composer.setPixelRatio(dpr);
-      composer.setSize(w, h);
-      sceneFBO.setSize(w * dpr, h * dpr);
-      edgeMask.setSize(w * dpr, h * dpr);
-      setRes(w, h);
-    },
-    depthTexture,
-  };
+    return {
+        composer,
+        bloom,
+        grade,
+        haze,
+        target,
+        edgeMask,
+        edgePass,
+        setSunScreenPos(x: number, y: number, visible: number): void {
+            crepPass.uniforms['uSunScreen'].value.set(x, y);
+            crepPass.uniforms['uSunVisible'].value = visible;
+        },
+        render(dt: number) {
+            grade.uniforms.uTime.value += dt;
+            const u = haze.uniforms;
+            u.uTime.value += dt;
+            u.uNear.value = camera.near;
+            u.uFar.value = camera.far;
+            u.uInvProj.value.copy(camera.projectionMatrixInverse);
+            u.uInvView.value.copy(camera.matrixWorld);
+            u.uCamPos.value.copy(camera.position);
+            type ExtFog = THREE.FogExp2 & { enabled?: boolean; aerialD?: number };
+            const extFog = scene.fog as ExtFog | null;
+            const fogEnabled = extFog?.enabled !== false;
+            if (extFog?.aerialD) {
+                u.uAerialD.value = fogEnabled ? extFog.aerialD : 1e9;
+            }
+            u.uMistMax.value = fogEnabled ? authoredMistMax : 0;
+            composer.render(dt);
+        },
+        setSize(w: number, h: number) {
+            const dpr = renderer.getPixelRatio();
+            composer.setPixelRatio(dpr);
+            composer.setSize(w, h);
+            sceneFBO.setSize(w * dpr, h * dpr);
+            edgeMask.setSize(w * dpr, h * dpr);
+            setRes(w, h);
+        },
+        depthTexture,
+    };
 }

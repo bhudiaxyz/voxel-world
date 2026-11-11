@@ -59,14 +59,14 @@ src/
 
 Three.js default axes apply throughout: **Y is up**, +X is east, +Z is south. All physics, voxel addressing, and noise sampling use this space directly — no axis remapping anywhere in the codebase.
 
-| Constant | Value | Meaning |
-| --- | --- | --- |
-| `WORLD.size` | 512 | World XZ extent in voxels (configurable via `size` param) |
-| `WORLD.height` | 96 | Maximum Y in voxels |
-| `WORLD.step` | 3 | One terrace step height in voxels |
-| `WATER.level` | 24.35 | Water plane Y (fractional keeps plane above the top shore face) |
-| `SEA` | 24 | `Math.floor(WATER.level)` — integer sea level used for voxel comparisons |
-| `CHUNK` | 16 | Chunk edge length in voxels; chunks are `16×96×16` |
+| Constant       | Value | Meaning                                                                  |
+| -------------- | ----- | ------------------------------------------------------------------------ |
+| `WORLD.size`   | 512   | World XZ extent in voxels (configurable via `size` param)                |
+| `WORLD.height` | 96    | Maximum Y in voxels                                                      |
+| `WORLD.step`   | 3     | One terrace step height in voxels                                        |
+| `WATER.level`  | 24.35 | Water plane Y (fractional keeps plane above the top shore face)          |
+| `SEA`          | 24    | `Math.floor(WATER.level)` — integer sea level used for voxel comparisons |
+| `CHUNK`        | 16    | Chunk edge length in voxels; chunks are `16×96×16`                       |
 
 **Voxel addressing** — flat array, row-major XZY: `index = x + sx * (z + sz * y)`. Column height cache uses `height[z * sx + x]` (ZX row-major) so a Z-outer loop over the heightfield is cache-friendly.
 
@@ -221,6 +221,7 @@ Adds moon disc + glow, then (when `clearNight > 0.01`): Milky Way with Great Rif
 Animated curtain aurora. Gated by `uNight * uAurora * smoothstep(0.04, 0.10, dir.y)`.
 
 Layers:
+
 - **Curtain band** — lower edge shaped by multi-frequency azimuthal ripple (slow drift + medium wave + fast flutter via `uAuroraTime * 4.0`); upper edge fades with `1.0 - smoothstep(0.38, 0.82, dir.y)` (edge0 < edge1; the original code had these inverted — that caused NaN on most drivers).
 - **Vertical rays** — slow structural noise (`t * 0.5`) plus a 4× faster shimmer layer; the two beating together cause rays to appear to ignite and die.
 - **Sweep pulse** — `sin(az * 1.7 + t * 0.5) * sin(az * 0.8 - t * 0.28)` — a brightness wave that travels across the azimuth.
@@ -230,6 +231,7 @@ Layers:
 All noise in `_aurora` uses direct `_noise3()` calls (no `_fbm3` loop). The FBM loop triggers ANGLE warning X3595 ("gradient instruction used in a loop with varying iteration") on Windows via the HLSL translator. Two inline octaves are sufficient for aurora structure.
 
 **Uniforms driven by `day-night.ts`:**
+
 - `uNight` — `getNightFactor()` result
 - `uAurora` — `max(0, (nightF - 0.5) / 0.5)` (fades in over second half of night)
 - `uAuroraTime` — accumulates `+= dt * 0.3` (independent of star rotation speed)
@@ -257,7 +259,7 @@ Sun direction is `(−cos(2πt), sin(2πt)×1.1 − 0.1, 0.3).normalize()` — s
 ### `getNightFactor()`
 
 ```ts
-const d = Math.abs(this.timeOfDay - 0.5) * 2;  // 0 at noon, 1 at midnight
+const d = Math.abs(this.timeOfDay - 0.5) * 2; // 0 at noon, 1 at midnight
 return Math.max(0, (d - 0.3) / 0.7);
 ```
 
@@ -307,27 +309,27 @@ return 'low';
 
 Known device routing:
 
-| Device | Tier |
-| --- | --- |
-| Samsung Galaxy S22 Ultra (8-core, 12 GB) | mobile-high |
-| Apple iPad Pro M2 (8-core, Safari: probe→4 GB) | mobile-high |
-| Apple iPad Air M2 (8-core, 4 GB) | mobile-high |
-| Apple iPad Air A14 (6-core, 4 GB) | mid |
-| MacBook Air M2 (8-core, 8 GB, maxTex=16384) | high |
-| Intel UHD laptop (8-core, 16 GB, maxTex=8192) | mid |
-| 2019 mid-range phone (6-core, 3 GB) | mid |
-| Budget phone (4-core, 2 GB) | low (desktop) / very-low (mobile) |
-| 7-year-old phone (no WebGL2) | very-low |
+| Device                                         | Tier                              |
+| ---------------------------------------------- | --------------------------------- |
+| Samsung Galaxy S22 Ultra (8-core, 12 GB)       | mobile-high                       |
+| Apple iPad Pro M2 (8-core, Safari: probe→4 GB) | mobile-high                       |
+| Apple iPad Air M2 (8-core, 4 GB)               | mobile-high                       |
+| Apple iPad Air A14 (6-core, 4 GB)              | mid                               |
+| MacBook Air M2 (8-core, 8 GB, maxTex=16384)    | high                              |
+| Intel UHD laptop (8-core, 16 GB, maxTex=8192)  | mid                               |
+| 2019 mid-range phone (6-core, 3 GB)            | mid                               |
+| Budget phone (4-core, 2 GB)                    | low (desktop) / very-low (mobile) |
+| 7-year-old phone (no WebGL2)                   | very-low                          |
 
 ### Settings table
 
-| Tier | DPR cap | Shadow (px) | Blur samples | Bloom | AO taps | DoF | Crep. taps | Edge mask | Stream radius |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| high | 2× | 3072 | 12 | ✓ | 8 | ✓ | 8 | ✓ | 12 |
-| mobile-high | 1.5× | 2048 | 8 | ✓ | 4 | ✓ | 4 | — | 11 |
-| mid | 1.25× | 2048 | 8 | ✓ | 4 | ✓ | 4 | — | 11 |
-| low | 1× | 1024 | 4 | — | 0 | — | 0 | — | 8 |
-| very-low | 1× | 512 | 4 | — | 0 | — | 0 | — | 6 |
+| Tier        | DPR cap | Shadow (px) | Blur samples | Bloom | AO taps | DoF | Crep. taps | Edge mask | Stream radius |
+| ----------- | ------- | ----------- | ------------ | ----- | ------- | --- | ---------- | --------- | ------------- |
+| high        | 2×      | 3072        | 12           | ✓     | 8       | ✓   | 8          | ✓         | 12            |
+| mobile-high | 1.5×    | 2048        | 8            | ✓     | 4       | ✓   | 4          | —         | 11            |
+| mid         | 1.25×   | 2048        | 8            | ✓     | 4       | ✓   | 4          | —         | 11            |
+| low         | 1×      | 1024        | 4            | —     | 0       | —   | 0          | —         | 8             |
+| very-low    | 1×      | 512         | 4            | —     | 0       | —   | 0          | —         | 6             |
 
 `EdgeMaskPass` is disabled on all mobile tiers — it doubles draw calls for little visual gain on smaller screens. `dprCap` is applied as `min(window.devicePixelRatio, cap)` so it can only reduce the native DPR, never raise it.
 
@@ -384,6 +386,7 @@ islandMinSep    = islandRadius * 2.2
 The heightfield is built as a stack of **contour discs**: each disc is a domain-warped circle (using FBM noise to make the boundary organic) worth exactly one terrace step (`WORLD.step = 3` blocks). Inside a disc the field is exactly constant — flatness is free, cliffs are the disc boundaries.
 
 Post-processing passes:
+
 1. **River carving** — after terracing, a river path is carved as a smooth channel (un-stepped) through the valley.
 2. **Ledge pass** — splits the tallest cliffs with long horizontal shelves.
 3. **Stair carving** — cuts walkable steps into cliff faces until the world is fully walk-connected.
@@ -423,8 +426,11 @@ Above sea level, river channels are filled with `RIVER_WATER` voxels (3 blocks a
 
 ```ts
 export const RIVER_WATER = registerBlock('RIVER_WATER', {
-  top: lin(0x4fa8bc), side: lin(0x3d97ae), bottom: lin(0x2e8899),
-  rough: 0.05, isWater: true,
+    top: lin(0x4fa8bc),
+    side: lin(0x3d97ae),
+    bottom: lin(0x2e8899),
+    rough: 0.05,
+    isWater: true,
 });
 ```
 
@@ -449,6 +455,7 @@ Rivers are drawn on the minimap in `bakeTerrain()` after the terrain image is wr
 ### Depth map
 
 `makeDepthMap(world)` bakes a `THREE.DataTexture` in `RGFormat`:
+
 - **R** — signed water depth: `(WATER.level − (top+1) + DEPTH_RANGE) / (2 × DEPTH_RANGE)`, range ±34 world units. Signed rather than clamped so the shader has a real path length for Beer-Lambert integration, and the waterline dark edge is drawn at the zero-crossing (clamped fields have no gradient at the shore).
 - **G** — river proximity 0–255 from `rivFlow`.
 
@@ -468,6 +475,7 @@ Red goes first (`uExtinction.r` highest), which is why deep water reads as blue-
 ### River proximity
 
 `rivProx` from the G channel drives two effects:
+
 - Wave speed multiplier: `float riverSpeed = 1.0 + rivProx * 1.8`
 - Bank foam: `smoothstep` band near the shore blended toward `vec3(0.90, 0.92, 0.96)`
 - Subtle blue tint: `col * vec3(0.88, 0.95, 1.06) * rivProx * 0.28`
@@ -504,7 +512,7 @@ void applyPlanetBend(inout vec3 worldPos, inout vec3 worldNormal) {
 
 ```ts
 if (Math.abs(bendOrigin.x - _lastPlanetX) + Math.abs(bendOrigin.z - _lastPlanetZ) > 0.1) {
-  for (const unis of world.allPlanetUnis) updatePlanetUniforms(unis, bendOrigin);
+    for (const unis of world.allPlanetUnis) updatePlanetUniforms(unis, bendOrigin);
 }
 ```
 
@@ -613,20 +621,20 @@ On startup (`main.ts`):
 
 `buildWorld` (`src/world/world.ts`) drives the loading bar via an `onProgress(fraction, label)` callback. Each step yields to the browser before the next synchronous block so the label is visible before the work starts. `generateTerrain` receives a sub-callback that maps its internal 0–1 range into the 0.06–0.24 window.
 
-| Progress | Label | Source |
-| --- | --- | --- |
-| 0.02 | drawing the map | `planWorld` — continent layout, region graph, river routing |
-| *(yield)* | | browser paints before synchronous terrain block |
-| 0.06 | sculpting the terrain | `generateTerrain` — macro relief discs, contour field |
-| 0.14 | carving the rivers | `generateTerrain` — river distance field + bank carving |
-| 0.19 | shaping the banks | `generateTerrain` — walkability, stairs, boulders |
-| 0.21 | filling the voxels | `generateTerrain` — voxel fill loop |
-| 0.26 | building the crossings | `buildStructures` — bridges, stepping stones |
-| 0.34 | placing scenes and landmarks | `buildStamps` — scenic stamps (groves, hot springs, overlooks…) + landmark structures (spires, wells, arches…) |
-| 0.40 | growing the forests | `scatterVegetation` — trees, mushrooms, crystals |
-| 0.50 | finding the path | `findSpawn` — locate a good player start position |
-| 0.54 → 0.96 | meshing the world | chunk streaming preload (per-chunk sub-progress) |
-| 1.0 | ready | loading overlay fades out |
+| Progress    | Label                        | Source                                                                                                         |
+| ----------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| 0.02        | drawing the map              | `planWorld` — continent layout, region graph, river routing                                                    |
+| _(yield)_   |                              | browser paints before synchronous terrain block                                                                |
+| 0.06        | sculpting the terrain        | `generateTerrain` — macro relief discs, contour field                                                          |
+| 0.14        | carving the rivers           | `generateTerrain` — river distance field + bank carving                                                        |
+| 0.19        | shaping the banks            | `generateTerrain` — walkability, stairs, boulders                                                              |
+| 0.21        | filling the voxels           | `generateTerrain` — voxel fill loop                                                                            |
+| 0.26        | building the crossings       | `buildStructures` — bridges, stepping stones                                                                   |
+| 0.34        | placing scenes and landmarks | `buildStamps` — scenic stamps (groves, hot springs, overlooks…) + landmark structures (spires, wells, arches…) |
+| 0.40        | growing the forests          | `scatterVegetation` — trees, mushrooms, crystals                                                               |
+| 0.50        | finding the path             | `findSpawn` — locate a good player start position                                                              |
+| 0.54 → 0.96 | meshing the world            | chunk streaming preload (per-chunk sub-progress)                                                               |
+| 1.0         | ready                        | loading overlay fades out                                                                                      |
 
 The settings panel's seed input and the pause menu's **Generate new world** button both call `pushSeedUrl(newWord)` then `location.reload()`, which re-enters the startup path with the new seed in the URL.
 
@@ -642,15 +650,31 @@ The settings panel's seed input and the pause menu's **Generate new world** butt
 
 ```ts
 interface VoxelPalette {
-  blocks: { GRASS_TOP, GRASS_SIDE, SOIL, SAND, STONE, STONE_PALE, STONE_WARM,
-            LEAF_ROUND, LEAF_SPIRE, LEAF_PALM, LEAF_BROAD, LEAF_WEEPING };
-  sky:    { zenith: number; horizon: number; haze: number; ground: number;
-            sunTint: number };
-  light:  { sunColor: number; skyColor: number; groundColor: number };
-  water:  { shoal: number; shallow: number; deep: number; extinction: THREE.Vector3 };
-  petals: number[];   // array of hex colours for petal particles
-  grade:  { lift: THREE.Color; gamma: THREE.Color; gain: THREE.Color;
-            saturation: number; bloom: { strength: number; radius: number; threshold: number } };
+    blocks: {
+        GRASS_TOP;
+        GRASS_SIDE;
+        SOIL;
+        SAND;
+        STONE;
+        STONE_PALE;
+        STONE_WARM;
+        LEAF_ROUND;
+        LEAF_SPIRE;
+        LEAF_PALM;
+        LEAF_BROAD;
+        LEAF_WEEPING;
+    };
+    sky: { zenith: number; horizon: number; haze: number; ground: number; sunTint: number };
+    light: { sunColor: number; skyColor: number; groundColor: number };
+    water: { shoal: number; shallow: number; deep: number; extinction: THREE.Vector3 };
+    petals: number[]; // array of hex colours for petal particles
+    grade: {
+        lift: THREE.Color;
+        gamma: THREE.Color;
+        gain: THREE.Color;
+        saturation: number;
+        bloom: { strength: number; radius: number; threshold: number };
+    };
 }
 ```
 
@@ -665,6 +689,7 @@ Non-palette constants (PATH, PLANK, BEAM, TRUNK, CRYSTAL, CLOTH, ROOF, etc.) are
 ### `setVoxelPalette(name)`
 
 Mutates in place:
+
 1. **Block colours** — `BLOCK_BY_ID` entries for all palette-driven block IDs.
 2. **`SKY`** — zenith, horizon, haze, ground, sunTint.
 3. **`LIGHT`** — sunColor, skyColor, groundColor.
@@ -747,14 +772,14 @@ The loading overlay (`#boot` in `index.html`) shows a spinning CSS 3D voxel cube
 
 ```html
 <div class="ls-emblem">
-  <div class="ls-cube">
-    <div class="ls-face ls-face--top"></div>
-    <div class="ls-face ls-face--bottom"></div>
-    <div class="ls-face ls-face--front"></div>
-    <div class="ls-face ls-face--back"></div>
-    <div class="ls-face ls-face--left"></div>
-    <div class="ls-face ls-face--right"></div>
-  </div>
+    <div class="ls-cube">
+        <div class="ls-face ls-face--top"></div>
+        <div class="ls-face ls-face--bottom"></div>
+        <div class="ls-face ls-face--front"></div>
+        <div class="ls-face ls-face--back"></div>
+        <div class="ls-face ls-face--left"></div>
+        <div class="ls-face ls-face--right"></div>
+    </div>
 </div>
 ```
 
@@ -770,16 +795,16 @@ When the `.ready` class is added, `#boot.ready .ls-emblem { opacity: 0 }` fades 
 
 Applied across the codebase:
 
-| # | File | Fix |
-| --- | --- | --- |
-| 1 | `gpu-tier.ts` | WebGL probe context released with `WEBGL_lose_context` after reading `MAX_TEXTURE_SIZE`, preventing the probe canvas from holding a GPU context indefinitely. |
-| 2 | `main.ts` | Wind guard corrected: `wu._windBase > 0` (scalar) instead of `if (wu.uWindStrength)` (always-truthy uniform object). |
-| 3 | `voxel.ts` | Wind sway height factor uses world Y (`transformed.y / 28.0`) instead of `aData.w`, giving correct crown-amplified sway. |
-| 4 | `day-night.ts` | `shadowMap.needsUpdate` guarded behind a sun-elevation delta threshold (>0.009 in Y). Shadows only re-render when the sun moves visibly, halving shadow cost on static scenes. |
-| 5 | `main.ts` | `atmo.followTarget()` skipped when the player is stationary — only called when `manualMovement`, `fly.active`, or `drone.active`. |
-| 6 | `main.ts` | `clock.update()` restored before `clock.getDelta()`. `THREE.Timer.getDelta()` returns the cached `_delta` field; it does **not** call `update()` internally. Removing it caused `rawDt = 0` every frame, freezing all physics. |
-| 7 | `gpu-tier.ts` | `very-low` water subdivision reduced from 8×8 to 4×4. |
-| 8 | `main.ts` | Wind calculation skipped entirely on `very-low` tier — the uniform object is never fetched. |
+| #   | File           | Fix                                                                                                                                                                                                                            |
+| --- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | `gpu-tier.ts`  | WebGL probe context released with `WEBGL_lose_context` after reading `MAX_TEXTURE_SIZE`, preventing the probe canvas from holding a GPU context indefinitely.                                                                  |
+| 2   | `main.ts`      | Wind guard corrected: `wu._windBase > 0` (scalar) instead of `if (wu.uWindStrength)` (always-truthy uniform object).                                                                                                           |
+| 3   | `voxel.ts`     | Wind sway height factor uses world Y (`transformed.y / 28.0`) instead of `aData.w`, giving correct crown-amplified sway.                                                                                                       |
+| 4   | `day-night.ts` | `shadowMap.needsUpdate` guarded behind a sun-elevation delta threshold (>0.009 in Y). Shadows only re-render when the sun moves visibly, halving shadow cost on static scenes.                                                 |
+| 5   | `main.ts`      | `atmo.followTarget()` skipped when the player is stationary — only called when `manualMovement`, `fly.active`, or `drone.active`.                                                                                              |
+| 6   | `main.ts`      | `clock.update()` restored before `clock.getDelta()`. `THREE.Timer.getDelta()` returns the cached `_delta` field; it does **not** call `update()` internally. Removing it caused `rawDt = 0` every frame, freezing all physics. |
+| 7   | `gpu-tier.ts`  | `very-low` water subdivision reduced from 8×8 to 4×4.                                                                                                                                                                          |
+| 8   | `main.ts`      | Wind calculation skipped entirely on `very-low` tier — the uniform object is never fetched.                                                                                                                                    |
 
 ---
 
@@ -791,14 +816,14 @@ Applied across the codebase:
 
 Each grammar re-validates the terrain before building. A site whose conditions are not met downgrades to the next grammar in the preference list rather than building on wrong terrain.
 
-| Grammar | Requires | Generates |
-| --- | --- | --- |
+| Grammar           | Requires                          | Generates                                                                       |
+| ----------------- | --------------------------------- | ------------------------------------------------------------------------------- |
 | `waterfallGarden` | 6+ block cliff with water at foot | Cascade, plunge pool, spray rocks, viewing deck, framing trees, lanterns, reeds |
-| `stoneCrossing` | River node with dry banks | Stepping stones, plank jetty, framing trees, reeds |
-| `lilyPond` | Level clearing near waterline | Excavated basin, sand rim, lily pads, leaning tree |
-| `blossomGrove` | Level open ground | Torii gate, swept floor, great tree, secondary ring, lanterns |
-| `cliffOverlook` | Level ground with 7+ block drop | Paved terrace, parapet, bench, lanterns, one tree |
-| `hotSpring` | Dry inland mid-elevation ground | Oval RIVER_WATER pool on STONE_WARM floor, boulder rim, leaf-moss scatter |
+| `stoneCrossing`   | River node with dry banks         | Stepping stones, plank jetty, framing trees, reeds                              |
+| `lilyPond`        | Level clearing near waterline     | Excavated basin, sand rim, lily pads, leaning tree                              |
+| `blossomGrove`    | Level open ground                 | Torii gate, swept floor, great tree, secondary ring, lanterns                   |
+| `cliffOverlook`   | Level ground with 7+ block drop   | Paved terrace, parapet, bench, lanterns, one tree                               |
+| `hotSpring`       | Dry inland mid-elevation ground   | Oval RIVER_WATER pool on STONE_WARM floor, boulder rim, leaf-moss scatter       |
 
 Separation: `MIN_SEPARATION = 34` blocks between any two scene centres. Quotas (`QUOTA`) cap each kind per 256×256 area so one type does not dominate. `hotspring` quota: 2 per area.
 
@@ -806,15 +831,15 @@ Separation: `MIN_SEPARATION = 34` blocks between any two scene centres. Quotas (
 
 One pass per continent after scenic stamps. Seven kinds, 2–3 per continent slot, shuffled per seed. Each landmark reserves its footprint against the vegetation scatter pass. All seven kinds are registered in `map.ts` and appear on the minimap as landmark circles.
 
-| Grammar | Generates |
-| --- | --- |
-| `twistedSpire` | 3×3 warm-stone base, 14–22 block drifting pale-stone shaft (shifts 1 block each 4 levels, max ±2), cap block |
-| `obelisk` | 3×3 base, 8–13 block straight shaft, lanterns on either side |
-| `monolithRing` | 7–8 standing stones at radius 10–13, every-other lintel, PATH floor |
-| `tombstoneField` | 14–22 scattered upright slabs 2–4 blocks tall, random lean caps |
+| Grammar             | Generates                                                                                                                              |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `twistedSpire`      | 3×3 warm-stone base, 14–22 block drifting pale-stone shaft (shifts 1 block each 4 levels, max ±2), cap block                           |
+| `obelisk`           | 3×3 base, 8–13 block straight shaft, lanterns on either side                                                                           |
+| `monolithRing`      | 7–8 standing stones at radius 10–13, every-other lintel, PATH floor                                                                    |
+| `tombstoneField`    | 14–22 scattered upright slabs 2–4 blocks tall, random lean caps                                                                        |
 | `floatingBiosphere` | Ovoid voxel body floating 20–32 blocks above terrain (grass cap → soil → warm-stone core), 8 stalactite drips below, small tree on top |
-| `ancientWell` | Stone rim (3×3 ring), STONE_PALE crossbeam, PATH clearing radius 5, scattered worn stones |
-| `ruinedArch` | Two pillars 5–7 blocks tall, partial lintel (1–2 centre blocks missing), rubble scatter |
+| `ancientWell`       | Stone rim (3×3 ring), STONE_PALE crossbeam, PATH clearing radius 5, scattered worn stones                                              |
+| `ruinedArch`        | Two pillars 5–7 blocks tall, partial lintel (1–2 centre blocks missing), rubble scatter                                                |
 
 The floating biosphere uses `T.put()` at `floatY + dy` offsets, bypassing the heightfield entirely. Stalactite length tapers from `STONE_WARM` (tip) through `STONE_PALE` to `STONE` (base).
 
@@ -826,22 +851,22 @@ The ruined arch spans along the X axis; the gap is randomised per seed so no two
 
 `src/world/vegetation.ts` — `plantTree()` supports fourteen silhouette forms:
 
-| Form | Silhouette | Primary biomes |
-| --- | --- | --- |
-| `round` | Classic round crown | All |
-| `stack` | Tiered stacking | All |
-| `twin` | Two-lobed top | All |
-| `bunch` | Tight cluster | All |
-| `nub` | Small compact cap | All (small scale) |
-| `spire` | Tall narrow cone | HIGHLAND, CONIFER |
-| `umbrella` | Flat wide canopy | MEADOW, SHORE |
-| `broad` | Low spreading crown | MEADOW, WETLAND |
-| `tall` | Birch/poplar — very tall bare trunk, small airy crown | MEADOW |
-| `layered` | Pagoda/cedar — 2–4 tiered horizontal discs with gaps | SAKURA |
-| `weeping` | Weeping cherry — wide drooping skirt, lifted central crown | SAKURA |
-| `palm` | Curved trunk, frond canopy with satellite clusters | SHORE (double-weighted) |
-| `dead` | Bare skeletal stubs, optional lean caps | HIGHLAND (double-weighted), SHORE |
-| `mangrove` | Aerial-root spread base, tiered canopy by scale | WETLAND (double-weighted) |
+| Form       | Silhouette                                                 | Primary biomes                    |
+| ---------- | ---------------------------------------------------------- | --------------------------------- |
+| `round`    | Classic round crown                                        | All                               |
+| `stack`    | Tiered stacking                                            | All                               |
+| `twin`     | Two-lobed top                                              | All                               |
+| `bunch`    | Tight cluster                                              | All                               |
+| `nub`      | Small compact cap                                          | All (small scale)                 |
+| `spire`    | Tall narrow cone                                           | HIGHLAND, CONIFER                 |
+| `umbrella` | Flat wide canopy                                           | MEADOW, SHORE                     |
+| `broad`    | Low spreading crown                                        | MEADOW, WETLAND                   |
+| `tall`     | Birch/poplar — very tall bare trunk, small airy crown      | MEADOW                            |
+| `layered`  | Pagoda/cedar — 2–4 tiered horizontal discs with gaps       | SAKURA                            |
+| `weeping`  | Weeping cherry — wide drooping skirt, lifted central crown | SAKURA                            |
+| `palm`     | Curved trunk, frond canopy with satellite clusters         | SHORE (double-weighted)           |
+| `dead`     | Bare skeletal stubs, optional lean caps                    | HIGHLAND (double-weighted), SHORE |
+| `mangrove` | Aerial-root spread base, tiered canopy by scale            | WETLAND (double-weighted)         |
 
 `pickForm(scale, rng)` selects a form based on tree scale: large trees (`scale > 0.72`) may be `palm`; medium (`scale > 0.46`) may be `mangrove`; small-medium (`scale > 0.26`) may be `dead`. `BIOME_FLORA` per-biome tables further bias toward biome-appropriate forms via weighted repetition in the `forms` array. Updated biomes:
 
