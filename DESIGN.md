@@ -453,7 +453,7 @@ Most world materials are stock Three.js materials extended through `onBeforeComp
 
 | Material                      | Base                  | Injected                                                                                                                                                                                                   | Cache key                 |
 | ----------------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
-| Terrain (`makeVoxelMaterial`) | `MeshLambertMaterial` | procedural patterns (brick, stone, plank, bark, grass, tile), grass fringe, macro colour noise, face shading, sun/ambient tints, baked AO, waterline ink, coloured VSM shadow tint, wind sway, planet bend | `VoxelWorld-voxel-v10`    |
+| Terrain (`makeVoxelMaterial`) | `MeshLambertMaterial` | procedural patterns (brick, stone, plank, bark, grass, tile), grass fringe, macro colour noise, face shading, sun/ambient tints, baked AO, waterline ink, coloured VSM shadow tint, wind sway, planet bend | `VoxelWorld-voxel-v11`    |
 | Glow                          | `MeshBasicMaterial`   | face shading ×1.5, planet bend                                                                                                                                                                             | `VoxelWorld-glow-v3`      |
 | Ground detail (`DetailField`) | `MeshLambertMaterial` | per-vertex wind (`aDetail` = sway, phase), planet bend. `DoubleSide`, `depthWrite: false`, `renderOrder = 2`                                                                                               | `VoxelWorld-vegdetail-v7` |
 | Water, sky, edges, particles  | `ShaderMaterial`      | written in full                                                                                                                                                                                            | —                         |
@@ -863,26 +863,59 @@ Behaviour states:
 
 ### Trees & bushes (`world/vegetation.ts`)
 
-Trees are voxels written into the grid, so they get meshing, AO, edges and collision for free. `plantTree()` supports fourteen silhouettes:
+Trees are voxels written into the grid, so they get meshing, AO, edges and collision for free. `plantTree()` takes a `form`, and there are two families of form.
 
-| Form       | Silhouette                                                | Primary biomes                    |
-| ---------- | --------------------------------------------------------- | --------------------------------- |
-| `round`    | Classic round crown                                       | All                               |
-| `stack`    | Tiered stacking                                           | All                               |
-| `twin`     | Two-lobed top                                             | All                               |
-| `bunch`    | Tight cluster                                             | All                               |
-| `nub`      | Small compact cap                                         | All (small scale)                 |
-| `spire`    | Tall narrow cone                                          | HIGHLAND, CONIFER                 |
-| `umbrella` | Flat wide canopy                                          | MEADOW, SHORE                     |
-| `broad`    | Low spreading crown                                       | MEADOW, WETLAND                   |
-| `tall`     | Birch/poplar: very tall bare trunk, small airy crown      | MEADOW                            |
-| `layered`  | Pagoda/cedar: 2–4 tiered horizontal discs with gaps       | SAKURA                            |
-| `weeping`  | Weeping cherry: wide drooping skirt, lifted central crown | SAKURA                            |
-| `palm`     | Curved trunk, frond canopy with satellite clusters        | SHORE (double-weighted)           |
-| `dead`     | Bare skeletal stubs, optional lean caps                   | HIGHLAND (double-weighted), SHORE |
-| `mangrove` | Aerial-root spread base, tiered canopy by scale           | WETLAND (double-weighted)         |
+**Blossom forms** are the signature pastel look. The biome's `BIOME_FLORA.forms` list picks among them, and stamp scenes use them too:
 
-`pickForm(scale, rng)` restricts forms by scale (large trees may be `palm`, medium `mangrove`, small-medium `dead`). The per-biome `BIOME_FLORA` tables bias the choice through weighted repetition in their `forms` arrays. Grove placement uses fixed-seed noise fields (`N_GROVE`, etc.) rather than the shared RNG, so forest layout doesn't depend on how many random draws came before it. An `occupied` mask records trunk cells for later passes.
+| Form            | Silhouette                                                | Used by                            |
+| --------------- | --------------------------------------------------------- | ---------------------------------- |
+| `round`         | Classic round crown                                       | sakura, meadow, wetland, shore     |
+| `stack`         | Tiered stacking (also the hero tree)                      | sakura, meadow                     |
+| `twin`          | Two-lobed top                                             | sakura, meadow                     |
+| `bunch`         | Tight cluster                                             | meadow, wetland, shore             |
+| `nub`           | Small compact cap                                         | highland, shore                    |
+| `umbrella`      | Flat wide canopy                                          | meadow, wetland, shore             |
+| `broad`         | Low spreading crown                                       | sakura, wetland                    |
+| `tall`          | Very tall bare trunk, small airy crown                    | sakura, meadow, wetland            |
+| `layered`       | Pagoda/cedar: 2–4 tiered horizontal discs with gaps       | meadow, highland, shore            |
+| `weeping`       | Weeping cherry: wide drooping skirt, lifted central crown | sakura, wetland, shore             |
+| `spire`, `dead` | Legacy cone / bare stubs                                  | stamp scenes and `pickForm()` only |
+
+**Named species** are placed **by altitude**. Each has a climate (from the continent's climate, via `plan.climateAt()`: 0 tropical, 1 temperate, 2 arid, 3 tundra) and an altitude band in blocks above sea level (`SPECIES` table):
+
+| Species    | Silhouette                                             | Climates            | Altitude | Notes      |
+| ---------- | ------------------------------------------------------ | ------------------- | -------- | ---------- |
+| `mangrove` | Stilt roots, broad low crown                           | tropical, temperate | 0–3      | wet ground |
+| `palm`     | Tall bare trunk, radiating frond disc                  | tropical, arid      | 0–5      |            |
+| `willow`   | Rounded crown with hanging strands to near the ground  | all                 | 0–8      | wet ground |
+| `cypress`  | Tall narrow column                                     | temperate, arid     | 2–10     |            |
+| `kapok`    | Very tall trunk, plank buttress roots, high flat crown | tropical            | 2–10     |            |
+| `baobab`   | Fat bottle trunk, sparse stubby crown                  | arid                | 3–11     |            |
+| `acacia`   | Forked trunk, flat savanna umbrella                    | arid, tropical      | 3–13     |            |
+| `oak`      | Broad heavy crown wider than tall                      | temperate           | 3–12     |            |
+| `birch`    | Slim pale trunk, narrow airy clumps                    | temperate, tundra   | 7–16     |            |
+| `pine`     | Tall bare trunk, compact crown with side whorls        | temperate, tundra   | 10–20    |            |
+| `fir`      | Dense symmetric cone to near the ground                | temperate, tundra   | 13–24    |            |
+| `spruce`   | Taller, narrower tiered spire with gaps                | tundra, temperate   | 16–30    |            |
+| `juniper`  | Wind-twisted scrub, lopsided pads                      | arid, tundra        | 14–30    |            |
+| `snag`     | Dead pale trunk, broken top, bare limbs                | all                 | 20–40    | treeline   |
+
+- **Band fitting:** the bands are fitted to the relief as generated. About 36% of land is 0–6 blocks above sea, 30% is 6–12, 21% is 12–18 and 13% is above 18, with peaks in the low 30s. Retune them if terrain relief changes.
+- **`pickSpecies(climate, alt, wet, rng)`:** a weighted pick. Weight is full inside a band and fades linearly to zero over `ALT_SOFT` (3) blocks outside it, so treelines blur rather than stop dead.
+- **Species trunks:** proportions come from `SPECIES_TRUNK`. Birch and snag use pale bark; baobab, kapok and juniper use dark bark. Baobab and kapok trunks are 2–3 wide.
+- **No extra tufts:** `NO_TUFTS` skips the generic extra-foliage tufts for species whose silhouette _is_ the shape (conifers, columns, hanging strands, palms) and for dead trees.
+
+**Placement** (`scatterVegetation`):
+
+1. **Hero tree:** one large `stack` on the broadest high plateau.
+2. **Grove cores, then woodland:**
+    - Each site goes to a named species with probability `1 − blossomShare`. The blossom share is sakura 0.85, meadow 0.45, highland 0.08, everything else 0.2.
+    - Otherwise the site gets the biome's blossom forms.
+    - Woodland density thins with altitude over the full ~34-block relief.
+3. **Treeline pass:** above 12 blocks, on grass _or stone_, with a 1-block slope allowed. Species only, thinning toward the very top. This is the only way alpine species get sites, because the woodland pass needs flat grass.
+4. **Waterside pass:** wet (wetness > 0.3), low (≤ 8 blocks) grass or sand, for mangrove and willow. The woodland pass rejects wet ground.
+
+Species choice and species builders draw from their own stream (`speciesRng`), so adding or retuning a species never moves the rest of the world. Grove placement uses fixed-seed noise fields (`N_GROVE`, etc.) rather than the shared RNG, so forest layout doesn't depend on how many random draws came before it. An `occupied` mask records trunk cells for later passes.
 
 ### Ground detail (`buildGroundDetail` + `world/veg-detail.ts`)
 

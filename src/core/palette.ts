@@ -58,6 +58,7 @@ export const FOG = {
  * Surface patterns — consumed by the voxel shader in core/voxel.ts
  * ------------------------------------------------------------------ */
 export const PATTERN = {
+    /** Generic subtle texture (patSurface) — nothing is ever a flat colour. */
     NONE: 0,
     BRICK: 1,
     STONE: 2,
@@ -65,6 +66,13 @@ export const PATTERN = {
     BARK: 4,
     GRASS: 5,
     TILE: 6,
+    SOIL: 7,
+    SAND: 8,
+    LEAF: 9,
+    COBBLE: 10,
+    CLOTH: 11,
+    CRYSTAL: 12,
+    // 13–15 free. The mesher packs the id into 4 bits (bit 4 is the sway flag).
 };
 
 /* ------------------------------------------------------------------ *
@@ -83,8 +91,9 @@ export const BLOCKS = {
         tint: z(),
         topTint: z(),
         fringeColor: z(),
-        pattern: PATTERN.NONE,
-        topPattern: PATTERN.NONE,
+        // Soil sides (the fringe paints the green lip over them), grass tops.
+        pattern: PATTERN.SOIL,
+        topPattern: PATTERN.GRASS,
         fringe: 0,
         grassCap: true,
         lightEdge: true,
@@ -97,8 +106,9 @@ export const BLOCKS = {
         tint: z(),
         topTint: z(),
         fringeColor: z(),
-        pattern: PATTERN.NONE,
-        topPattern: PATTERN.NONE,
+        // Soil sides (the fringe paints the green lip over them), grass tops.
+        pattern: PATTERN.SOIL,
+        topPattern: PATTERN.GRASS,
         fringe: 0,
         grassCap: true,
         lightEdge: true,
@@ -111,8 +121,9 @@ export const BLOCKS = {
         tint: z(),
         topTint: z(),
         fringeColor: z(),
-        pattern: PATTERN.NONE,
-        topPattern: PATTERN.NONE,
+        // Soil sides (the fringe paints the green lip over them), grass tops.
+        pattern: PATTERN.SOIL,
+        topPattern: PATTERN.GRASS,
         fringe: 0,
         grassCap: true,
         lightEdge: true,
@@ -125,8 +136,9 @@ export const BLOCKS = {
         tint: z(),
         topTint: z(),
         fringeColor: z(),
-        pattern: PATTERN.NONE,
-        topPattern: PATTERN.NONE,
+        // Rock sides under a grass top.
+        pattern: PATTERN.STONE,
+        topPattern: PATTERN.GRASS,
         fringe: 0,
         grassCap: true,
         stoneSubstrate: true,
@@ -140,8 +152,9 @@ export const BLOCKS = {
         tint: z(),
         topTint: z(),
         fringeColor: z(),
-        pattern: PATTERN.NONE,
-        topPattern: PATTERN.NONE,
+        // Rock sides under a grass top.
+        pattern: PATTERN.STONE,
+        topPattern: PATTERN.GRASS,
         fringe: 0,
         grassCap: true,
         stoneSubstrate: true,
@@ -155,8 +168,9 @@ export const BLOCKS = {
         tint: z(),
         topTint: z(),
         fringeColor: z(),
-        pattern: PATTERN.NONE,
-        topPattern: PATTERN.NONE,
+        // Rock sides under a grass top.
+        pattern: PATTERN.STONE,
+        topPattern: PATTERN.GRASS,
         fringe: 0,
         grassCap: true,
         stoneSubstrate: true,
@@ -168,7 +182,7 @@ export const BLOCKS = {
         side: z(),
         bottom: z(),
         tint: z(),
-        pattern: PATTERN.NONE,
+        pattern: PATTERN.SOIL,
         rough: 0.55,
     }),
     SAND: B(5, {
@@ -176,7 +190,7 @@ export const BLOCKS = {
         side: z(),
         bottom: z(),
         tint: z(),
-        pattern: PATTERN.NONE,
+        pattern: PATTERN.SAND,
         rough: 0.4,
     }),
 
@@ -186,7 +200,7 @@ export const BLOCKS = {
         side: z(),
         bottom: z(),
         tint: z(),
-        pattern: PATTERN.NONE,
+        pattern: PATTERN.STONE,
         rough: 0.6,
     }),
     STONE_PALE: B(11, {
@@ -194,7 +208,7 @@ export const BLOCKS = {
         side: z(),
         bottom: z(),
         tint: z(),
-        pattern: PATTERN.NONE,
+        pattern: PATTERN.STONE,
         rough: 0.5,
     }),
     STONE_WARM: B(12, {
@@ -202,7 +216,7 @@ export const BLOCKS = {
         side: z(),
         bottom: z(),
         tint: z(),
-        pattern: PATTERN.NONE,
+        pattern: PATTERN.STONE,
         rough: 0.55,
     }),
 
@@ -212,7 +226,7 @@ export const BLOCKS = {
         side: c(0x7e7464),
         bottom: c(0x6e6454),
         tint: c(0x847a68),
-        pattern: PATTERN.NONE,
+        pattern: PATTERN.COBBLE,
         rough: 0.45,
     }),
 
@@ -259,12 +273,12 @@ export const BLOCKS = {
     }),
 
     /* --- foliage (palette-driven) --------------------------------------- */
-    LEAF_PINK: B(30, { top: z(), side: z(), bottom: z(), tint: z(), pattern: PATTERN.NONE, rough: 0.22, sway: true }),
-    LEAF_BLUSH: B(31, { top: z(), side: z(), bottom: z(), tint: z(), pattern: PATTERN.NONE, rough: 0.2, sway: true }),
-    LEAF_LILAC: B(32, { top: z(), side: z(), bottom: z(), tint: z(), pattern: PATTERN.NONE, rough: 0.22, sway: true }),
-    LEAF_CREAM: B(33, { top: z(), side: z(), bottom: z(), tint: z(), pattern: PATTERN.NONE, rough: 0.2, sway: true }),
-    LEAF_MINT: B(34, { top: z(), side: z(), bottom: z(), tint: z(), pattern: PATTERN.NONE, rough: 0.22, sway: true }),
-    LEAF_ROSE: B(35, { top: z(), side: z(), bottom: z(), tint: z(), pattern: PATTERN.NONE, rough: 0.22, sway: true }),
+    LEAF_PINK: B(30, { top: z(), side: z(), bottom: z(), tint: z(), pattern: PATTERN.LEAF, rough: 0.22, sway: true }),
+    LEAF_BLUSH: B(31, { top: z(), side: z(), bottom: z(), tint: z(), pattern: PATTERN.LEAF, rough: 0.2, sway: true }),
+    LEAF_LILAC: B(32, { top: z(), side: z(), bottom: z(), tint: z(), pattern: PATTERN.LEAF, rough: 0.22, sway: true }),
+    LEAF_CREAM: B(33, { top: z(), side: z(), bottom: z(), tint: z(), pattern: PATTERN.LEAF, rough: 0.2, sway: true }),
+    LEAF_MINT: B(34, { top: z(), side: z(), bottom: z(), tint: z(), pattern: PATTERN.LEAF, rough: 0.22, sway: true }),
+    LEAF_ROSE: B(35, { top: z(), side: z(), bottom: z(), tint: z(), pattern: PATTERN.LEAF, rough: 0.22, sway: true }),
 
     /* --- accents (intentional constants — not palette-driven) ----------- */
     LANTERN: B(40, {
@@ -281,7 +295,7 @@ export const BLOCKS = {
         side: c(0xd2c0f1),
         bottom: c(0xc2aee5),
         tint: c(0xeee5fd),
-        pattern: PATTERN.NONE,
+        pattern: PATTERN.CRYSTAL,
         rough: 0.1,
         emissive: 0.42,
     }),
@@ -290,7 +304,7 @@ export const BLOCKS = {
         side: c(0xb86c4e),
         bottom: c(0xa05c40),
         tint: c(0xd08060),
-        pattern: PATTERN.NONE,
+        pattern: PATTERN.CLOTH,
         rough: 0.3,
     }),
     CLOTH_CREAM: B(43, {
@@ -298,7 +312,7 @@ export const BLOCKS = {
         side: c(0xdecaa0),
         bottom: c(0xcaba88),
         tint: c(0xf0e0b8),
-        pattern: PATTERN.NONE,
+        pattern: PATTERN.CLOTH,
         rough: 0.3,
     }),
     ROOF_ROSE: B(44, {

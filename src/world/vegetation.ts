@@ -41,8 +41,8 @@ const BUSH_ROSE = registerBlock('BUSH_ROSE', {
     bottom: c(0xc1a3aa),
     tint: c(0xd0adb4),
     topTint: c(0xd6b9be),
-    pattern: PATTERN.GRASS,
-    topPattern: PATTERN.GRASS,
+    pattern: PATTERN.LEAF,
+    topPattern: PATTERN.LEAF,
     rough: 0.45,
 });
 const BUSH_MAUVE = registerBlock('BUSH_MAUVE', {
@@ -51,8 +51,8 @@ const BUSH_MAUVE = registerBlock('BUSH_MAUVE', {
     bottom: c(0xb3a3ab),
     tint: c(0xc2afb8),
     topTint: c(0xcabac1),
-    pattern: PATTERN.GRASS,
-    topPattern: PATTERN.GRASS,
+    pattern: PATTERN.LEAF,
+    topPattern: PATTERN.LEAF,
     rough: 0.45,
 });
 const BUSH_DUSK = registerBlock('BUSH_DUSK', {
@@ -61,8 +61,8 @@ const BUSH_DUSK = registerBlock('BUSH_DUSK', {
     bottom: c(0xaca0bd),
     tint: c(0xbbaecb),
     topTint: c(0xc4b9d5),
-    pattern: PATTERN.GRASS,
-    topPattern: PATTERN.GRASS,
+    pattern: PATTERN.LEAF,
+    topPattern: PATTERN.LEAF,
     rough: 0.45,
 });
 const BUSH_CREAM = registerBlock('BUSH_CREAM', {
@@ -71,8 +71,8 @@ const BUSH_CREAM = registerBlock('BUSH_CREAM', {
     bottom: c(0xc8baa8),
     tint: c(0xd6c7b4),
     topTint: c(0xdfd2c1),
-    pattern: PATTERN.GRASS,
-    topPattern: PATTERN.GRASS,
+    pattern: PATTERN.LEAF,
+    topPattern: PATTERN.LEAF,
     rough: 0.45,
 });
 const BUSHES = [BUSH_ROSE, BUSH_MAUVE, BUSH_ROSE, BUSH_CREAM, BUSH_DUSK, BUSH_MAUVE];
@@ -84,8 +84,8 @@ const SCRUB = registerBlock('SCRUB', {
     bottom: c(0xa79ca0),
     tint: c(0xb5a9ad),
     topTint: c(0xbfb4b7),
-    pattern: PATTERN.GRASS,
-    topPattern: PATTERN.GRASS,
+    pattern: PATTERN.LEAF,
+    topPattern: PATTERN.LEAF,
     rough: 0.6,
 });
 
@@ -131,8 +131,8 @@ const FERN = registerBlock('FERN', {
     bottom: c(0x2e4226),
     tint: c(0x3f5f35),
     topTint: c(0x5a7a48),
-    pattern: PATTERN.GRASS,
-    topPattern: PATTERN.GRASS,
+    pattern: PATTERN.LEAF,
+    topPattern: PATTERN.LEAF,
     rough: 0.55,
 });
 const FERN_RED = registerBlock('FERN_RED', {
@@ -141,8 +141,8 @@ const FERN_RED = registerBlock('FERN_RED', {
     bottom: c(0x612f1a),
     tint: c(0x7a3e26),
     topTint: c(0x9e5535),
-    pattern: PATTERN.GRASS,
-    topPattern: PATTERN.GRASS,
+    pattern: PATTERN.LEAF,
+    topPattern: PATTERN.LEAF,
     rough: 0.55,
 });
 const MOSS_THICK = registerBlock('MOSS_THICK', {
@@ -172,8 +172,8 @@ const SHRUB_TALL = registerBlock('SHRUB_TALL', {
     bottom: c(0x9a8088),
     tint: c(0xa89098),
     topTint: c(0xb8a2a8),
-    pattern: PATTERN.GRASS,
-    topPattern: PATTERN.GRASS,
+    pattern: PATTERN.LEAF,
+    topPattern: PATTERN.LEAF,
     rough: 0.5,
 });
 const GRASS_TALL = registerBlock('GRASS_TALL', {
@@ -239,26 +239,121 @@ const BIOME_FLORA = {
     },
     [BIOME.WETLAND]: {
         leaves: [BLOCKS.LEAF_MINT, BLOCKS.LEAF_CREAM, BLOCKS.LEAF_MINT],
-        forms: ['mangrove', 'broad', 'bunch', 'round', 'umbrella', 'weeping', 'tall', 'mangrove'],
+        // Mangrove/willow now come from SPECIES, which keeps them at the waterline.
+        forms: ['broad', 'bunch', 'round', 'umbrella', 'weeping', 'tall'],
         scale: [0.26, 0.78],
         density: 0.75,
         bushes: [BUSH_DUSK, BUSH_MAUVE, BUSH_CREAM],
     },
     [BIOME.HIGHLAND]: {
         leaves: [BLOCKS.LEAF_LILAC, BLOCKS.LEAF_MINT],
-        forms: ['spire', 'nub', 'spire', 'layered', 'dead', 'dead'],
+        // Conifers and snags now come from SPECIES by altitude; these are the
+        // few blossom forms that still read as highland.
+        forms: ['nub', 'layered', 'nub'],
         scale: [0.14, 0.46],
         density: 0.28,
         bushes: [SCRUB, SCRUB, BUSH_DUSK],
     },
     [BIOME.SHORE]: {
         leaves: [BLOCKS.LEAF_CREAM, BLOCKS.LEAF_BLUSH],
-        forms: ['palm', 'palm', 'bunch', 'round', 'nub', 'umbrella', 'layered', 'weeping', 'dead'],
+        // Palms come from SPECIES (tropical/arid shores only).
+        forms: ['bunch', 'round', 'nub', 'umbrella', 'layered', 'weeping'],
         scale: [0.16, 0.7],
         density: 0.22,
         bushes: [BUSH_CREAM, SCRUB],
     },
 };
+/* ================================================================== *
+ * Named species, placed by altitude
+ *
+ * The blossom forms above (round, stack, twin…) are the signature look and
+ * stay as they were. These are real-world silhouettes, each with the climate it
+ * belongs to (the continent's climate from the planner) and an altitude band in
+ * blocks above sea level. Placement picks from the species that fit the spot,
+ * weighted, with soft band edges so treelines blur rather than stop dead.
+ *
+ * Climate: 0 tropical, 1 temperate, 2 arid, 3 tundra.
+ * ================================================================== */
+type Species = {
+    name: string;
+    climates: number[];
+    /** [lo, hi] blocks above sea; weight fades over `soft` blocks outside. */
+    alt: [number, number];
+    weight: number;
+    /** Needs damp ground (wetness > 0.3). */
+    wet?: boolean;
+    /** Scale range for this species. */
+    scale: [number, number];
+};
+/*
+ * Bands are fitted to the terrain as generated, not to an idealised mountain:
+ * land above sea level is ~36% 0–6 blocks, ~30% 6–12, ~21% 12–18 and only ~13%
+ * above 18 (peaks reach the low 30s). So: shore 0–5, lowland 3–12, upland
+ * 9–18, alpine 15+, treeline 20+. Retune these if WORLD.step or MACRO_RELIEF
+ * changes the relief.
+ */
+const SPECIES: Species[] = [
+    { name: 'mangrove', climates: [0, 1], alt: [0, 3], weight: 1.4, wet: true, scale: [0.4, 0.8] },
+    { name: 'palm', climates: [0, 2], alt: [0, 5], weight: 1.2, scale: [0.45, 0.9] },
+    { name: 'willow', climates: [0, 1, 2, 3], alt: [0, 8], weight: 1.3, wet: true, scale: [0.55, 0.9] },
+    { name: 'cypress', climates: [1, 2], alt: [2, 10], weight: 0.7, scale: [0.4, 0.9] },
+    { name: 'kapok', climates: [0], alt: [2, 10], weight: 0.6, scale: [0.75, 1.0] },
+    { name: 'baobab', climates: [2], alt: [3, 11], weight: 0.6, scale: [0.5, 0.95] },
+    { name: 'acacia', climates: [2, 0], alt: [3, 13], weight: 1.0, scale: [0.45, 0.9] },
+    { name: 'oak', climates: [1], alt: [3, 12], weight: 1.2, scale: [0.55, 1.0] },
+    { name: 'birch', climates: [1, 3], alt: [7, 16], weight: 1.0, scale: [0.35, 0.8] },
+    { name: 'pine', climates: [1, 3], alt: [10, 20], weight: 1.1, scale: [0.4, 0.9] },
+    { name: 'fir', climates: [1, 3], alt: [13, 24], weight: 1.1, scale: [0.35, 0.85] },
+    { name: 'spruce', climates: [3, 1], alt: [16, 30], weight: 1.2, scale: [0.35, 0.85] },
+    { name: 'juniper', climates: [2, 3], alt: [14, 30], weight: 0.9, scale: [0.2, 0.5] },
+    { name: 'snag', climates: [0, 1, 2, 3], alt: [20, 40], weight: 0.6, scale: [0.3, 0.7] },
+];
+const ALT_SOFT = 3;
+/** Forms whose silhouette the generic foliage tufts would blur, or that have no leaves. */
+const NO_TUFTS = new Set(['snag', 'dead', 'fir', 'spruce', 'cypress', 'willow', 'pine', 'palm']);
+
+/** Bare-trunk height per species: [min, + scale × extra]. */
+const SPECIES_TRUNK: Record<string, [number, number]> = {
+    mangrove: [1, 2],
+    palm: [6, 8],
+    cypress: [1, 2],
+    willow: [2, 3],
+    kapok: [7, 7],
+    baobab: [3, 4],
+    acacia: [4, 4],
+    oak: [2, 3],
+    birch: [5, 7],
+    pine: [6, 8],
+    fir: [1, 2],
+    spruce: [1, 2],
+    juniper: [1, 2],
+    snag: [4, 6],
+};
+
+/**
+ * Weighted species pick for a site, or null when none suits (then the biome's
+ * blossom forms are used). Altitude weight is 1 inside the band and fades
+ * linearly to 0 over ALT_SOFT blocks outside it.
+ */
+function pickSpecies(climate: number, alt: number, wet: boolean, rng: any): Species | null {
+    let total = 0;
+    const w: number[] = [];
+    for (const s of SPECIES) {
+        let k = s.climates.includes(climate) ? s.weight : 0;
+        if (k && s.wet && !wet) k = 0;
+        if (k) {
+            const out = alt < s.alt[0] ? s.alt[0] - alt : alt > s.alt[1] ? alt - s.alt[1] : 0;
+            k *= Math.max(0, 1 - out / ALT_SOFT);
+        }
+        w.push(k);
+        total += k;
+    }
+    if (total <= 0) return null;
+    let r = rng() * total;
+    for (let i = 0; i < SPECIES.length; i++) if ((r -= w[i]) <= 0) return SPECIES[i];
+    return SPECIES[SPECIES.length - 1];
+}
+
 /** Paler partner used for the sunlit patches within one canopy. */
 const CANOPY_LIGHT = new Map([
     [BLOCKS.LEAF_PINK, BLOCKS.LEAF_BLUSH],
@@ -350,33 +445,59 @@ export function plantTree(grid: any, x: number, y: number, z: number, rng: any, 
     const pale = CANOPY_LIGHT.get(leaf) || leaf;
     const twoTone = opts.twoTone ?? rng.chance(0.62);
 
-    const trunkBlock = rng.chance(0.55) ? BLOCKS.TRUNK : rng.chance(0.5) ? BLOCKS.TRUNK_PALE : TRUNK_ROSE;
+    // Birch and snag trunks are pale; baobab, kapok and juniper are dark and
+    // characterful. Everything else keeps the old mixed bark.
+    const trunkBlock =
+        form === 'birch' || form === 'snag'
+            ? BLOCKS.TRUNK_PALE
+            : form === 'baobab' || form === 'kapok' || form === 'juniper'
+              ? BLOCKS.TRUNK
+              : rng.chance(0.55)
+                ? BLOCKS.TRUNK
+                : rng.chance(0.5)
+                  ? BLOCKS.TRUNK_PALE
+                  : TRUNK_ROSE;
 
     const unit = scale >= 0.42 ? 2 : 1;
     const large = scale >= 0.72;
-    const tw = scale >= 0.82 ? 2 : 1;
+    // Baobab and kapok are defined by massive trunks; birch and cypress by slim ones.
+    const tw =
+        form === 'baobab'
+            ? scale >= 0.5
+                ? 3
+                : 2
+            : form === 'kapok'
+              ? 2
+              : form === 'birch' || form === 'cypress' || form === 'juniper'
+                ? 1
+                : scale >= 0.82
+                  ? 2
+                  : 1;
 
     // Form-specific trunk height: spire/umbrella = taller trunk, broad = shorter.
-    const bare =
-        form === 'spire'
-            ? Math.max(3, Math.round(3 + scale * 5))
-            : form === 'umbrella'
-              ? Math.max(3, Math.round(3 + scale * 3.5))
-              : form === 'broad'
-                ? Math.max(1, Math.round(1 + scale * 2))
-                : form === 'tall'
-                  ? Math.max(6, Math.round(6 + scale * 9))
-                  : form === 'layered'
-                    ? Math.max(3, Math.round(3 + scale * 4))
-                    : form === 'weeping'
-                      ? Math.max(2, Math.round(2 + scale * 3))
-                      : form === 'palm'
-                        ? Math.max(5, Math.round(5 + scale * 7))
-                        : form === 'dead'
-                          ? Math.max(3, Math.round(3 + scale * 5))
-                          : form === 'mangrove'
-                            ? Math.max(1, Math.round(1 + scale * 2))
-                            : Math.max(2, Math.round(2.5 + scale * 3.5));
+    // Named species (SPECIES table) carry their own trunk proportions.
+    const sp = SPECIES_TRUNK[form];
+    const bare = sp
+        ? Math.max(sp[0], Math.round(sp[0] + scale * sp[1]))
+        : form === 'spire'
+          ? Math.max(3, Math.round(3 + scale * 5))
+          : form === 'umbrella'
+            ? Math.max(3, Math.round(3 + scale * 3.5))
+            : form === 'broad'
+              ? Math.max(1, Math.round(1 + scale * 2))
+              : form === 'tall'
+                ? Math.max(6, Math.round(6 + scale * 9))
+                : form === 'layered'
+                  ? Math.max(3, Math.round(3 + scale * 4))
+                  : form === 'weeping'
+                    ? Math.max(2, Math.round(2 + scale * 3))
+                    : form === 'palm'
+                      ? Math.max(5, Math.round(5 + scale * 7))
+                      : form === 'dead'
+                        ? Math.max(3, Math.round(3 + scale * 5))
+                        : form === 'mangrove'
+                          ? Math.max(1, Math.round(1 + scale * 2))
+                          : Math.max(2, Math.round(2.5 + scale * 3.5));
 
     const canopyY = y + bare;
     const [ax, az] = buildTrunk(grid, x, y, z, bare + unit, tw, trunkBlock.id, 0, 0);
@@ -617,6 +738,173 @@ export function plantTree(grid: any, x: number, y: number, z: number, rng: any, 
             }
             break;
         }
+        /* ---- named species (placed by altitude; see SPECIES) ------------ */
+        case 'oak': {
+            // Broad, heavy, irregular crown wider than tall, on a short thick trunk.
+            const w = large ? 9 : unit === 2 ? 7 : 5;
+            fillBox(0, 0, 0, w, 2, w - 1, leaf.id);
+            fillBox(3 * dx, 1, -2 * dz, 3, 2, 3, leaf.id);
+            fillBox(-3 * dx, 1, 2 * dz, 3, 2, 3, leaf.id);
+            fillBox(dx, 2, dz, w - 3, 2, w - 3, lightId);
+            fillBox(-dx, 4, 0, Math.max(2, w - 5), 1, Math.max(2, w - 5), lightId);
+            break;
+        }
+        case 'birch': {
+            // Slim pale trunk, narrow airy crown of small loose clumps.
+            const h = large ? 6 : unit === 2 ? 5 : 3;
+            for (let k = 0; k < h; k += 2) {
+                const ox = k % 4 === 0 ? dx : -dx;
+                fillBox(ox, k, k % 4 === 0 ? 0 : dz, 2, 2, 2, k % 4 === 0 ? leaf.id : lightId);
+            }
+            fillBox(0, h, 0, 1, 1, 1, lightId);
+            break;
+        }
+        case 'pine': {
+            // Tall bare trunk (bare is long), a compact rounded-flat crown on top
+            // with a couple of short side whorls just below it.
+            const w = large ? 5 : unit === 2 ? 4 : 3;
+            fillBox(0, 0, 0, w, 1, w, leaf.id);
+            fillBox(2 * dx, -2, 0, 2, 1, 2, leaf.id);
+            fillBox(-2 * dx, -3, dz, 2, 1, 2, leaf.id);
+            fillBox(0, 1, 0, w - 1, 1, w - 1, lightId);
+            fillBox(dx, 2, dz, Math.max(1, w - 3), 1, Math.max(1, w - 3), lightId);
+            break;
+        }
+        case 'fir': {
+            // Dense symmetric cone, skirts almost to the ground.
+            const tiers = large ? 6 : unit === 2 ? 5 : 3;
+            const base = large ? 7 : unit === 2 ? 5 : 3;
+            for (let t = 0; t < tiers; t++) {
+                const w = Math.max(1, base - Math.floor((t * base) / tiers) - (t > tiers - 2 ? 1 : 0));
+                fillBox(0, t * 2, 0, w, 2, w, t & 1 ? lightId : leaf.id);
+            }
+            fillBox(0, tiers * 2, 0, 1, 1, 1, lightId);
+            break;
+        }
+        case 'spruce': {
+            // Taller and narrower than fir, with visible gaps between drooping tiers.
+            const tiers = large ? 7 : unit === 2 ? 6 : 4;
+            const base = large ? 5 : unit === 2 ? 4 : 3;
+            for (let t = 0; t < tiers; t++) {
+                const w = Math.max(1, base - Math.floor((t * base) / (tiers + 1)));
+                fillBox(t & 1 ? dx : 0, t * 2, 0, w, 1, w, t & 1 ? lightId : leaf.id);
+                if (w >= 3) fillBox(0, t * 2 + 1, 0, w - 2, 1, w - 2, leaf.id);
+            }
+            fillBox(0, tiers * 2, 0, 1, 2, 1, leaf.id);
+            break;
+        }
+        case 'cypress': {
+            // Tall narrow column (Mediterranean / Italian cypress).
+            const h = large ? 12 : unit === 2 ? 9 : 6;
+            fillBox(0, 0, 0, 2, h - 2, 2, leaf.id);
+            fillBox(dx, 2, 0, 1, h - 5, 1, lightId);
+            fillBox(0, h - 2, 0, 1, 2, 1, lightId);
+            break;
+        }
+        case 'acacia': {
+            // Savanna umbrella: trunk forks into two leaning limbs, very flat
+            // wide crown, with a second smaller flat layer offset beside it.
+            const w = large ? 9 : unit === 2 ? 7 : 5;
+            grid.set(cx + dx, canopyY - 1, cz, trunkBlock.id);
+            grid.set(cx - dx, canopyY - 1, cz + dz, trunkBlock.id);
+            fillBox(0, 0, 0, w, 1, w - 2, leaf.id);
+            fillBox(dx * Math.ceil(w / 3), -1, dz * 2, Math.ceil(w / 2), 1, Math.ceil(w / 2), leaf.id);
+            fillBox(-dx, 1, 0, w - 3, 1, Math.max(2, w - 5), lightId);
+            break;
+        }
+        case 'willow': {
+            // Rounded crown with long hanging strands around the rim reaching
+            // most of the way to the ground.
+            const w = large ? 7 : unit === 2 ? 5 : 4;
+            fillBox(0, 0, 0, w, 2, w, leaf.id);
+            fillBox(0, 2, 0, w - 2, 1, w - 2, lightId);
+            const r = Math.floor(w / 2);
+            const drop = Math.max(2, bare - 1);
+            for (let a = 0; a < 12; a++) {
+                if (!rng.chance(0.7)) continue;
+                const th = (a / 12) * Math.PI * 2;
+                const sx = cx + Math.round(Math.cos(th) * r),
+                    sz = cz + Math.round(Math.sin(th) * r);
+                const len = rng.int(Math.ceil(drop * 0.5), drop);
+                for (let k = 1; k <= len; k++) grid.set(sx, canopyY - k, sz, k & 1 ? leaf.id : lightId);
+            }
+            break;
+        }
+        case 'kapok': {
+            // Rainforest emergent: very tall trunk with plank buttress roots,
+            // a high flat spreading crown.
+            for (const [rx, rz] of [
+                [2, 0],
+                [-2, 0],
+                [0, 2],
+                [0, -2],
+            ] as [number, number][]) {
+                grid.set(cx + rx, y, cz + rz, trunkBlock.id);
+                grid.set(cx + rx / 2, y + 1, cz + rz / 2, trunkBlock.id);
+                grid.set(cx + rx / 2, y, cz + rz / 2, trunkBlock.id);
+            }
+            const w = large ? 11 : 9;
+            fillBox(0, 0, 0, w, 1, w, leaf.id);
+            fillBox(3 * dx, 1, -2 * dz, 4, 1, 4, lightId);
+            fillBox(-3 * dx, 1, 2 * dz, 4, 1, 4, lightId);
+            fillBox(0, 2, 0, 5, 1, 5, leaf.id);
+            break;
+        }
+        case 'baobab': {
+            // Fat bottle trunk (tw = 2–3, widened again mid-height), a sparse
+            // small crown of stubby branch tips on top.
+            const o = -Math.floor((tw + 1) / 2);
+            for (let ty = 1; ty < bare - 1; ty++)
+                for (let ddx = 0; ddx < tw + 2; ddx++)
+                    for (let ddz = 0; ddz < tw + 2; ddz++) {
+                        const edge = ddx === 0 || ddz === 0 || ddx === tw + 1 || ddz === tw + 1;
+                        const corner = (ddx === 0 || ddx === tw + 1) && (ddz === 0 || ddz === tw + 1);
+                        if (edge && (corner || ty === 1 || ty === bare - 2)) continue;
+                        grid.set(cx + o + ddx, y + ty, cz + o + ddz, trunkBlock.id);
+                    }
+            for (const [bx, bz] of [
+                [2, 0],
+                [-2, 1],
+                [1, -2],
+                [-1, 2],
+            ] as [number, number][]) {
+                grid.set(cx + bx, canopyY, cz + bz, trunkBlock.id);
+                fillBox(bx, 1, bz, 2, 1, 2, rng.chance(0.5) ? leaf.id : lightId);
+            }
+            fillBox(0, 1, 0, 3, 1, 3, leaf.id);
+            break;
+        }
+        case 'juniper': {
+            // Wind-twisted scrub: short leaning trunk, a few lopsided dense pads.
+            grid.set(cx + dx, canopyY, cz, trunkBlock.id);
+            grid.set(cx + 2 * dx, canopyY + 1, cz + dz, trunkBlock.id);
+            fillBox(2 * dx, 1, dz, unit === 2 ? 4 : 3, 2, unit === 2 ? 3 : 2, leaf.id);
+            fillBox(-dx, 0, -dz, 2, 2, 2, leaf.id);
+            fillBox(3 * dx, 3, dz, 2, 1, 2, lightId);
+            break;
+        }
+        case 'snag': {
+            // Dead standing tree: pale bare trunk, a broken top, two or three
+            // angled dead limbs. No foliage at all.
+            const limbs = large ? 3 : 2;
+            for (let k = 0; k < limbs; k++) {
+                const ldx = k & 1 ? dx : -dx,
+                    ldz = k === 2 ? dz : 0;
+                const ly = canopyY - 1 - k * 2;
+                for (let s = 1; s <= (large ? 3 : 2); s++)
+                    grid.set(cx + ldx * s, ly + Math.floor(s / 2), cz + ldz * s, trunkBlock.id);
+            }
+            // Broken jagged top
+            grid.set(cx, canopyY + 1, cz, trunkBlock.id);
+            if (rng.chance(0.5)) grid.set(cx + dx, canopyY + 2, cz, trunkBlock.id);
+            topY = Math.max(topY, canopyY + 2);
+            minX = Math.min(minX, cx - 3);
+            maxX = Math.max(maxX, cx + 3);
+            minZ = Math.min(minZ, cz - 1);
+            maxZ = Math.max(maxZ, cz + 1);
+            break;
+        }
+
         case 'stack':
         default: {
             // Original architecture: broad lower mass + asymmetric shoulders + offset crown.
@@ -649,7 +937,9 @@ export function plantTree(grid: any, x: number, y: number, z: number, rng: any, 
 
     // Scatter extra foliage tufts around the crown to break the uniform silhouette
     // and add height variation — smaller clusters at random heights and offsets.
-    {
+    // Skipped where the silhouette IS the species (conifers, columns, hanging
+    // strands) and for dead trees, which have no foliage to scatter.
+    if (!NO_TUFTS.has(form)) {
         const spread = large ? 3 : unit === 2 ? 2 : 1;
         const crownH = topY - canopyY;
         const count = large ? rng.int(5, 9) : unit === 2 ? rng.int(3, 6) : rng.int(2, 4);
@@ -796,20 +1086,6 @@ export function plantBush(
 }
 
 /* ================================================================== *
- * Willow and spire tree shapes
- * ================================================================== */
-
-/** Wide, drooping crown — placed near water. Delegates to plantTree with 'broad' form. */
-function buildWillow(grid: any, x: number, y: number, z: number, rng: any, leaf: any) {
-    return plantTree(grid, x, y, z, rng, { scale: rng.range(0.55, 0.85), leaf, form: 'broad' });
-}
-
-/** Narrow, tall crown — placed on hilltops. Delegates to plantTree with 'spire' form. */
-function buildSpire(grid: any, x: number, y: number, z: number, rng: any, leaf: any) {
-    return plantTree(grid, x, y, z, rng, { scale: rng.range(0.3, 0.6), leaf, form: 'spire' });
-}
-
-/* ================================================================== *
  * Scatter
  * ================================================================== */
 
@@ -912,6 +1188,10 @@ export function scatterVegetation(world: any, rng: any) {
     /* ---- fields ---------------------------------------------------- */
     /** -1..1, feature size ~90 blocks: which parts of the map are woodland. */
     const grove = (x: any, z: any) => fbm2(N_GROVE, x * 0.0115, z * 0.0115, 3);
+    // Species picks and species builders draw from their own stream, so adding
+    // or retuning a species never moves the rest of the world (DESIGN.md,
+    // Determinism). The shared rng still decides *where* a tree goes.
+    const speciesRng = makeRng(0x5bec ^ S);
     /** 0..1, drives blossom hue by region so a stand reads as one species. */
     const hue = (x: any, z: any) => (fbm2(N_HUE, x * 0.0085 + 40, z * 0.0085 - 17, 2) + 1) * 0.5;
 
@@ -986,11 +1266,13 @@ export function scatterVegetation(world: any, rng: any) {
         if (!siteOk(x, z, 2, 1)) continue;
 
         const g = grove(x, z);
-        const elev01 = clamp((heights[i] - sea) / 26, 0, 1);
+        const elev01 = clamp((heights[i] - sea) / 34, 0, 1);
         // Sheltered valley floors get the richest blossom; the exposed tops get
-        // almost nothing, which is what makes the plateaus read as plateaus.
+        // much less, which is what makes the plateaus read as plateaus. Spread
+        // over the full relief (~34 blocks; was 26) and eased (was ×0.82), so
+        // the alpine bands carry a sparse treeline of conifers and snags.
         let dens = smoothstep(-0.2, 0.3, g);
-        dens *= 1 - smoothstep(0.52, 0.95, elev01) * 0.82;
+        dens *= 1 - smoothstep(0.4, 1.0, elev01) * 0.65;
         dens *= 1 - smoothstep(0.3, 0.5, wetness[i]) * 0.5;
         /* Capped BEFORE the biome multiplier, which is the whole point.
          *
@@ -1009,19 +1291,95 @@ export function scatterVegetation(world: any, rng: any) {
         const scale = clamp(rng.range(lo, hi) + core * (hi - lo) * 0.55, 0.1, 1.0);
         const rad = scale > 0.72 ? 6 : scale > 0.46 ? 4 : scale > 0.26 ? 3 : 2;
         if (!free(x, z, rad)) continue;
-        const isWillow = wetness[i] > 0.3 && heights[i] < sea + 8;
-        const isSpire = heights[i] > sea + 14;
-        if (isWillow || isSpire) {
+
+        /* Altitude decides the species.
+         *
+         * A real-world species is chosen from those that suit this continent's
+         * climate and this height above the sea (see SPECIES), so a walk uphill
+         * passes from palms or willows at the shore, through oaks and birches,
+         * into pine, fir and spruce, and out to juniper scrub and dead snags at
+         * the top. Sakura and meadow keep their blossom forms most of the time —
+         * they are the world's signature — and every biome keeps some, so a
+         * province never loses its colour entirely. */
+        const alt = heights[i] - sea;
+        const biome = plan ? plan.biomeAt(x, z) : BIOME.MEADOW;
+        const blossomShare =
+            biome === BIOME.SAKURA ? 0.85 : biome === BIOME.MEADOW ? 0.45 : biome === BIOME.HIGHLAND ? 0.08 : 0.2;
+        const species =
+            speciesRng() >= blossomShare
+                ? pickSpecies(plan ? plan.climateAt(x, z) : 1, alt, wetness[i] > 0.3, speciesRng)
+                : null;
+        if (species) {
+            const [slo, shi] = species.scale;
+            // Keep the grove-core size boost, but within the species' own range.
+            const sScale = clamp(slo + (shi - slo) * (0.35 * speciesRng() + core * 0.65), 0.1, 1.0);
             const band = floraAt(x, z).leaves;
             const leaf = band[clamp(Math.floor(hue(x, z) * band.length), 0, band.length - 1)];
-            const t = isWillow
-                ? buildWillow(grid, x, heights[i] + 1, z, rng, leaf)
-                : buildSpire(grid, x, heights[i] + 1, z, rng, leaf);
+            const t = plantTree(grid, x, heights[i] + 1, z, speciesRng, { scale: sScale, leaf, form: species.name });
             trees.push(t);
             claim(x, z, Math.max(2, Math.floor(t.w / 2)));
         } else {
             plant(x, z, scale);
         }
+    }
+
+    /* ---- the treeline ------------------------------------------------
+     * The woodland pass wants flat grass, and high ground is mostly stone and
+     * steep — so without this the alpine species (fir, spruce, juniper, snag)
+     * barely ever got a site. A sparse dedicated pass above 12 blocks accepts
+     * rock and a 1-block slope, and picks *only* by altitude and climate:
+     * up here the blossom forms would look out of place. Thins with height so
+     * the very tops stay bare. */
+    for (let attempt = 0, n = Math.round(2600 * AREA); attempt < n; attempt++) {
+        const x = speciesRng.int(5, S - 6),
+            z = speciesRng.int(5, S - 6);
+        const i = z * S + x;
+        const alt = heights[i] - sea;
+        if (alt < 12) continue;
+        const top = grid.get(x, heights[i], z);
+        if (!GRASS_IDS.has(top) && !STONE_IDS.has(top)) continue;
+        if (grid.isSolid(x, heights[i] + 1, z) || !flatEnough(heights, S, x, z, 1, 1)) continue;
+        if (!speciesRng.chance(0.55 * (1 - smoothstep(22, 34, alt) * 0.8))) continue;
+        if (!free(x, z, 3)) continue;
+        const sp = pickSpecies(plan ? plan.climateAt(x, z) : 1, alt, wetness[i] > 0.3, speciesRng);
+        if (!sp) continue;
+        const band = floraAt(x, z).leaves;
+        const leaf = band[clamp(Math.floor(hue(x, z) * band.length), 0, band.length - 1)];
+        const sScale = speciesRng.range(sp.scale[0], sp.scale[1]);
+        const t = plantTree(grid, x, heights[i] + 1, z, speciesRng, { scale: sScale, leaf, form: sp.name });
+        trees.push(t);
+        claim(x, z, Math.max(2, Math.floor(t.w / 2)));
+    }
+
+    /* ---- the waterside -----------------------------------------------
+     * The woodland pass rejects wet ground (wetness > 0.5) and thins anything
+     * damp, so the two species that belong in it — mangrove and willow — had
+     * nowhere to grow. A sparse pass along the low, wet margins of rivers and
+     * lakes gives them their place. */
+    const WET_SPECIES = SPECIES.filter((s) => s.wet);
+    for (let attempt = 0, n = Math.round(1400 * AREA); attempt < n; attempt++) {
+        const x = speciesRng.int(5, S - 6),
+            z = speciesRng.int(5, S - 6);
+        const i = z * S + x;
+        const alt = heights[i] - sea;
+        if (alt < 0 || alt > 8 || wetness[i] <= 0.3) continue;
+        const top = grid.get(x, heights[i], z);
+        if (!GRASS_IDS.has(top) && top !== BLOCKS.SAND.id) continue;
+        if (grid.isSolid(x, heights[i] + 1, z) || !flatEnough(heights, S, x, z, 1, 1)) continue;
+        if (!speciesRng.chance(0.35) || !free(x, z, 3)) continue;
+        const climate = plan ? plan.climateAt(x, z) : 1;
+        const fits = WET_SPECIES.filter((s) => s.climates.includes(climate) && alt <= s.alt[1] + ALT_SOFT);
+        if (!fits.length) continue;
+        const sp = speciesRng.pick(fits);
+        const band = floraAt(x, z).leaves;
+        const leaf = band[clamp(Math.floor(hue(x, z) * band.length), 0, band.length - 1)];
+        const t = plantTree(grid, x, heights[i] + 1, z, speciesRng, {
+            scale: speciesRng.range(sp.scale[0], sp.scale[1]),
+            leaf,
+            form: sp.name,
+        });
+        trees.push(t);
+        claim(x, z, Math.max(2, Math.floor(t.w / 2)));
     }
 
     /* ---- bushes -----------------------------------------------------

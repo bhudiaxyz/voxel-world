@@ -822,11 +822,26 @@ export function planWorld(seed: any, size: any) {
         }
     }
 
+    /** Climate of the nearest continent: 0 tropical, 1 temperate, 2 arid, 3 tundra. */
+    const climateAt = (x: number, z: number): number => {
+        let best = 0,
+            bestD = Infinity;
+        for (let i = 0; i < continentCenters.length; i++) {
+            const d = (x - continentCenters[i][0]) ** 2 + (z - continentCenters[i][1]) ** 2;
+            if (d < bestD) {
+                bestD = d;
+                best = i;
+            }
+        }
+        return islandBiomes[best] ?? 1;
+    };
+
     return {
         size,
         cellSize: CELL,
         cellsAcross: cw,
         regions,
+        climateAt,
         cellRegion,
         cellBiome,
         regionAt,

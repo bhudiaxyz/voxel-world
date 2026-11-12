@@ -1134,8 +1134,9 @@ function meshRegion(
                         localV[i] = isTop ? 1 : isBottom ? 0 : c[1];
                     }
 
-                    // Bit 3 of the pattern byte signals wind sway; mod(aData.y, 8) in the frag shader strips it.
-                    const patternPacked = (pattern || 0) | (block.sway ? 8 : 0);
+                    // Low 4 bits: pattern id (0–15). Bit 4 signals wind sway; mod(aData.y, 16)
+                    // in the frag shader strips it.
+                    const patternPacked = (pattern || 0) | (block.sway ? 16 : 0);
                     target.quad(
                         verts,
                         F.n,
@@ -1814,10 +1815,10 @@ const VERT_BODY = /* glsl */ `
   // local attribute is already the world position.
   vPosW  = position;
 
-  // Wind sway: bit 3 of aData.y flags swayable blocks (leaf blocks).
+  // Wind sway: bit 4 of aData.y flags swayable blocks (leaf blocks).
   // Phase offset from world XZ keeps adjacent trees out of sync.
-  // Height factor (aData.w) keeps the base stationary.
-  if (aData.y >= 8.0 && uWindStrength > 0.0) {
+  // Height factor keeps the base stationary.
+  if (aData.y >= 16.0 && uWindStrength > 0.0) {
     float phase = transformed.x * 0.31 + transformed.z * 0.27;
     float gust  = gustAt(transformed.xz, uWindTime, uWindDir);
     float sway  = (sin(uWindTime * 1.1 + phase) * 0.6
@@ -1919,22 +1920,132 @@ const FRAG_DECL = /* glsl */ `
     float fine = sin(uv.x * 31.0 + uv.y * 0.7) * 0.5 + 0.5;
     return mix(base, tint, (grain * 0.16 + fine * 0.06));
   }
+
+  /* ---- added so that no voxel is a flat colour -----------------------
+   * All of these work in world-space UVs (1 unit = 1 block) and stay low
+   * contrast: they are texture you notice on second look, in keeping with
+   * the pastel diorama, not a photographic material. */
+
+  /** Crumbly earth: clods, small dark pits and the odd pale pebble. */
+  vec3 patSoil(vec2 uv, vec3 base, vec3 tint) {
+    float n = vxNoise(uv * 2.3) * 0.5 + vxNoise(uv * 6.1) * 0.3 + vxNoise(uv * 15.0) * 0.2;
+    vec3 col = mix(base, tint, smoothstep(0.35, 0.75, n) * 0.7);
+    vec2 cell = floor(uv * 5.0);
+    float h = vxHash(cell + 1.3);
+    float d = length(fract(uv * 5.0) - 0.5);
+    col *= 1.0 - step(0.86, h) * (1.0 - smoothstep(0.12, 0.30, d)) * 0.16;     // pits
+    col = mix(col, col * 1.18, step(0.95, h) * (1.0 - smoothstep(0.10, 0.22, d)));  // pebbles
+    return col;
+  }
+
+  /** Sand: fine grain plus soft wind ripples running across the tops. */
+  vec3 patSand(vec2 uv, vec3 base, vec3 tint, bool top) {
+    float grain = vxHash(floor(uv * 14.0)) * 0.6 + vxNoise(uv * 9.0) * 0.4;
+    vec3 col = base * (0.955 + grain * 0.09);
+    if (top) {
+      float rip = sin(uv.x * 4.2 + uv.y * 1.3 + vxNoise(uv * 0.7) * 3.0) * 0.5 + 0.5;
+      col = mix(col, mix(col, tint, 0.5), smoothstep(0.65, 0.95, rip) * 0.55);
+    } else {
+      // Sides show faint horizontal strata.
+      col *= 0.97 + sin(uv.y * 9.0 + vxNoise(uv * 1.5) * 2.0) * 0.03;
+    }
+    return col;
+  }
+
+  /** Leaf mass: clusters of small leaves, dark gaps between them, lit edges. */
+  vec3 patLeaf(vec2 uv, vec3 base, vec3 tint) {
+    vec2 p = uv * 4.0;
+    vec2 cell = floor(p);
+    vec2 f = fract(p) - 0.5 + (vec2(vxHash(cell), vxHash(cell + 7.7)) - 0.5) * 0.5;
+    float d = length(f);
+    float leaf = 1.0 - smoothstep(0.30, 0.48, d);
+    float h = vxHash(cell + 3.1);
+    vec3 lit = mix(base, tint, 0.35 + h * 0.4);
+    vec3 col = mix(base * 0.80, lit, leaf);        // gaps read as depth into the crown
+    col *= 0.96 + vxNoise(uv * 1.7) * 0.08;        // broad clumping
+    return col;
+  }
+
+  /** Cobbled path: irregular rounded stones in a darker bed. */
+  vec3 patCobble(vec2 uv, vec3 base, vec3 tint) {
+    vec2 p = uv * 2.6;
+    vec2 cell = floor(p);
+    float best = 9.0, second = 9.0, id = 0.0;
+    for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
+      vec2 o = vec2(float(i), float(j));
+      vec2 c = cell + o;
+      vec2 pt = o + vec2(vxHash(c), vxHash(c + 5.3)) * 0.8 + 0.1;
+      float d = length(fract(p) - pt);
+      if (d < best) { second = best; best = d; id = vxHash(c + 9.1); }
+      else if (d < second) second = d;
+    }
+    float mortar = 1.0 - smoothstep(0.03, 0.11, second - best);
+    vec3 stone = base * (0.92 + id * 0.16);
+    return mix(stone, tint * 0.72, mortar * 0.8);
+  }
+
+  /** Woven cloth: fine over-under weave, a little uneven. */
+  vec3 patCloth(vec2 uv, vec3 base, vec3 tint) {
+    vec2 p = uv * 10.0;
+    float wx = sin(p.x * 3.14159) * 0.5 + 0.5, wy = sin(p.y * 3.14159) * 0.5 + 0.5;
+    float over = mod(floor(p.x) + floor(p.y), 2.0);
+    float weave = mix(wx, wy, over);
+    vec3 col = base * (0.94 + weave * 0.10);
+    return mix(col, tint, vxNoise(uv * 3.0) * 0.12);
+  }
+
+  /** Crystal: hard-edged facets with bright edges. */
+  vec3 patCrystal(vec2 uv, vec3 base, vec3 tint) {
+    vec2 p = uv * 2.2;
+    float a = fract(p.x + p.y * 0.62), b = fract(p.y - p.x * 0.41);
+    float facet = vxHash(floor(vec2(p.x + p.y * 0.62, p.y - p.x * 0.41)));
+    float edge = 1.0 - smoothstep(0.0, 0.06, min(min(a, 1.0 - a), min(b, 1.0 - b)));
+    return mix(base * (0.86 + facet * 0.26), tint * 1.15, edge * 0.7);
+  }
+
+  /** Generic fallback so no block is ever a flat colour. */
+  vec3 patSurface(vec2 uv, vec3 base, vec3 tint) {
+    float n = vxNoise(uv * 3.1) * 0.6 + vxNoise(uv * 9.3) * 0.4;
+    vec3 col = mix(base, tint, smoothstep(0.35, 0.8, n) * 0.35);
+    return col * (0.97 + vxHash(floor(uv * 8.0)) * 0.06);
+  }
 `;
 
 const FRAG_BODY = /* glsl */ `
   {
     vec3 col = diffuseColor.rgb;
-    float pat = mod(vDataV.y, 8.0);
+    float pat = floor(mod(vDataV.y, 16.0) + 0.5);
     float fringe = vDataV.z;
     float localV = vDataV.w;
     bool isSide = abs(vNrmW.y) < 0.5;
 
-    if (pat > 0.5 && pat < 1.5)      col = patBrick(vUvW, col, vTintV);
-    else if (pat > 1.5 && pat < 2.5) col = patStone(vUvW, col, vTintV);
-    else if (pat > 2.5 && pat < 3.5) col = patPlank(vUvW, col, vTintV);
-    else if (pat > 3.5 && pat < 4.5) col = patBark(vUvW, col, vTintV);
-    else if (pat > 4.5 && pat < 5.5) col = patGrassTop(vUvW, col, vTintV);
-    else if (pat > 5.5 && pat < 6.5) col = patTile(vUvW, col, vTintV);
+    /* --- surface detail, faded with distance ---------------------------
+     * Every pattern here has features down to 1/15 of a block. Past ~60
+     * blocks that is below a pixel, and instead of averaging out it aliases
+     * into moiré — the horizontal banding on distant grass. Fading the
+     * pattern toward its base colour over 30–110 blocks keeps it crisp up
+     * close and clean far away (by then fog and the haze pass own the look).
+     * Uniform across a draw call apart from distance, so no branch divergence. */
+    float viewDist = length(vPosW - cameraPosition);
+    float detail = 1.0 - smoothstep(30.0, 110.0, viewDist);
+    if (detail > 0.002) {
+      vec3 t;
+      bool top = vNrmW.y > 0.5;
+      if      (pat == 1.0)  t = patBrick(vUvW, col, vTintV);
+      else if (pat == 2.0)  t = patStone(vUvW, col, vTintV);
+      else if (pat == 3.0)  t = patPlank(vUvW, col, vTintV);
+      else if (pat == 4.0)  t = patBark(vUvW, col, vTintV);
+      else if (pat == 5.0)  t = patGrassTop(vUvW, col, vTintV);
+      else if (pat == 6.0)  t = patTile(vUvW, col, vTintV);
+      else if (pat == 7.0)  t = patSoil(vUvW, col, vTintV);
+      else if (pat == 8.0)  t = patSand(vUvW, col, vTintV, top);
+      else if (pat == 9.0)  t = patLeaf(vUvW, col, vTintV);
+      else if (pat == 10.0) t = patCobble(vUvW, col, vTintV);
+      else if (pat == 11.0) t = patCloth(vUvW, col, vTintV);
+      else if (pat == 12.0) t = patCrystal(vUvW, col, vTintV);
+      else                  t = patSurface(vUvW, col, vTintV);
+      col = mix(col, t, detail);
+    }
 
     // --- grass spilling over the lip of the block --------------------
     // Keep the green cap at the authored fraction (25% for turf). A restrained
@@ -2154,7 +2265,7 @@ export function makeVoxelMaterial() {
             );
         mat.userData.shader = shader;
     };
-    mat.customProgramCacheKey = () => 'VoxelWorld-voxel-v10';
+    mat.customProgramCacheKey = () => 'VoxelWorld-voxel-v11';
     return mat;
 }
 
