@@ -1933,8 +1933,11 @@ const FRAG_DECL = /* glsl */ `
     vec2 cell = floor(uv * 5.0);
     float h = vxHash(cell + 1.3);
     float d = length(fract(uv * 5.0) - 0.5);
-    col *= 1.0 - step(0.86, h) * (1.0 - smoothstep(0.12, 0.30, d)) * 0.16;     // pits
-    col = mix(col, col * 1.18, step(0.95, h) * (1.0 - smoothstep(0.10, 0.22, d)));  // pebbles
+    // Pits and pebbles are exclusive per cell (both on one cell drew a ring).
+    float pit = step(0.88, h) * (1.0 - step(0.96, h));
+    float peb = step(0.96, h);
+    col *= 1.0 - pit * (1.0 - smoothstep(0.05, 0.26, d)) * 0.10;
+    col = mix(col, col * 1.10, peb * (1.0 - smoothstep(0.04, 0.18, d)));
     return col;
   }
 
@@ -1952,18 +1955,13 @@ const FRAG_DECL = /* glsl */ `
     return col;
   }
 
-  /** Leaf mass: clusters of small leaves, dark gaps between them, lit edges. */
+  /** Leaf mass: soft dappled clumps with faint darker gaps — foliage, not polka dots. */
   vec3 patLeaf(vec2 uv, vec3 base, vec3 tint) {
-    vec2 p = uv * 4.0;
-    vec2 cell = floor(p);
-    vec2 f = fract(p) - 0.5 + (vec2(vxHash(cell), vxHash(cell + 7.7)) - 0.5) * 0.5;
-    float d = length(f);
-    float leaf = 1.0 - smoothstep(0.30, 0.48, d);
-    float h = vxHash(cell + 3.1);
-    vec3 lit = mix(base, tint, 0.35 + h * 0.4);
-    vec3 col = mix(base * 0.80, lit, leaf);        // gaps read as depth into the crown
-    col *= 0.96 + vxNoise(uv * 1.7) * 0.08;        // broad clumping
-    return col;
+    float clump = vxNoise(uv * 2.4) * 0.55 + vxNoise(uv * 5.7) * 0.30 + vxNoise(uv * 11.0) * 0.15;
+    vec3 col = mix(base * 0.93, mix(base, tint, 0.4) * 1.04, smoothstep(0.30, 0.72, clump));
+    // Small irregular gaps where the eye sees into the crown.
+    float gap = smoothstep(0.78, 0.92, vxNoise(uv * 7.3 + 3.0));
+    return col * (1.0 - gap * 0.10);
   }
 
   /** Cobbled path: irregular rounded stones in a darker bed. */
@@ -2027,7 +2025,15 @@ const FRAG_BODY = /* glsl */ `
      * close and clean far away (by then fog and the haze pass own the look).
      * Uniform across a draw call apart from distance, so no branch divergence. */
     float viewDist = length(vPosW - cameraPosition);
-    float detail = 1.0 - smoothstep(30.0, 110.0, viewDist);
+    // Footprint-based fade: fwidth(uv) is how many blocks one pixel covers.
+    // On ground seen at a grazing angle that grows long before distance does,
+    // and is what turned the fine grass grain into stripes pointing at the
+    // vanishing point. Patterns carry detail down to ~1/15 block, so fade once
+    // a pixel covers more than ~0.08 block. Computed here, in uniform control
+    // flow, because derivatives are undefined inside the branches below.
+    vec2 fw = fwidth(vUvW);
+    float footprint = max(fw.x, fw.y);
+    float detail = (1.0 - smoothstep(0.06, 0.22, footprint)) * (1.0 - smoothstep(40.0, 120.0, viewDist));
     if (detail > 0.002) {
       vec3 t;
       bool top = vNrmW.y > 0.5;
@@ -2265,7 +2271,7 @@ export function makeVoxelMaterial() {
             );
         mat.userData.shader = shader;
     };
-    mat.customProgramCacheKey = () => 'VoxelWorld-voxel-v11';
+    mat.customProgramCacheKey = () => 'VoxelWorld-voxel-v13';
     return mat;
 }
 
