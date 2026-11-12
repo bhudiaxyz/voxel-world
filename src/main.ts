@@ -468,6 +468,8 @@ async function start(): Promise<void> {
             wu.uWet.value = weather.wet;
             wu.uSnow.value = weather.snowCover;
             wu.uCausticTime.value += dt;
+            // Lantern flicker / cascade flow on the emissive glow mesh.
+            world.meshes.glowMaterial.userData.glowTime.value += dt;
             const sunDir = dayNight.sunDir;
             const sunUp = THREE.MathUtils.smoothstep(sunDir.y, -0.05, 0.15);
             const night = dayNight.getNightFactor();

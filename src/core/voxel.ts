@@ -1959,15 +1959,18 @@ const FRAG_DECL = /* glsl */ `
    * horizontal cracks, with a lighter worn ridge on each plate. On the top /
    * bottom faces (cut ends) it shows growth rings instead.
    */
-  vec3 patBark(vec2 uv, vec3 base, vec3 tint, bool endGrain, vec3 pos) {
-    if (endGrain) {
-      // Rings around the trunk centre (block centre is a good approximation).
-      vec2 c = fract(pos.xz) - 0.5;
-      float r = length(c) * 7.0 + vxNoise(pos.xz * 4.0) * 0.6;
-      float ring = sin(r * 6.2832) * 0.5 + 0.5;
-      vec3 wood = mix(base * 1.45, tint * 1.25, 0.5);
-      return wood * (0.86 + ring * 0.14) * (1.0 - smoothstep(0.38, 0.5, length(c)) * 0.35);
-    }
+  // Single return per function: early returns make ANGLE's HLSL translator
+  // warn X4000 (potentially uninitialized) on the fall-through path.
+  vec3 patBarkEnd(vec3 base, vec3 tint, vec3 pos) {
+    // Rings around the trunk centre (block centre is a good approximation).
+    vec2 c = fract(pos.xz) - 0.5;
+    float r = length(c) * 7.0 + vxNoise(pos.xz * 4.0) * 0.6;
+    float ring = sin(r * 6.2832) * 0.5 + 0.5;
+    vec3 wood = mix(base * 1.45, tint * 1.25, 0.5);
+    return wood * (0.86 + ring * 0.14) * (1.0 - smoothstep(0.38, 0.5, length(c)) * 0.35);
+  }
+
+  vec3 patBarkSide(vec2 uv, vec3 base, vec3 tint) {
     float x = uv.x * 5.0 + vxNoise(vec2(uv.y * 0.9, uv.x * 0.6)) * 1.4;   // furrows wander
     float col0 = floor(x);
     float fx = fract(x);
@@ -1985,16 +1988,21 @@ const FRAG_DECL = /* glsl */ `
     return col;
   }
 
+  vec3 patBark(vec2 uv, vec3 base, vec3 tint, bool endGrain, vec3 pos) {
+    return endGrain ? patBarkEnd(base, tint, pos) : patBarkSide(uv, base, tint);
+  }
+
   /**
    * Water voxels (rivers above sea level): flowing ripple lines, soft caustic
    * light, foam flecks and a brighter sheen on the tops; murky depth on sides.
    */
-  vec3 patWater(vec2 uv, vec3 base, vec3 tint, bool top, float t) {
-    if (!top) {
-      // Side of a water column: darker with depth, faint moving light bands.
-      float band = sin(uv.y * 5.0 - t * 1.2 + vxNoise(uv * 1.3) * 2.0) * 0.5 + 0.5;
-      return base * (0.72 + band * 0.12);
-    }
+  vec3 patWaterSide(vec2 uv, vec3 base, float t) {
+    // Side of a water column: darker with depth, faint moving light bands.
+    float band = sin(uv.y * 5.0 - t * 1.2 + vxNoise(uv * 1.3) * 2.0) * 0.5 + 0.5;
+    return base * (0.72 + band * 0.12);
+  }
+
+  vec3 patWaterTop(vec2 uv, vec3 base, vec3 tint, float t) {
     vec2 flow = uv + vec2(t * 0.45, t * 0.12);
     float a = vxNoise(flow * 1.6), b = vxNoise(flow * 1.6 * 1.37 + 9.1 - vec2(t * 0.2, 0.0));
     float web = pow(max(1.0 - abs(a - b) * 3.5, 0.0), 3.0);               // caustic light
@@ -2004,6 +2012,10 @@ const FRAG_DECL = /* glsl */ `
     float foam = smoothstep(0.82, 0.93, vxNoise(flow * 3.3 + 4.0));
     col = mix(col, vec3(0.92, 0.96, 1.0), foam * 0.45);
     return col;
+  }
+
+  vec3 patWater(vec2 uv, vec3 base, vec3 tint, bool top, float t) {
+    return top ? patWaterTop(uv, base, tint, t) : patWaterSide(uv, base, t);
   }
 
   /* ---- added so that no voxel is a flat colour -----------------------
@@ -2428,7 +2440,7 @@ export function makeVoxelMaterial() {
             );
         mat.userData.shader = shader;
     };
-    mat.customProgramCacheKey = () => 'VoxelWorld-voxel-v16';
+    mat.customProgramCacheKey = () => 'VoxelWorld-voxel-v17';
     return mat;
 }
 
@@ -2440,16 +2452,22 @@ export function makeGlowMaterial() {
     // Using the full VERT_DECL/FRAG_DECL (terrain-specific attributes aTint/aFringe/aUv/aData)
     // caused driver-level issues on some WebGL implementations when those attributes were
     // missing from glow geometry, leading to visual flickering.
-    const GLOW_VERT_DECL = /* glsl */ `varying vec3 vNrmW;\n${PLANET_UNIFORMS_GLSL}\n${PLANET_BEND_GLSL}`;
-    const GLOW_FRAG_DECL = /* glsl */ `varying vec3 vNrmW;`;
+    // Texture comes from world position only (no extra attributes — see above),
+    // and the style is chosen by the block's colour: amber = lantern, pale
+    // blue-white = cascade, anything else (crystal lilac) = faceted glow.
+    const GLOW_VERT_DECL = /* glsl */ `varying vec3 vNrmW;\nvarying vec3 vGlowPos;\n${PLANET_UNIFORMS_GLSL}\n${PLANET_BEND_GLSL}`;
+    const GLOW_FRAG_DECL = /* glsl */ `varying vec3 vNrmW;\nvarying vec3 vGlowPos;\nuniform float uGlowTime;\n${COMMON_GLSL}`;
+    const glowTime = { value: 0 };
     mat.onBeforeCompile = (shader) => {
         Object.assign(shader.uniforms, planetUnis);
+        shader.uniforms.uGlowTime = glowTime;
         shader.vertexShader = shader.vertexShader
             .replace('#include <common>', `#include <common>\n${GLOW_VERT_DECL}`)
             .replace(
                 '#include <begin_vertex>',
                 `#include <begin_vertex>
   vNrmW = normal;
+  vGlowPos = position;   // chunk meshes are untransformed: local = world
   applyPlanetBend(transformed, vNrmW);`,
             );
         shader.fragmentShader = shader.fragmentShader
@@ -2459,7 +2477,37 @@ export function makeGlowMaterial() {
                 `#include <color_fragment>
         {
           float faceShade = vNrmW.y > 0.5 ? 1.06 : (vNrmW.y < -0.5 ? 0.8 : 0.94);
-          diffuseColor.rgb *= faceShade * 1.5;
+          vec3 c = diffuseColor.rgb;
+          bool side = abs(vNrmW.y) < 0.5;
+          // In-plane coordinates of this face, in blocks.
+          vec2 uv = abs(vNrmW.x) > 0.5 ? vGlowPos.zy : abs(vNrmW.z) > 0.5 ? vGlowPos.xy : vGlowPos.xz;
+          vec2 f = fract(uv);
+          float warm = c.r - c.b;          // lanterns are strongly warm
+          float cool = c.b - c.r;          // cascades are pale and cool
+          if (warm > 0.25) {
+            // Lantern: dark frame around the edge and a cross bar, glowing paper
+            // panes that are brightest in the middle and flicker gently.
+            float frame = 1.0 - smoothstep(0.06, 0.12, min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y)));
+            float bar = side ? 1.0 - smoothstep(0.02, 0.05, abs(f.y - 0.5)) : 0.0;
+            float glow = 1.0 - length(f - 0.5) * 0.9;
+            float flick = 0.94 + 0.06 * sin(uGlowTime * 9.0 + vGlowPos.x * 3.1 + vGlowPos.z * 2.3);
+            vec3 paper = c * (0.8 + glow * 0.5) * flick * (0.95 + vxNoise(uv * 9.0) * 0.1);
+            c = mix(paper, c * 0.18, max(frame, bar) * 0.9);
+          } else if (cool > -0.02 && dot(c, vec3(0.333)) > 0.75) {
+            // Cascade: water falling in streaks, foam, moving downward.
+            float streak = vxNoise(vec2(uv.x * 6.0, uv.y * 0.6 + uGlowTime * 2.4));
+            float fine = vxNoise(vec2(uv.x * 17.0, uv.y * 2.0 + uGlowTime * 3.6));
+            c *= 0.82 + streak * 0.22 + fine * 0.10;
+            c = mix(c, vec3(1.0), smoothstep(0.7, 0.9, fine) * 0.35);
+          } else {
+            // Crystal and other glow: hard facets with brighter edges.
+            vec2 p = uv * 2.2;
+            float a = fract(p.x + p.y * 0.62), b = fract(p.y - p.x * 0.41);
+            float facet = vxHash(floor(vec2(p.x + p.y * 0.62, p.y - p.x * 0.41)));
+            float edge = 1.0 - smoothstep(0.0, 0.06, min(min(a, 1.0 - a), min(b, 1.0 - b)));
+            c = c * (0.82 + facet * 0.3) * (1.0 + edge * 0.35);
+          }
+          diffuseColor.rgb = c * faceShade * 1.5;
         }`,
             );
     };
@@ -2468,6 +2516,7 @@ export function makeGlowMaterial() {
         uAoTint: { value: new THREE.Color(1, 1, 1) },
     };
     mat.userData.planetUnis = planetUnis;
-    mat.customProgramCacheKey = () => 'VoxelWorld-glow-v3';
+    mat.userData.glowTime = glowTime;
+    mat.customProgramCacheKey = () => 'VoxelWorld-glow-v4';
     return mat;
 }

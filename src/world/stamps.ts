@@ -1044,8 +1044,10 @@ function hotSpring(_world: any, T: any, site: any, rng: any) {
     for (let dz = -rz; dz <= rz; dz++)
         for (let dx = -rx; dx <= rx; dx++) {
             if ((dx / rx) ** 2 + (dz / rz) ** 2 > 1.0) continue;
-            T.ground(cx + dx, cz + dz, baseY, BLOCKS.STONE_WARM.id); // floor
-            T.put(cx + dx, cz + dz, baseY + 1, RIVER_WATER.id); // warm pool
+            // Sunk one block so the pool sits level with the ground around it
+            // rather than standing on top of it.
+            T.ground(cx + dx, cz + dz, baseY - 1, BLOCKS.STONE_WARM.id); // floor
+            T.put(cx + dx, cz + dz, baseY, RIVER_WATER.id); // warm pool, at ground level
         }
 
     // Boulder rim
