@@ -847,15 +847,17 @@ Exactly one mode owns the camera each frame. `fpCam.flyActive` / `droneActive` t
 
 - **Walk (`FPCamera.update`):** eye height 1.75, plus head bob (0.022 m at 2.2 Hz × speed) while grounded.
 - **Drone (`player/drone.ts`):** a state machine `idle → rising → cruising` (plus `landing`).
-    - **Enter:** scans upward for clear air, then rises to `max(18, clearance + 4, current altitude)`. Entering from fly mode skips the rise.
+    - **Enter:** rises to `max(enterLiftHeight (6), obstruction clearance + 3, current altitude)`. Clearance only applies when something is actually overhead. Entering from fly mode skips the rise. (The minimum used to be 18, a big launch.)
     - **Cruise:** terrain-follow is a P-controller on a smoothed ground target: `smoothed += (raw − smoothed) × min(1, dt × 3.5)`, then vertical velocity `= clamp(error × 4, ±14)`.
     - **Speed and steering:** cruise speed 18, sprint 45; A/D or mouse X turns the heading; touch joystick Y below zero brakes.
-    - **Land:** descends at 90 m/s until 2.5 blocks above ground, then hands back to walk mode. Any upward input (Space, ↑ or the scroll wheel) aborts the landing.
+    - **Land:** the hover target drops at 90 m/s, and while landing the camera follows with its own limits: `landingSinkRate` (40 blocks/s, versus the cruise cap of 7) and `landingEase` (`dt × 9`, versus 3). It lands in about a second from 50 blocks up, then hands back to walk mode at 2.5 blocks above ground. Before, the cruise descent cap _was_ the landing speed, which took several seconds. Any upward input (Space, ↑ or the scroll wheel) aborts the landing.
     - **Exit:** `exit()` leaves immediately, without landing; this is the F-cycle step from drone to fly.
 - **Fly (`player/fly.ts`):** free 6-DoF movement at speed 20 (sprint 60).
     - The terrain floor (surface + 1.75) is smoothed downward at up to 8 m/s, so flying over a cliff doesn't snap you down.
     - A probe 6 blocks ahead pushes you upward (up to 14 m/s) before you hit a wall.
-    - Leaving fly mode (F or L) places the controller on the ground directly beneath the camera.
+    - **Entering** lifts you only if something is overhead, and only 1 block above it.
+    - **F** drops straight to walk mode, with the controller placed on the ground beneath the camera.
+    - **L** (`flyLanding` in `main.ts`) descends at the drone's landing pace (up to 40 blocks/s, eased) and switches to walk mode at eye height. Upward input aborts it, and the touch 🛬 button hides while it's in progress.
 
 `cycleMode()` in `main.ts` handles the mode transitions, including resetting yaw/pitch and syncing the controller position.
 
