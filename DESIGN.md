@@ -451,12 +451,12 @@ Only `EdgeMaskPass` draws the edge layer, so ink exists only on the high tier. `
 
 Most world materials are stock Three.js materials extended through `onBeforeCompile` string replacement, so they keep Three's lighting, shadows and fog:
 
-| Material                      | Base                  | Injected                                                                                                                                                                                                   | Cache key                 |
-| ----------------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
-| Terrain (`makeVoxelMaterial`) | `MeshLambertMaterial` | procedural patterns (brick, stone, plank, bark, grass, tile), grass fringe, macro colour noise, face shading, sun/ambient tints, baked AO, waterline ink, coloured VSM shadow tint, wind sway, planet bend | `VoxelWorld-voxel-v17`    |
-| Glow                          | `MeshBasicMaterial`   | face shading ×1.5, planet bend                                                                                                                                                                             | `VoxelWorld-glow-v3`      |
-| Ground detail (`DetailField`) | `MeshLambertMaterial` | per-vertex wind (`aDetail` = sway, phase), planet bend. `DoubleSide`, `depthWrite: false`, `renderOrder = 2`                                                                                               | `VoxelWorld-vegdetail-v7` |
-| Water, sky, edges, particles  | `ShaderMaterial`      | written in full                                                                                                                                                                                            | —                         |
+| Material                      | Base                  | Injected                                                                                                                                                                                                                                                                            | Cache key                 |
+| ----------------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| Terrain (`makeVoxelMaterial`) | `MeshLambertMaterial` | procedural surface patterns (see [Voxel surface patterns](#voxel-surface-patterns)), per-block tone, grass fringe, macro colour noise, face shading, sun/ambient tints, baked AO, waterline ink, coloured VSM shadow tint, weather (wet/snow), bed caustics, wind sway, planet bend | `VoxelWorld-voxel-v17`    |
+| Glow                          | `MeshBasicMaterial`   | world-position patterns chosen by colour (lantern frame + panes with flicker, falling cascade streaks, crystal facets), face shading ×1.5, planet bend                                                                                                                              | `VoxelWorld-glow-v4`      |
+| Ground detail (`DetailField`) | `MeshLambertMaterial` | per-vertex wind (`aDetail` = sway, phase), planet bend. `DoubleSide`, `depthWrite: false`, `renderOrder = 2`                                                                                                                                                                        | `VoxelWorld-vegdetail-v7` |
+| Water, sky, edges, particles  | `ShaderMaterial`      | written in full                                                                                                                                                                                                                                                                     | —                         |
 
 Rules:
 
@@ -465,13 +465,51 @@ Rules:
 - **Shared uniforms:** uniforms used by many meshes live on `material.userData.uniforms` and are copied into `shader.uniforms` in `onBeforeCompile`.
     - **Per-mesh uniform values don't work with a shared material**, because Three only re-uploads uniforms when the bound material changes.
 - **Wind sway** (terrain leaves):
-    - Bit 3 of `aData.y` flags swayable blocks.
+    - Bit 4 of `aData.y` flags swayable blocks (the low 4 bits are the pattern id).
     - The vertex shader offsets XZ by two summed sines (phase taken from world XZ) × `uWindStrength` × `clamp(y / 28, 0, 1)`.
     - `main.ts` animates `uWindTime`, `uWindDir` and `uWindStrength`, with a slowly rotating direction and a gust envelope; `_windBase` holds the slider value.
     - Skipped on very-low.
 - **Fog near-plane patch:**
     - At import, `lighting.ts` rewrites `THREE.ShaderChunk.fog_fragment` once to subtract `FOG_NEAR` (96) before the exp² curve, which keeps the play area at full colour.
     - It logs a warning if that chunk changes shape after a Three upgrade.
+
+### Voxel surface patterns
+
+Every block has a `pattern` (sides) and optional `topPattern` (`PATTERN` in `palette.ts`). The id travels in the low 4 bits of `aData.y` and `FRAG_BODY` dispatches on it. **No block is a flat colour:** `NONE` falls back to `patSurface`, a subtle generic texture.
+
+| Id  | Pattern   | Used by                            | What it draws                                                                               |
+| --- | --------- | ---------------------------------- | ------------------------------------------------------------------------------------------- |
+| 0   | `NONE`    | fallback                           | Two-octave noise, tint patches, fine grain                                                  |
+| 1   | `BRICK`   | —                                  | Running-bond courses, pitted faces, chipped corners                                         |
+| 2   | `STONE`   | stone, stone-substrate grass sides | Angular cell-noise facets, hairline cracks, mottling, speckle                               |
+| 3   | `PLANK`   | planks, roofs                      | Boards with joints, per-board tone, flowing grain, knots, nail heads                        |
+| 4   | `BARK`    | trunks, beams                      | Sides: wandering furrows, raised plates with cracks, worn ridges, fibre. Ends: growth rings |
+| 5   | `GRASS`   | grass tops, moss                   | Broad turf patches, clumps, blade stipple                                                   |
+| 6   | `TILE`    | —                                  | Square tiles with seams                                                                     |
+| 7   | `SOIL`    | soil, grass sides                  | Clods, wall layering, grit, occasional pit or pebble                                        |
+| 8   | `SAND`    | sand                               | Light/dark grains, lit-crest wind ripples, shells (tops); strata (sides)                    |
+| 9   | `LEAF`    | leaves, bushes, ferns, shrubs      | Two staggered layers of pointed leaves at random angles with midribs, dark gaps, clumping   |
+| 10  | `COBBLE`  | path                               | Domed cell-noise cobbles in a dark bed                                                      |
+| 11  | `CLOTH`   | cloth                              | Over-under weave, thread gaps, folds                                                        |
+| 12  | `CRYSTAL` | crystal (non-emissive faces)       | Hard facets with bright edges                                                               |
+| 13  | `WATER`   | `RIVER_WATER`                      | Tops: flowing ripples, caustic web, foam flecks (animated). Sides: murky moving bands       |
+
+Rules for the patterns:
+
+- **Shift brightness directly.** Patterns modulate luminance directly (a ±10–20% range) rather than mixing toward `tint`. A block's tint is only about 10% off its base, so tint-mixing barely registered and blocks read as flat paint.
+- **Per-block tone.** Each voxel is ±4% brighter or darker than its neighbours (`vxHash3` of the block cell). Big slabs then read as built from blocks, and at 1-block granularity it can't alias.
+- **Footprint fade (anti-aliasing).** Pattern detail is mixed out by `detail = (1 − smoothstep(0.06, 0.22, max(fwidth(uv)))) × (1 − smoothstep(40, 120, dist))`.
+    - `fwidth(uv)` is how many blocks one pixel covers. On ground seen at a grazing angle it grows long before distance does, and without the fade the fine grass grain turned into stripes pointing at the vanishing point.
+    - It must be computed in uniform control flow, outside the pattern branches.
+- **GLSL hygiene.**
+    - **Function order.** GLSL needs functions declared before use, so helpers go first (`patBarkEnd`/`patBarkSide`, then `patBark`).
+    - **Single return per function.** Early returns trigger ANGLE warning X4000 on Windows.
+    - **Reserved words.** Avoid ES 3.00 reserved words as identifiers (for example `patch`).
+- **Glow mesh patterns.** Emissive blocks (lantern, cascade, crystal) are drawn by the glow material, which has no UV or pattern attributes (adding the terrain attribute set caused driver flicker). Its patterns are derived from world position, and the style is chosen from the vertex colour:
+    - **Lantern:** warm colours (r − b > 0.25).
+    - **Cascade:** pale, cool colours.
+    - **Crystal facets:** everything else.
+    - `uGlowTime` (ticked in `main.ts`) animates lantern flicker and cascade flow.
 
 ---
 
@@ -691,6 +729,15 @@ Each tier value is used in one place:
 - Above 57 fps, it climbs back by 0.1, up to 1.
 
 Each change calls `renderer.setDprScale()` and then the normal resize path, which resizes the composer and all its targets.
+
+### Shadow depth precision
+
+VSM stores depth and depth² in a half-float RG target, which keeps only about three significant digits. The shadow camera's depth range is therefore kept tight:
+
+- The sun sits `SUN_DIST` (200) from its player-following target (shared by `lighting.ts` and `DayNight`).
+- The shadow camera's near and far planes are `SUN_DIST − 150` and `SUN_DIST + 200`.
+
+The old range (near 1, far `worldSize × 3.2`, sun 845 units out) spread that precision over about 2,450 units. That is coarse enough for the shadow test to step at grazing sun angles. The tighter range only has to span the ±extent frustum and the 96-block height range.
 
 ### Robustness
 
@@ -975,6 +1022,12 @@ Separation: `MIN_SEPARATION = 34` blocks between any two scene centres. Quotas (
 
 One pass per continent after scenic stamps. Seven kinds, 2–3 per continent slot, shuffled per seed. Each landmark reserves its footprint against the vegetation scatter pass. All seven kinds are registered in `map.ts` and appear on the minimap as landmark circles.
 
+**Placement.**
+
+- **Clearance:** landmarks only need to clear other stamps by `LANDMARK_CLEARANCE` (14 blocks), not the 34-block `MIN_SEPARATION` that scenes keep between each other.
+- **Fallback spiral:** if the planned spot is wet or crowded, the nearest valid dry spot on a spiral around it (up to 40 blocks out) is used instead. The landmark's RNG seed is the same whichever spot it lands on.
+- **Why:** previously landmarks ran after about 80 scenic stamps had claimed the map, with the scenic 34-block rule and no fallback, so only about 1 of 15 planned landmarks was ever built. Now nearly all are.
+
 | Grammar             | Generates                                                                                                                              |
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | `twistedSpire`      | 3×3 warm-stone base, 14–22 block drifting pale-stone shaft (shifts 1 block each 4 levels, max ±2), cap block                           |
@@ -1020,17 +1073,28 @@ The point where a dry ravine meets a wet reach is where `addCascades()` places i
 
 ### RIVER_WATER voxels (`terrain.ts`)
 
-Above sea level, river channels are filled with `RIVER_WATER` voxels (3 blocks above the carved bed) so the river is visible as a teal-blue channel rather than a dry ravine:
+Above sea level, river channels are filled with `RIVER_WATER` voxels (pattern `WATER`), so the river reads as a flowing channel rather than a dry ravine. The rule is **carve, then fill**, so the water always sits _inside_ its banks.
+
+1. **Surface.** For each channel column above sea level, the water surface is one block below the lowest _dry_ bank (non-channel, above sea) within `BANK_R` (3). It's computed from the uncarved heights, so carving one column can't lower its neighbour's reference.
+2. **Slope relaxation.** Six passes cap each surface at most one block above any 4-neighbour's water surface, or at a dry neighbour's height. A river on a slope then steps down with the land instead of standing above the lower bank. Genuine drops still become cascades.
+3. **Carve.** The bed is lowered to `surface − depth`, where `depth` is 1 at the channel edge and up to `RIVER_DEPTH` (3) on the centreline. Voxels above the bed are cleared, the bed gets a sand block, and `heights` is lowered to match, because collision, navigation, the map and vegetation all read it.
+4. **Fill.** Water is placed from bed + 1 up to the surface.
+
+The previous version stacked three water blocks _on top of_ the column, which stood rivers up as raised teal walls wherever the earlier carve had left the bed level with its banks. About 10% of water columns still sit 1–2 blocks above an adjacent dry column. These are mostly river mouths and waterfall lips, where a step is genuine.
 
 ```ts
 export const RIVER_WATER = registerBlock('RIVER_WATER', {
     top: lin(0x4fa8bc),
     side: lin(0x3d97ae),
     bottom: lin(0x2e8899),
+    tint: lin(0x7cc8d8), // ripple / sheen colour for patWater
+    pattern: PATTERN.WATER,
     rough: 0.05,
     isWater: true,
 });
 ```
+
+The `hotSpring` stamp sinks its floor one block, so its pool sits level with the ground instead of on top of it.
 
 `isWater: true` is checked by `VoxelGrid.isSolid()` (returns false, keeping the block passable) and by `Controller` when probing for water surface level.
 

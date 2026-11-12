@@ -1153,13 +1153,38 @@ export function buildStamps(world: any, _rng: any) {
         well: ancientWell,
         arch: ruinedArch,
     };
+    /* Landmarks used to be almost all missing (≈1 of 15 planned per world).
+     * They ran after ~80 scenic stamps and every bridge had claimed the map,
+     * and `claimed()` rejects anything within MIN_SEPARATION (34 blocks) of ANY
+     * claim — the spacing scenes keep from each other, far wider than a
+     * landmark's footprint. The planned spot was nearly always inside one, and
+     * a rejected site was simply dropped.
+     *
+     * So: landmarks only need to clear other stamps' footprints
+     * (LANDMARK_CLEARANCE), and if the planned spot fails, the nearest valid
+     * dry spot on a spiral around it is tried instead. */
+    const LANDMARK_CLEARANCE = 14;
+    const scenicClaimed = T.claimed;
+    T.claimed = (x: any, z: any) => T.claims.some((c: any) => Math.hypot(c[0] - x, c[1] - z) < LANDMARK_CLEARANCE);
     for (const site of plan.landmarks || []) {
-        const [sx, sz] = site.at;
-        if (sx < 12 || sz < 12 || sx > S - 13 || sz > S - 13) continue;
-        (T as any).rng = makeRng(site.seed ^ 0x1d3a2c4b);
         const grammar = LANDMARK_GRAMMARS[site.kind];
         if (!grammar) continue;
-        const made = grammar(world, T, site, (T as any).rng);
+        const [sx0, sz0] = site.at;
+        let made = null;
+        // Spiral out from the planned spot: ring radius r, 8 + 2r samples per ring.
+        for (let r = 0; r <= 40 && !made; r += 4) {
+            const n = r === 0 ? 1 : 8 + r * 2;
+            for (let k = 0; k < n && !made; k++) {
+                const a = (k / n) * Math.PI * 2;
+                const sx = Math.round(sx0 + Math.cos(a) * r),
+                    sz = Math.round(sz0 + Math.sin(a) * r);
+                if (sx < 12 || sz < 12 || sx > S - 13 || sz > S - 13) continue;
+                if (!T.dry(sx, sz) || T.claimed(sx, sz)) continue;
+                // Same seed whichever spot it lands on, so the landmark itself is deterministic.
+                (T as any).rng = makeRng(site.seed ^ 0x1d3a2c4b);
+                made = grammar(world, T, { ...site, at: [sx, sz] }, (T as any).rng);
+            }
+        }
         if (made) {
             T.claims.push(made.at);
             made.score = 0;
@@ -1167,6 +1192,7 @@ export function buildStamps(world: any, _rng: any) {
             world.stamps.push(made);
         }
     }
+    T.claimed = scenicClaimed;
 
     return world.stamps;
 }
