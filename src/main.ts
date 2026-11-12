@@ -24,6 +24,7 @@ import { createDroneMode } from './player/drone';
 import { createFlyMode } from './player/fly';
 import { detectGpuTier, hasWebGL2, TIER_SETTINGS } from './render/gpu-tier';
 import { createTouchControls, isTouchDevice } from './ui/touch-controls';
+import { Weather } from './render/weather';
 
 export let currentSeedWord = 'LusaliBenoruLezagi';
 const urlWord = new URLSearchParams(location.search).get('seed');
@@ -39,6 +40,8 @@ pushSeedUrl(currentSeedWord);
 // Scratch vectors — reused every frame to avoid GC pressure.
 const _sunWorld = new THREE.Vector3();
 const _sunNDC = new THREE.Vector3();
+const _moonDir = new THREE.Vector3();
+const _wind2 = new THREE.Vector2();
 let _lastPlanetX = Infinity,
     _lastPlanetZ = Infinity;
 
@@ -205,6 +208,9 @@ async function start(): Promise<void> {
     const touch = createTouchControls(fpCam, renderer.domElement);
 
     const post = createPostFX(renderer, scene, fpCam.camera, world.meshes.edgeMaterial, tier);
+    post.shareSky(atmo.sky.material.uniforms);
+    const weather = new Weather(makeRng(SEED ^ 0x3e47));
+    const groundDetail = world.decorations.find((d: any) => d.object3d?.name === 'veg-detail');
     // FPCamera has no zoom range; pass a stub so settings.js compiles cleanly
     const settings = createSettings({
         rig: { setZoomRange: () => {} },
@@ -432,19 +438,74 @@ async function start(): Promise<void> {
         if (manualMovement || fly.active || drone.active) atmo.followTarget(controller.pos.x, controller.pos.z);
         dayNight.update(dt);
 
+        weather.update(dt);
+        const wu = world.meshes.material.userData.uniforms;
+
         // Wind: slowly rotate direction + gust envelope, push to voxel shader.
         // Skipped on very-low (no particles, sparse trees) and when strength is 0.
+        // Weather blows harder: rain ×1.6, snow ×1.3 on top of the slider.
         if (tier !== 'very-low') {
-            const wu = world.meshes.material.userData.uniforms;
             if (wu._windBase > 0) {
                 windTime += dt;
                 windAngle += dt * 0.04 * (Math.sin(windTime * 0.11) * 0.5 + 0.5);
                 windDir.set(Math.cos(windAngle), Math.sin(windAngle));
                 const gust = 0.5 + Math.sin(windTime * 0.7) * 0.3 + Math.sin(windTime * 1.3) * 0.2;
+                const storm = 1 + weather.rain * 0.6 + weather.snow * 0.3;
                 wu.uWindTime.value = windTime;
                 wu.uWindDir.value.copy(windDir);
-                wu.uWindStrength.value = wu._windBase * gust;
+                wu.uWindStrength.value = wu._windBase * gust * storm;
+                if (groundDetail) {
+                    const gu = groundDetail.planetUnis as any;
+                    gu.uWindDir.value.copy(windDir);
+                    gu.uGustTime.value = windTime;
+                    gu.uGustStr.value = Math.min(1.5, wu._windBase * 2.2 * storm);
+                }
             }
+        }
+
+        // ---- weather on the ground, water light, time-of-day grade -----------
+        {
+            wu.uWet.value = weather.wet;
+            wu.uSnow.value = weather.snowCover;
+            wu.uCausticTime.value += dt;
+            const sunDir = dayNight.sunDir;
+            const sunUp = THREE.MathUtils.smoothstep(sunDir.y, -0.05, 0.15);
+            const night = dayNight.getNightFactor();
+            // Bed caustics need sunlight and calm-ish water; mobile tiers keep them.
+            wu.uCausticStr.value = tier === 'very-low' ? 0 : 0.35 * sunUp * (1 - weather.rain * 0.7);
+
+            // Golden hour: sun low but up. Blue hour: sun just below the horizon.
+            const g = post.grade.uniforms;
+            g.uGolden.value =
+                THREE.MathUtils.smoothstep(sunDir.y, 0.0, 0.08) *
+                (1 - THREE.MathUtils.smoothstep(sunDir.y, 0.18, 0.38)) *
+                0.85;
+            g.uBlue.value =
+                THREE.MathUtils.smoothstep(sunDir.y, -0.22, -0.06) *
+                (1 - THREE.MathUtils.smoothstep(sunDir.y, -0.06, 0.04));
+            // Overcast mutes both.
+            const overcast = 1 - Math.max(weather.rain, weather.snow) * 0.75;
+            g.uGolden.value *= overcast;
+            g.uBlue.value *= overcast;
+            post.haze.uniforms.uHazeGlow.value = 0.22 * overcast;
+
+            const moonDir = _moonDir.copy(sunDir).negate();
+            water.setLights(
+                sunDir,
+                atmo.sun.color,
+                moonDir,
+                night * THREE.MathUtils.smoothstep(moonDir.y, 0.0, 0.2) * overcast,
+            );
+
+            // Rain/snow particles drift with the wind; motes catch a low sun.
+            _wind2.copy(windDir).multiplyScalar(1.5 + weather.rain * 2.5);
+            particles.setAtmosphere(
+                weather.rain,
+                weather.snow,
+                _wind2,
+                sunDir,
+                sunUp * (0.45 + (1 - THREE.MathUtils.smoothstep(sunDir.y, 0.1, 0.5)) * 0.55) * overcast,
+            );
         }
 
         // Project sun to screen for crepuscular rays — active only near horizon.
@@ -574,6 +635,7 @@ async function start(): Promise<void> {
         dayNight,
         drone,
         fly,
+        weather,
     };
 }
 

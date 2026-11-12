@@ -124,6 +124,9 @@ export function createWater(size: any, depthMap: any, tier: string = 'high', wat
                 uSky: { value: SKY.zenith.clone() },
                 uSunDir: { value: LIGHT.sunDir.clone().normalize() },
                 uSunColor: { value: LIGHT.sunColor.clone() },
+                uMoonDir: { value: new THREE.Vector3(0, -1, 0) },
+                uMoonColor: { value: new THREE.Color(0.62, 0.72, 0.95) },
+                uMoonLight: { value: 0 },
                 uExtinction: { value: new THREE.Vector3(...WATER.extinction) },
                 uDepthMap: { value: depthMap },
                 uWorldSize: { value: size },
@@ -168,6 +171,8 @@ export function createWater(size: any, depthMap: any, tier: string = 'high', wat
       uniform float uTime, uOpacity, uDensity, uSaturation, uCellTone, uCaustic, uReflect;
       uniform float uWorldSize, uRange, uLevel;
       uniform vec3 uShoal, uShallow, uDeep, uWarm, uSheen, uHorizon, uSky, uSunDir, uSunColor;
+      uniform vec3 uMoonDir, uMoonColor;
+      uniform float uMoonLight;
       uniform vec3 uExtinction;
       uniform sampler2D uDepthMap;
       varying vec3 vWorld;
@@ -313,6 +318,19 @@ export function createWater(size: any, depthMap: any, tier: string = 'high', wat
         vec3 Hv = normalize(uSunDir + V);
         col += uSunColor * pow(max(dot(N, Hv), 0.0), 90.0) * 0.22 * above;
 
+        /* --- moonlight -------------------------------------------------------
+         * At night the water is the brightest thing in the frame, and the
+         * reason is the moon path: a broken column of glints stretching from the
+         * viewer toward the moon. A lower exponent than the sun glint spreads
+         * it into that path; the wave normal breaks it into sparkles. Gated by
+         * uMoonLight so daytime pays one multiply. */
+        if (uMoonLight > 0.001) {
+          vec3 Hm = normalize(uMoonDir + V);
+          float path = pow(max(dot(N, Hm), 0.0), 38.0);
+          float sparkle = smoothstep(0.55, 0.95, h21(floor(uv * 3.0) + floor(uTime * 6.0)));
+          col += uMoonColor * uMoonLight * (path * (0.35 + sparkle * 0.9) + fres * 0.06) * above;
+        }
+
         /* --- bank foam -------------------------------------------------------
          * A thin bright froth band right at the waterline. Confined to the
          * 0.4–1.2 block shore strip so it is never visible on deep water. */
@@ -374,6 +392,18 @@ export function createWater(size: any, depthMap: any, tier: string = 'high', wat
         planetUnis: mat.uniforms,
         update(dt: number) {
             mat.uniforms.uTime.value += dt;
+        },
+        /**
+         * Live sun / moon (main.ts, from DayNight). The sun glint used to keep
+         * its creation-time direction and colour all day long.
+         * @param moon 0..1 moonlight strength (night factor × moon above horizon)
+         */
+        setLights(sunDir: THREE.Vector3, sunColor: THREE.Color, moonDir: THREE.Vector3, moon: number) {
+            const u = mat.uniforms;
+            u.uSunDir.value.copy(sunDir);
+            u.uSunColor.value.copy(sunColor);
+            u.uMoonDir.value.copy(moonDir);
+            u.uMoonLight.value = moon;
         },
     };
 }

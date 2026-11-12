@@ -18,7 +18,7 @@ Developer reference: how the code is organised, the approach each subsystem take
 - [Rendering pipeline](#rendering-pipeline)
 - [Ink edges](#ink-edges)
 - [Materials & shader injection](#materials--shader-injection)
-- [Sky model](#sky-model) · [Day/night cycle](#daynight-cycle) · [Water](#water) · [Planet bend](#planet-bend)
+- [Weather & atmosphere](#weather--atmosphere) · [Sky model](#sky-model) · [Day/night cycle](#daynight-cycle) · [Water](#water) · [Planet bend](#planet-bend)
 - [GPU tiering & performance](#gpu-tiering--performance)
 - [Input & controls](#input--controls)
 - [Player systems](#player-systems) · [Navigation & the dog](#navigation--the-dog)
@@ -78,6 +78,7 @@ src/
 │   ├── day-night.ts         ← DayNight: keyframed sun/sky/light, voxel tint uniforms
 │   ├── postfx.ts            ← createPostFX(): SceneDepth → EdgeMask → Atmosphere → Bloom → Crepuscular → Grade → AA
 │   ├── planet.ts            ← PLANET_BEND_GLSL, planetUniformValues(), updatePlanetUniforms()
+│   ├── weather.ts           ← Weather: clear/rain/snow fronts, ground wetness & snow cover
 │   ├── fp-camera.ts         ← FPCamera: pointer lock, key state, mouse/touch look, wish vector, altitude axis
 │   └── camera.ts            ← CameraRig — legacy third-person rig, not currently imported
 │
@@ -405,6 +406,7 @@ Display-space colour grading:
     - contrast around mid-grey
     - a monotonic highlight knee
 - **Ink compositing** from the edge mask. It uses `mix`, never addition, so pale ink can't become an emitter.
+- **Golden / blue hour:** `uGolden` warms highlights and mids (sun just above the horizon); `uBlue` cools and lifts the shadows (sun just below it). Both are luminance-weighted, set each frame by `main.ts` from the sun's elevation, and muted by overcast weather.
 - **Finishing:** a tinted vignette and film grain.
 
 ### Anti-aliasing
@@ -416,6 +418,8 @@ Display-space colour grading:
 | very-low               | none |
 
 The AA pass sets `needsSwap = false`. Without it, the composer alternates render targets and the depth attachment detaches every other frame, which shows as a full-screen flash.
+
+Known warning: on Windows, Three's stock `FXAAShader` (low tier only) logs ANGLE warning X3595 at compile time. It's harmless, and fixing it would mean forking the shader.
 
 ---
 
@@ -449,9 +453,9 @@ Most world materials are stock Three.js materials extended through `onBeforeComp
 
 | Material                      | Base                  | Injected                                                                                                                                                                                                   | Cache key                 |
 | ----------------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
-| Terrain (`makeVoxelMaterial`) | `MeshLambertMaterial` | procedural patterns (brick, stone, plank, bark, grass, tile), grass fringe, macro colour noise, face shading, sun/ambient tints, baked AO, waterline ink, coloured VSM shadow tint, wind sway, planet bend | `VoxelWorld-voxel-v9`     |
+| Terrain (`makeVoxelMaterial`) | `MeshLambertMaterial` | procedural patterns (brick, stone, plank, bark, grass, tile), grass fringe, macro colour noise, face shading, sun/ambient tints, baked AO, waterline ink, coloured VSM shadow tint, wind sway, planet bend | `VoxelWorld-voxel-v10`    |
 | Glow                          | `MeshBasicMaterial`   | face shading ×1.5, planet bend                                                                                                                                                                             | `VoxelWorld-glow-v3`      |
-| Ground detail (`DetailField`) | `MeshLambertMaterial` | per-vertex wind (`aDetail` = sway, phase), planet bend. `DoubleSide`, `depthWrite: false`, `renderOrder = 2`                                                                                               | `VoxelWorld-vegdetail-v4` |
+| Ground detail (`DetailField`) | `MeshLambertMaterial` | per-vertex wind (`aDetail` = sway, phase), planet bend. `DoubleSide`, `depthWrite: false`, `renderOrder = 2`                                                                                               | `VoxelWorld-vegdetail-v5` |
 | Water, sky, edges, particles  | `ShaderMaterial`      | written in full                                                                                                                                                                                            | —                         |
 
 Rules:
@@ -468,6 +472,36 @@ Rules:
 - **Fog near-plane patch:**
     - At import, `lighting.ts` rewrites `THREE.ShaderChunk.fog_fragment` once to subtract `FOG_NEAR` (96) before the exp² curve, which keeps the play area at full colour.
     - It logs a warning if that chunk changes shape after a Three upgrade.
+
+---
+
+## Weather & atmosphere
+
+`render/weather.ts` (`Weather`) is a state machine: `clear → rain → clear → snow → clear …`, with each front lasting a few minutes (randomised from the seed). It keeps two kinds of value separate:
+
+- **Falling now:** `rain` and `snow`, eased in and out over about 20 s so a front _arrives_.
+- **Remembered by the ground:** `wet` builds over about 25 s of rain and dries over about 2 min. `snowCover` builds over about 1 min of snow and melts slowly (four times faster in rain). Melting snow leaves the ground wet. Puddles and settled snow outlive the weather that made them, which is most of what sells them.
+
+`?weather=` pins the state. In clear weather every consumer reads zero, so weather costs nothing until it rains.
+
+`main.ts` feeds the weather and the sun into these consumers each frame:
+
+| Effect                 | Where                          | How                                                                                                                                                                                                                                                                                                                                |
+| ---------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Rain / snow            | `particles.ts` (`uKind` 1 / 2) | Camera-centred fields: rain is an upright streak, snow a fluttering round flake, both drifting with the wind. Buffers are allocated at full size, and `instanceCount = max × intensity`, so clear skies draw nothing. They use their own RNG stream, so petals don't move.                                                         |
+| Puddles, wet ground    | terrain shader (`uWet`)        | Surfaces above the waterline darken; flat tops pool dark, sky-tinted puddles in noise hollows.                                                                                                                                                                                                                                     |
+| Settling snow          | terrain shader (`uSnow`)       | Tops cover first, with noise driving patchy accumulation. As cover grows it creeps over the top edge of side faces. It's tinted by `uAmbientTint` × face shading so it stays readable at dusk.                                                                                                                                     |
+| Wind gusts             | `GUST_GLSL` in `voxel.ts`      | `gustAt(xz, t, dir)`: travelling bands along the wind direction with two incommensurate frequencies. Trees lean and shake harder in a band; meadow detail flattens downwind (`uGustStr`). Both share `uWindDir` and the clock, so a gust rolls over grass and canopy together. Weather multiplies the wind (rain ×1.6, snow ×1.3). |
+| Shallow-water caustics | terrain shader (`uCausticStr`) | A drifting two-noise web projected onto underwater _tops_, fading exponentially with depth. Off on very-low and at night; reduced in rain. (The water's own surface web remains.)                                                                                                                                                  |
+| Sun glow in the haze   | atmosphere pass (`uHazeGlow`)  | A tight Mie-like lobe (`pow(s,24)` + `pow(s,8)`) in the live sun colour, carried by fog and mist, swelling as the sun gets low. Reduced when overcast.                                                                                                                                                                             |
+| Golden / blue hour     | Grade (`uGolden`, `uBlue`)     | See [Grade](#grade).                                                                                                                                                                                                                                                                                                               |
+| Sunlit dust motes      | `particles.ts` (`uSunLit`)     | Motes and pollen brighten when they sit between the eye and the sun (forward scatter, `pow(dot(view, sun), 6)`), strongest when the sun is low.                                                                                                                                                                                    |
+| Moonlight on water     | water shader (`uMoonLight`)    | A broad moon glint (`pow(N·H, 38)`) broken into flickering sparkles by a cell hash, plus a faint Fresnel sheen. Gated by night factor × moon elevation × clear sky.                                                                                                                                                                |
+
+Two latent bugs were fixed along the way:
+
+- **Haze didn't follow the time of day.** The atmosphere pass had its own copy of the sky uniforms, which nothing updated, so distant land faded toward the _noon_ sky at every hour and the haze in-scatter stayed pinned to the noon sun. `post.shareSky(atmo.sky.material.uniforms)` now makes both passes read the same uniform objects. The water's sun glint had the same problem; it now updates through `water.setLights()`.
+- **The sun ran a quarter-day early.** `sin(2πt)` put the sun overhead at 06:00 and on the horizon at noon, out of step with the palette keyframes and the HUD clock. It's now phased `(t − 0.25)·2π`: horizon at 0.25 and 0.75, overhead at 0.5.
 
 ---
 
@@ -1161,12 +1195,13 @@ When the `.ready` class is added, `#boot.ready .ls-emblem { opacity: 0 }` fades 
 
 ### URL parameters
 
-| Parameter    | Effect                                                                              |
-| ------------ | ----------------------------------------------------------------------------------- |
-| `?seed=word` | Choose the world. Always present after load                                         |
-| `?tier=name` | Force a GPU tier (`high`, `mobile-high`, `mid`, `low`, `very-low`)                  |
-| `?shadow=N`  | Diagnostic shadow-map size, used only if the tier gives none                        |
-| `?capture=1` | `preserveDrawingBuffer: true`, so `canvas.toDataURL()` works for screenshot tooling |
+| Parameter                    | Effect                                                                              |
+| ---------------------------- | ----------------------------------------------------------------------------------- |
+| `?seed=word`                 | Choose the world. Always present after load                                         |
+| `?tier=name`                 | Force a GPU tier (`high`, `mobile-high`, `mid`, `low`, `very-low`)                  |
+| `?shadow=N`                  | Diagnostic shadow-map size, used only if the tier gives none                        |
+| `?weather=clear\|rain\|snow` | Pin the weather (otherwise fronts cycle every few minutes)                          |
+| `?capture=1`                 | `preserveDrawingBuffer: true`, so `canvas.toDataURL()` works for screenshot tooling |
 
 ### `window.__game`
 

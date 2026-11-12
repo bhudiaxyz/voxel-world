@@ -1770,6 +1770,22 @@ const COMMON_GLSL = /* glsl */ `
   }
 `;
 
+/**
+ * Travelling wind gusts. A band of stronger wind sweeps across the world along
+ * the wind direction; two incommensurate band frequencies keep it from looking
+ * periodic. Shared by tree sway and ground detail so a gust visibly rolls over
+ * the meadow *and* the canopy together. Returns 0..1.
+ */
+export const GUST_GLSL = /* glsl */ `
+  float gustAt(vec2 xz, float t, vec2 dir) {
+    float along = dot(xz, dir);
+    float side  = dot(xz, vec2(-dir.y, dir.x));
+    float band  = sin(along * 0.045 - t * 1.6 + sin(side * 0.021) * 2.2) * 0.5 + 0.5;
+    float band2 = sin(along * 0.017 - t * 0.7 + side * 0.009) * 0.5 + 0.5;
+    return smoothstep(0.55, 1.0, band) * (0.55 + 0.45 * band2);
+  }
+`;
+
 const VERT_DECL = /* glsl */ `
   attribute vec3 aTint;
   attribute vec3 aFringe;
@@ -1785,6 +1801,7 @@ const VERT_DECL = /* glsl */ `
   uniform float uWindTime;
   uniform vec2  uWindDir;
   uniform float uWindStrength;
+  ${GUST_GLSL}
 `;
 
 const VERT_BODY = /* glsl */ `
@@ -1802,9 +1819,11 @@ const VERT_BODY = /* glsl */ `
   // Height factor (aData.w) keeps the base stationary.
   if (aData.y >= 8.0 && uWindStrength > 0.0) {
     float phase = transformed.x * 0.31 + transformed.z * 0.27;
+    float gust  = gustAt(transformed.xz, uWindTime, uWindDir);
     float sway  = (sin(uWindTime * 1.1 + phase) * 0.6
                  + sin(uWindTime * 0.47 + phase * 1.9) * 0.4)
-                 * uWindStrength;
+                 * uWindStrength * (1.0 + gust * 1.4)
+                 + gust * uWindStrength * 0.5;   // gusts also lean, not just shake
     float heightT = clamp(transformed.y / 28.0, 0.0, 1.0);
     transformed.x += uWindDir.x * sway * heightT;
     transformed.z += uWindDir.y * sway * heightT;
@@ -1832,6 +1851,10 @@ const FRAG_DECL = /* glsl */ `
   uniform float uFillAmbient;  // flat ambient lift for all faces
   uniform vec3  uSunTint;      // warm tint on sun-facing surfaces
   uniform vec3  uAmbientTint;  // cool tint on all surfaces (night blue shift)
+  uniform float uSnow;         // 0..1 settled snow cover (weather.ts)
+  uniform float uWet;          // 0..1 surface wetness / puddles after rain
+  uniform float uCausticTime;  // drives the bed caustics under shallow water
+  uniform float uCausticStr;   // 0 disables bed caustics (tier / night)
 
 
   /**
@@ -2001,6 +2024,47 @@ const FRAG_BODY = /* glsl */ `
       col = mix(col, uWaterInk, line * uWaterInkStrength);
     }
 
+    /* --- weather on the ground ---------------------------------------
+     * Both are zero unless weather.ts is driving them, and every branch is
+     * uniform-gated, so clear weather pays one comparison each. */
+    if (uWet > 0.001 && vPosW.y > uWaterLevel + 0.02) {
+      // Wet surfaces darken and saturate; puddles pool in noise hollows on
+      // flat tops and turn sky-coloured.
+      float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
+      col = mix(col, mix(vec3(lum), col, 1.08) * 0.80, uWet * 0.6);
+      if (vNrmW.y > 0.5) {
+        float hollow = vxNoise(vPosW.xz * 0.33) * 0.7 + vxNoise(vPosW.xz * 1.1) * 0.3;
+        // Sparse: only the deepest hollows hold water. Dark, cool and a little
+        // sky-tinted — a puddle reads as a hole full of reflected sky, never as
+        // a pale patch (which is snow's job).
+        float puddle = smoothstep(0.70, 0.76, hollow + (1.0 - uWet) * 0.35);
+        col = mix(col, uAmbientTint * vec3(0.30, 0.36, 0.46), puddle * uWet * 0.8);
+      }
+    }
+    if (uSnow > 0.001) {
+      // Snow settles on up-facing surfaces first, then creeps over edges of
+      // side faces as cover grows. Noise breaks the front so it accumulates
+      // in patches instead of fading in uniformly.
+      float drift = vxNoise(vPosW.xz * 0.21) * 0.6 + vxNoise(vPosW.xz * 0.9) * 0.4;
+      float cover = vNrmW.y > 0.5 ? smoothstep(0.0, 0.55, uSnow * 1.25 - drift * 0.55)
+                  : isSide ? smoothstep(1.0 - uSnow * 0.35, 1.0, localV) * smoothstep(0.35, 0.9, uSnow)
+                  : 0.0;
+      // Snow takes the scene's light tint so it stays readable at dusk/night.
+      col = mix(col, vec3(0.93, 0.95, 1.0) * uAmbientTint * faceShade, cover);
+    }
+    // --- caustics on the shallow bed ------------------------------------
+    // The water draws its own surface web; this is the light it focuses onto
+    // the ground beneath, which is what sells "shallow" from a distance.
+    if (uCausticStr > 0.0 && vPosW.y < uWaterLevel && vNrmW.y > 0.5) {
+      float depth = uWaterLevel - vPosW.y;
+      vec2 p = vPosW.xz * 0.55;
+      float t = uCausticTime;
+      float a = vxNoise(p + vec2(t * 0.31, -t * 0.23));
+      float b = vxNoise(p * 1.37 + vec2(-t * 0.19, t * 0.29) + 17.0);
+      float web = pow(max(1.0 - abs(a - b) * 4.0, 0.0), 4.0);
+      col += vec3(1.0, 0.97, 0.88) * web * uCausticStr * exp(-depth * 0.45) * smoothstep(0.0, 0.4, depth);
+    }
+
     diffuseColor.rgb = col;
   }
 `;
@@ -2050,6 +2114,12 @@ export function makeVoxelMaterial() {
         uWindDir: { value: new THREE.Vector2(1.0, 0.3).normalize() },
         uWindStrength: { value: 0.0 },
 
+        /* --- weather & water light (driven by weather.ts / main.ts) ------- */
+        uSnow: { value: 0.0 },
+        uWet: { value: 0.0 },
+        uCausticTime: { value: 0.0 },
+        uCausticStr: { value: 0.0 },
+
         /* --- planet bend -------------------------------------------------- */
         ...planetUniformValues(new THREE.Vector3()),
     };
@@ -2084,7 +2154,7 @@ export function makeVoxelMaterial() {
             );
         mat.userData.shader = shader;
     };
-    mat.customProgramCacheKey = () => 'VoxelWorld-voxel-v9';
+    mat.customProgramCacheKey = () => 'VoxelWorld-voxel-v10';
     return mat;
 }
 

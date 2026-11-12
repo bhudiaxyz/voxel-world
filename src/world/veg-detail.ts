@@ -20,6 +20,7 @@
 
 import * as THREE from 'three';
 import { PLANET_UNIFORMS_GLSL, PLANET_BEND_GLSL, planetUniformValues } from '../render/planet';
+import { GUST_GLSL } from '../core/voxel';
 
 const UP = [0, 1, 0];
 const DETAIL_CHUNK = 48;
@@ -262,6 +263,10 @@ export class DetailField {
             uTime: { value: 0 },
             uWindAmp: { value: windAmp },
             uWindSpeed: { value: windSpeed },
+            /** Shared with the terrain material each frame (main.ts) so gusts line up. */
+            uWindDir: { value: new THREE.Vector2(1, 0) },
+            uGustTime: { value: 0 },
+            uGustStr: { value: 0 },
             ...planetUniformValues(new THREE.Vector3()),
         };
 
@@ -286,6 +291,9 @@ export class DetailField {
           uniform float uTime;
           uniform float uWindAmp;
           uniform float uWindSpeed;
+          uniform vec2 uWindDir;
+          uniform float uGustTime, uGustStr;
+          ${GUST_GLSL}
           ${PLANET_UNIFORMS_GLSL}
           ${PLANET_BEND_GLSL}
         `,
@@ -306,12 +314,17 @@ export class DetailField {
             transformed.x += w * a;
             transformed.z += w * a * 0.55;
             transformed.y -= abs(w) * a * 0.18;   // tips dip as they bend
+            // A gust band flattens the blades downwind as it passes — the
+            // visible "wave" rolling across a meadow.
+            float g = gustAt(transformed.xz, uGustTime, uWindDir) * uGustStr * sway * sway;
+            transformed.xz += uWindDir * g * 0.55;
+            transformed.y -= g * 0.22;
             applyPlanetBend(transformed, objectNormal);
           }
         `,
                 );
         };
-        mat.customProgramCacheKey = () => 'VoxelWorld-vegdetail-v4';
+        mat.customProgramCacheKey = () => 'VoxelWorld-vegdetail-v5';
 
         // Every primitive emitted by DetailField is an isolated four-vertex quad.
         // Count those quads by spatial cell first, then fill exact-size typed
@@ -383,7 +396,7 @@ export class DetailField {
             geometry.setIndex(new THREE.BufferAttribute(idx, 1));
             geometry.computeBoundingSphere();
             // Keep wind-displaced tips inside the culling volume at screen edges.
-            geometry.boundingSphere!.radius += windAmp * 2 + 0.25;
+            geometry.boundingSphere!.radius += windAmp * 2 + 0.85; // + gust lean
 
             const mesh = new THREE.Mesh(geometry, mat);
             mesh.name = `${name}-${bucket.ci}-${bucket.ck}`;

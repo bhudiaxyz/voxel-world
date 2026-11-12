@@ -135,8 +135,11 @@ export class DayNight {
         // Compute keyframe segment once — all lerp calls below share the same t.
         const ia = keyframe(t);
 
-        // Full circle: 0=midnight (sun below), 0.5=noon (sun overhead)
-        const a = t * Math.PI * 2;
+        // Full circle: 0=midnight (sun lowest), 0.25 / 0.75 = horizon, 0.5 = noon (sun highest).
+        // The −0.25 phase is what lines the sun up with the palette keyframes and
+        // the HUD clock; without it sin() peaked at 0.25, putting the sun
+        // overhead at 06:00 and on the horizon at noon.
+        const a = (t - 0.25) * Math.PI * 2;
 
         this._sunDir
             .set(

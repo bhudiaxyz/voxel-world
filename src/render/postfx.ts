@@ -78,6 +78,10 @@ const GradeShader = {
         // that a second, gentler knee is what stops blossom tops clipping to white.
         uKnee: { value: 0.8 },
         toneMappingExposure: { value: GRADE.exposure },
+        // Time-of-day grade (DayNight drives these): golden hour warms the
+        // highlights, blue hour cools and lifts the shadows. 0 = neutral.
+        uGolden: { value: 0.0 },
+        uBlue: { value: 0.0 },
     },
     vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -88,6 +92,7 @@ const GradeShader = {
     uniform vec3 uLift, uGamma, uGain, uMilkColor;
     uniform vec3 uEdgeDark, uEdgeLight;
     uniform float uSat, uContrast, uVignette, uTime, uGrain, uAberration, uMilk, uKnee;
+    uniform float uGolden, uBlue;
     uniform float uEdgeDarkOpacity, uEdgeLightOpacity;
     varying vec2 vUv;
 
@@ -126,6 +131,14 @@ const GradeShader = {
       // coloured air rather than as absence of light.
       col = mix(col, col * vec3(1.020, 1.000, 0.978), smoothstep(0.55, 1.0, l));
       col = mix(col, col * vec3(0.968, 0.976, 1.045), 1.0 - smoothstep(0.0, 0.50, l));
+
+      // --- golden / blue hour -----------------------------------------------
+      // Golden: warm, slightly richer highlights and mids — the low sun.
+      // Blue: the 20 minutes after sunset, a cool lifted wash where shadows go
+      // indigo rather than black. Both are luminance-weighted so they colour
+      // the light, not the whole frame equally.
+      col = mix(col, col * vec3(1.10, 1.00, 0.84), uGolden * smoothstep(0.15, 0.85, l));
+      col = mix(col, col * vec3(0.84, 0.92, 1.16) + vec3(0.010, 0.014, 0.032), uBlue * (1.0 - smoothstep(0.2, 0.9, l) * 0.5));
 
       // --- milk ----------------------------------------------------------
       // Weighted toward the dark end so the deepest values (trunks, shadowed
@@ -360,6 +373,8 @@ function makeAtmosphereShader(sunDir: THREE.Vector3) {
 
             /* ---- extras ---- */
             uInscatter: { value: 0.28 },
+            /** Strength of the tight sun lobe in the haze (0 = off). */
+            uHazeGlow: { value: 0.22 },
             uDof: { value: 1.2 }, // pixels of defocus at full haze (0 = disabled)
             uAOTaps: { value: 8 }, // rosette taps (0 = skip AO)
             uCloud: { value: 0.055 },
@@ -375,7 +390,7 @@ function makeAtmosphereShader(sunDir: THREE.Vector3) {
       uniform float uNear, uFar, uAerialD, uFogNear, uDesat, uSkyBlend;
       uniform float uMistBase, uMistH, uMistDens, uMistMax;
       uniform float uAOStrength, uAORadius, uAORange;
-      uniform float uInscatter, uDof, uAOTaps, uCloud, uCloudShadow, uTime, uFocal;
+      uniform float uInscatter, uDof, uAOTaps, uCloud, uCloudShadow, uTime, uFocal, uHazeGlow;
       uniform vec3 uCamPos, uMistColor, uAOTint;
       uniform vec2 uResolution;
       uniform mat4 uInvProj, uInvView;
@@ -512,6 +527,15 @@ function makeAtmosphereShader(sunDir: THREE.Vector3) {
         // ---- forward scatter -------------------------------------------------
         float s = max(dot(wdir, uSunDirW), 0.0);
         col += uSunGlow * uInscatter * (fog + mist * 0.5) * (pow(s, 4.0) * 0.8 + pow(s, 1.2) * 0.35);
+
+        // ---- sun glow in the haze ---------------------------------------------
+        // A tight Mie-like lobe around the sun, carried by the air itself, so
+        // distant hills facing into a low sun dissolve into bright glare. Its
+        // colour is the live sun colour (warm at dusk, absent at night) and it
+        // swells as the sun nears the horizon, where the light path is longest.
+        float lowSun = 1.0 - smoothstep(0.05, 0.45, uSunDirW.y);
+        float mie = pow(s, 24.0) * 1.6 + pow(s, 8.0) * 0.45;
+        col += uSunColor * uHazeGlow * mie * (fog * 0.85 + mist * 0.6) * (0.35 + lowSun * 1.4);
 
         gl_FragColor = vec4(col, src.a);
       }
@@ -694,6 +718,19 @@ export function createPostFX(
         target,
         edgeMask,
         edgePass,
+        /**
+         * Make the haze pass read the sky dome's uniform OBJECTS, so DayNight's
+         * per-frame updates reach both. Before this, the aerial perspective
+         * faded distant land toward the noon sky at every hour and the haze
+         * in-scatter never followed the sun.
+         */
+        shareSky(skyUniforms: Record<string, THREE.IUniform>): void {
+            for (const k of Object.keys(skyUniforms)) {
+                // ShaderPass.uniforms IS material.uniforms, so swapping entries
+                // in place is enough.
+                if (k in haze.uniforms && k !== 'uTime') haze.uniforms[k] = skyUniforms[k];
+            }
+        },
         setSunScreenPos(x: number, y: number, visible: number): void {
             crepPass.uniforms['uSunScreen'].value.set(x, y);
             crepPass.uniforms['uSunVisible'].value = visible;
