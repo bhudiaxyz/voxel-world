@@ -52,7 +52,8 @@ export function createFlyMode(grid: VoxelGrid): FlyMode {
             let clearY = Math.ceil(camera.position.y) + 1;
             const scanTop = clearY + 48;
             while (clearY < scanTop && grid.isSolid(cx, clearY, cz)) clearY++;
-            if (clearY > camera.position.y + 1) camera.position.y = clearY + 2;
+            // Only lifts when something is overhead; just enough to clear it.
+            if (clearY > camera.position.y + 1) camera.position.y = clearY + 1;
             smoothedFloor = grid.surfaceY(camera.position.x, camera.position.z) + FLY.floorClearance;
         },
 

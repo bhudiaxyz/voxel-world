@@ -7,10 +7,15 @@ const DRONE = {
     sprintSpeed: 45,
     hoverAltitude: 15,
     yawSensitivity: 0.7,
-    enterLiftHeight: 18,
+    /** Minimum hover height on entering the drone (was 18 — a big launch). */
+    enterLiftHeight: 6,
     keyYawSpeed: 1.4,
     landingDescentRate: 90,
     landingCompleteHeight: 2.5,
+    /** Max blocks/s the camera's target sinks while landing (cruise cap is 7). */
+    landingSinkRate: 40,
+    /** Camera ease toward the target while landing, per second (cruise is 3). */
+    landingEase: 9,
 };
 
 type State = 'idle' | 'rising' | 'cruising';
@@ -69,7 +74,9 @@ export function createDroneMode(grid: VoxelGrid): DroneMode {
                 let clearY = Math.ceil(camera.position.y) + 1;
                 const scanTop = clearY + 48;
                 while (clearY < scanTop && grid.isSolid(cx, clearY, cz)) clearY++;
-                const safeAltitude = clearY + 4 - groundY; // 4 blocks of headroom above obstruction
+                // Only clear an obstruction if there IS one overhead (clearY moved).
+                const blocked = clearY > Math.ceil(camera.position.y) + 1;
+                const safeAltitude = blocked ? clearY + 3 - groundY : 0; // 3 blocks of headroom above it
                 hoverAltitude = Math.max(DRONE.enterLiftHeight, safeAltitude, camera.position.y - groundY);
             }
         },
@@ -166,15 +173,21 @@ export function createDroneMode(grid: VoxelGrid): DroneMode {
             const rawTarget = probeHigh + hoverAltitude;
 
             // Ascent: snap immediately so rising terrain is never smoothed away.
-            // Descent: cap rate so a sudden drop doesn't plunge the drone.
+            // Descent: cap rate so a sudden drop doesn't plunge the drone — but
+            // while LANDING that cap was the whole landing speed (7 blocks/s, then
+            // a slow ease), so landing gets its own, much faster limits.
+            const descentCap = isLanding ? DRONE.landingSinkRate : 7;
             if (rawTarget >= smoothedTargetY) {
                 smoothedTargetY = rawTarget;
             } else {
-                smoothedTargetY = Math.max(rawTarget, smoothedTargetY - 7 * dt);
+                smoothedTargetY = Math.max(rawTarget, smoothedTargetY - descentCap * dt);
             }
 
-            // Fast ascent, gentle descent on actual camera position.
-            const lerpRate = smoothedTargetY > camera.position.y ? Math.min(1, dt * 7) : Math.min(1, dt * 3);
+            // Fast ascent, gentle descent on actual camera position (brisk when landing).
+            const lerpRate =
+                smoothedTargetY > camera.position.y
+                    ? Math.min(1, dt * 7)
+                    : Math.min(1, dt * (isLanding ? DRONE.landingEase : 3));
             camera.position.y += (smoothedTargetY - camera.position.y) * lerpRate;
 
             // Hard floor: never clip into terrain or sea surface.

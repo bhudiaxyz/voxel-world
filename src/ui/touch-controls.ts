@@ -263,7 +263,7 @@ export function createTouchControls(fpCam: FPCamera, dom: HTMLElement): TouchCon
             const land = document.getElementById('btn-land')! as HTMLElement;
             const fly = document.getElementById('btn-fly')! as HTMLElement;
             // Land: shown in either air mode (planet-explorer), hidden mid-landing.
-            land.style.display = (droneActive && !landing) || flyActive ? 'block' : 'none';
+            land.style.display = (droneActive || flyActive) && !landing ? 'block' : 'none';
             // ✈ shows the mode a tap will switch to.
             const next = flyActive
                 ? ['🚶', 'Next mode: walk']

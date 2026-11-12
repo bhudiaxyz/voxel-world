@@ -128,7 +128,11 @@ async function start(): Promise<void> {
     const canAct = () => fpCam.isLocked || fpCam.touchActive;
     // ---- shared mode actions (keyboard + touch call the same functions) ----
     // Cycle matches planet-explorer: walk → drone → fly → walk.
+    // Fly-mode landing descends quickly (same pace as the drone) rather than
+    // teleporting to the ground; the frame loop drives it while this is set.
+    let flyLanding = false;
     const toWalk = () => {
+        flyLanding = false;
         fly.exit();
         fpCam.flyActive = false;
         fpCam.yaw = fpCam.camera.rotation.y;
@@ -155,7 +159,7 @@ async function start(): Promise<void> {
     };
     const land = () => {
         if (drone.active) drone.beginLanding();
-        else if (fly.active) toWalk();
+        else if (fly.active) flyLanding = true;
     };
     const toggleEdges = () => {
         const g = post.grade.uniforms;
@@ -401,16 +405,21 @@ async function start(): Promise<void> {
         dog.update(dt);
 
         if (fly.active) {
-            fly.update(
-                dt,
-                fpCam.camera,
-                fpCam._keys,
-                fpCam.yaw,
-                fpCam.pitch,
-                fpCam.drainDroneAltDelta(dt),
-                fpCam._joyX,
-                fpCam._joyY,
-            );
+            const altInput = fpCam.drainDroneAltDelta(dt);
+            if (flyLanding && altInput > 0) flyLanding = false; // pulling up aborts, as in the drone
+            if (flyLanding) {
+                // Ease straight down to eye height above the ground, then walk.
+                const c = fpCam.camera;
+                const groundEye = world.grid.surfaceY(c.position.x, c.position.z) + 1.75;
+                const step = Math.min(40 * dt, (c.position.y - groundEye) * Math.min(1, dt * 9) + 4 * dt);
+                c.position.y = Math.max(groundEye, c.position.y - Math.max(step, 0));
+                if (c.position.y - groundEye < 0.15) {
+                    flyLanding = false;
+                    toWalk();
+                }
+            } else {
+                fly.update(dt, fpCam.camera, fpCam._keys, fpCam.yaw, fpCam.pitch, altInput, fpCam._joyX, fpCam._joyY);
+            }
         } else if (drone.active) {
             const done = drone.update(
                 dt,
@@ -526,7 +535,7 @@ async function start(): Promise<void> {
         particles.update(dt, fpCam.camera);
         for (const d of world.animated) d.update(dt, fpCam.camera);
         bubbles.update(dt);
-        touch.update(drone.active, drone.landing, fly.active);
+        touch.update(drone.active, drone.landing || flyLanding, fly.active);
         map.update();
         hud.update();
         settings.update();
