@@ -1,6 +1,47 @@
 # Voxel World — Design & Architecture
 
-Developer reference. For user-facing documentation see [README.md](README.md).
+Developer reference: how the code is organised, the approach each subsystem takes, and why. For user-facing documentation see [README.md](README.md).
+
+**Suggested reading order:** [Runtime architecture](#runtime-architecture) → [Procedural generation pipeline](#procedural-generation-pipeline) → [Voxel grid, meshing & streaming](#voxel-grid-meshing--streaming) → [Rendering pipeline](#rendering-pipeline) → [GPU tiering & performance](#gpu-tiering--performance). The remaining sections are per-subsystem reference.
+
+---
+
+## Contents
+
+- [Stack & build](#stack--build)
+- [Source layout](#source-layout)
+- [Runtime architecture](#runtime-architecture)
+- [Coordinate system & world constants](#coordinate-system--world-constants)
+- [Determinism & seeding](#determinism--seeding)
+- [Procedural generation pipeline](#procedural-generation-pipeline)
+- [Voxel grid, meshing & streaming](#voxel-grid-meshing--streaming)
+- [Rendering pipeline](#rendering-pipeline)
+- [Ink edges](#ink-edges)
+- [Materials & shader injection](#materials--shader-injection)
+- [Sky model](#sky-model) · [Day/night cycle](#daynight-cycle) · [Water](#water) · [Planet bend](#planet-bend)
+- [GPU tiering & performance](#gpu-tiering--performance)
+- [Input & controls](#input--controls)
+- [Player systems](#player-systems) · [Navigation & the dog](#navigation--the-dog)
+- [Vegetation](#vegetation) · [Scene stamps](#scene-stamps) · [River system (detail)](#river-system-detail)
+- [UI](#ui) · [Palette system](#palette-system) · [Boot screen](#boot-screen)
+- [Debugging & diagnostics](#debugging--diagnostics)
+- [Conventions & gotchas](#conventions--gotchas)
+
+---
+
+## Stack & build
+
+| Piece      | Notes                                                                                                                  |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Three.js   | `^0.185` — **WebGL2 only** (WebGL1 support was removed in r163). `WebGLRenderer` + `three/examples/jsm` postprocessing |
+| TypeScript | `^5.9`; `tsc --noEmit` type-checks, Vite transpiles                                                                    |
+| Vite       | `^8`; `npm run dev` serves on port 5180, `npm run build` = typecheck + bundle to `dist/`                               |
+| nipplejs   | `^1.0`; virtual joystick on touch devices                                                                              |
+| Prettier   | 4-space indent, 120 columns, single quotes (`.prettierrc`); `package-lock.json` is ignored (`.prettierignore`)         |
+
+There is no test framework; changes are verified by running the app (see [Debugging & diagnostics](#debugging--diagnostics)). Much of the code is loosely typed (`any`) because it was ported from JavaScript — tighten types in a module when you work on it rather than in bulk.
+
+The chunk mesher runs in a module worker (`new Worker(new URL('./voxel-worker.ts', import.meta.url), { type: 'module' })`), which Vite emits as a separate bundle.
 
 ---
 
@@ -8,197 +49,425 @@ Developer reference. For user-facing documentation see [README.md](README.md).
 
 ```text
 src/
-├── main.ts                  ← entry point: scene setup, game loop (frame()), input wiring, window.__game debug handle
+├── main.ts                  ← entry: startup sequence, frame loop, shared input actions, window.__game debug handle
+├── styles.css               ← boot screen + base page styles
+├── global.d.ts              ← ambient `declare module '*.js'` for untyped imports
 │
 ├── core/
-│   ├── palette.ts           ← art bible: all colours, BLOCK_BY_ID, setVoxelPalette(), GRADE/SKY/LIGHT/WATER/FOG constants
-│   ├── voxel.ts             ← VoxelGrid (dense Uint8Array), greedy mesher, chunk streamer, LOD fade, CHUNK=16, EDGE_LAYER
-│   └── rng.ts               ← seeded PRNG, 2D/3D noise, FBM helpers
+│   ├── palette.ts           ← art bible: block registry (BLOCKS, BLOCK_BY_ID, registerBlock), VOXEL_PALETTES, setVoxelPalette(), SKY/LIGHT/WATER/GRADE/FOG
+│   ├── voxel.ts             ← VoxelGrid, face mesher, edge-graph builder, voxel/glow/edge materials, chunk streamer
+│   ├── voxel-worker.ts      ← worker entry: receives chunk windows, returns transferable geometry
+│   └── rng.ts               ← seed words, mulberry32 PRNG, hash2/hash3, 2D/3D value noise, fbm2, ridge2, clamp/smoothstep
 │
 ├── world/
-│   ├── planner.ts           ← planWorld(): island layout, stepping stones, bridge chains, biome fields, river routing
-│   ├── terrain.ts           ← generateTerrain(): contour-disc terracing, river carving, voxel fill, RIVER_WATER blocks
-│   ├── water.ts             ← makeDepthMap() (RG texture), createWater() (wave shader, Beer-Lambert absorption)
-│   ├── vegetation.ts        ← plantTree() (14 silhouette forms), plantBush(), ferns, moss, lichen, grass, mushrooms, crystals; BIOME_FLORA tables
-│   ├── props.ts             ← bridges, rocks, and other static props placed from terrain data
-│   └── stamps.ts            ← buildStamps(): scenic grammars (waterfall, crossing, pond, grove, overlook, hotspring), landmark grammars (spire, obelisk, ring, tombs, biosphere, well, arch)
+│   ├── world.ts             ← buildWorld(): runs the generators in order, preloads spawn chunks, assembles the World object
+│   ├── planner.ts           ← planWorld(): continents, stepping stones, regions, biomes, elevation field, rivers, lakes, scenic sites
+│   ├── terrain.ts           ← generateTerrain(): contour composition, river/lake carving, banks, stairs, voxel fill; WORLD, wrapAxis()
+│   ├── terrain-shape.ts     ← heightfield operators: modeFilter, despeckle, carveStairs, riseAbove, dropBelow
+│   ├── props.ts             ← buildStructures(): bridges along plan.bridgeChains
+│   ├── stamps.ts            ← buildStamps(): scenic grammars + landmark grammars
+│   ├── vegetation.ts        ← scatterVegetation(): trees (14 forms), bushes, scrub; buildGroundDetail()
+│   ├── veg-detail.ts        ← DetailField: sub-voxel quads (tufts, blades, flowers, petals, boxes), batched + distance-culled
+│   └── water.ts             ← makeDepthMap(), createWater(): wave field, Beer-Lambert absorption, caustics
 │
 ├── render/
-│   ├── renderer.ts          ← WebGLRenderer setup, shadow map config per tier
-│   ├── lighting.ts          ← Atmosphere: sun/hemi/fill lights, sky dome mesh, skyUniformValues()
-│   ├── sky.ts               ← shared GLSL: SKY_UNIFORMS_GLSL, SKY_FN_GLSL (skyRadiance, nightSkyAddons, _aurora)
-│   ├── day-night.ts         ← DayNight: keyframe palette animation, getNightFactor(), aurora and star uniforms
-│   ├── postfx.ts            ← createPostFX(): SceneDepth → EdgeMask → Atmosphere → Bloom → Crepuscular → Grade → SMAA
-│   ├── planet.ts            ← PLANET_BEND_GLSL vertex snippet, updatePlanetUniforms()
-│   ├── fp-camera.ts         ← FPCamera: pointer lock, key/mouse state, drainDroneAltDelta(), touch state
-│   └── gpu-tier.ts          ← detectGpuTier(), TIER_SETTINGS table (high/mobile-high/mid/low/very-low)
+│   ├── renderer.ts          ← WebGLRenderer setup, DPR cap × adaptive scale, shadow type & cadence, float-RT capability flag
+│   ├── gpu-tier.ts          ← detectGpuTier(), hasWebGL2(), TIER_SETTINGS
+│   ├── lighting.ts          ← Atmosphere: fog (+ near-plane patch), sky dome, sun with VSM shadows, hemi, fill, ambient
+│   ├── sky.ts               ← shared GLSL: skyRadiance(), nightSkyAddons(), _aurora()
+│   ├── day-night.ts         ← DayNight: keyframed sun/sky/light, voxel tint uniforms
+│   ├── postfx.ts            ← createPostFX(): SceneDepth → EdgeMask → Atmosphere → Bloom → Crepuscular → Grade → AA
+│   ├── planet.ts            ← PLANET_BEND_GLSL, planetUniformValues(), updatePlanetUniforms()
+│   ├── fp-camera.ts         ← FPCamera: pointer lock, key state, mouse/touch look, wish vector, altitude axis
+│   └── camera.ts            ← CameraRig — legacy third-person rig, not currently imported
 │
 ├── player/
-│   ├── controller.ts        ← Controller: AABB physics, stepping, swimming, sprint
-│   ├── drone.ts             ← createDroneMode(): P-controller terrain-follow, landing state machine
-│   ├── fly.ts               ← createFlyMode(): free-flight with terrain floor
-│   ├── character.ts         ← third-person character mesh and animation state
-│   ├── dog.ts               ← dog AI: pathfinding to player, sit/stand commands
-│   └── pathfinding.ts       ← A* grid pathfinder, path navigator
+│   ├── controller.ts        ← Controller (AABB physics, swimming, step-up) + Input (keys, zoom, `paused`)
+│   ├── character.ts         ← procedural voxel traveller + animation (hidden from the first-person camera via layer 1)
+│   ├── drone.ts             ← createDroneMode(): rise → cruise → land state machine, terrain-follow
+│   ├── fly.ts               ← createFlyMode(): free flight with a smoothed terrain floor
+│   ├── pathfinding.ts       ← NavigationSurface + time-sliced A*; click-to-move navigator
+│   └── dog.ts               ← companion dog: rest/wander/follow, hopping, solved sit pose
 │
 ├── ui/
-│   ├── map.ts               ← minimap: bakeTerrain(), river network (glow+solid passes, ocean-clipped), invalidateTerrain()
-│   ├── touch-controls.ts    ← createTouchControls(): nippleJS joystick, swipe-to-look, button wiring
-│   ├── hud.ts               ← heads-up display overlays
-│   ├── pause.ts             ← pause menu, generate-new-world button
-│   ├── settings.ts          ← settings panel (planet radius, day speed, load radius, shadow res, bloom, seed)
-│   └── bubbles.ts           ← speech bubble system
+│   ├── touch-controls.ts    ← isTouchDevice, nippleJS joystick, swipe-to-look, touch buttons
+│   ├── hud.ts               ← place name, shortcut hints, time/drone chips, ⚙ button
+│   ├── map.ts               ← full-screen map: baked terrain, rivers, landmarks, player arrow
+│   ├── pause.ts             ← pause menu + bindings list (keyboard or touch variant)
+│   ├── settings.ts          ← settings panel, localStorage persistence, per-tier defaults
+│   └── bubbles.ts           ← world-anchored speech bubbles (dog commands)
 │
 └── fx/
-    └── particles.ts         ← billboarded particle system (leaves, dust)
+    └── particles.ts         ← GPU-animated instanced particles: petals, motes, pollen
 ```
+
+---
+
+## Runtime architecture
+
+### Threads
+
+| Thread      | Work                                                                                                |
+| ----------- | --------------------------------------------------------------------------------------------------- |
+| Main        | World generation (once, at startup), physics, AI, rendering — and chunk meshing if the worker fails |
+| Mesh worker | Chunk meshing during play; one worker, one chunk in flight                                          |
+
+World generation is **synchronous on the main thread**. `buildWorld()` awaits `setTimeout(0)` between stages so the loading bar repaints, but each stage blocks. For a 768² world it takes a few seconds on desktop and is the main startup cost. Moving it into a worker would mean transferring the grid and plan back; that hasn't been needed so far.
+
+### Startup sequence (`start()` in `main.ts`)
+
+1. `hasWebGL2()` — if false, throw a readable error, which the boot screen displays.
+2. `detectGpuTier()` → `tier`; `ts = TIER_SETTINGS[tier]`.
+3. `createRenderer(container, tier)`. `setTierDefaults()` seeds the settings panel defaults from the tier. A `webglcontextlost` listener reloads the page — same seed, same world.
+4. `buildWorld(SEED, setProgress, ts.streamRadius, { density, distance })` — the generation pipeline plus the spawn-chunk preload.
+5. Construct, in order: `FPCamera`, `Atmosphere`, `DayNight`, water, particles, character, `Controller`, drone/fly modes, `Input`, navigator, map, bubbles, dog, touch controls, post-FX, settings, HUD, pause.
+6. Wire the shared actions (`cycleMode`, `land`, `toggleEdges`, `stepTime`) to keyboard and touch.
+7. Call `scene.updateMatrixWorld(true)` once, then set `scene.matrixWorldAutoUpdate = false` (see [Conventions](#conventions--gotchas)).
+8. Start `frame()`. The first frame marks the boot screen `.ready`; a click or tap dismisses it and, on desktop, requests pointer lock.
+
+### Frame loop (`frame()` in `main.ts`)
+
+Order matters, because later steps read state written by earlier ones:
+
+```text
+clock.update(); dt = min(rawDt, 1/20)             ← clamp so one long frame cannot tunnel the physics
+wish = fpCam.getWish()                             ← keyboard or touch, world space, Y = 0
+navigator.update(dt, wish, …)                      ← click-to-move may overwrite `wish`
+controller.update(h, wish, …) × N                  ← fixed 1/60 s sub-steps
+character.update / dog.update                      ← each calls updateMatrixWorld() itself
+fly.update | drone.update | fpCam.update           ← exactly one of these owns the camera
+world.streaming.update(player, camera, dt)         ← chunk load/unload queues
+atmo.followTarget()  (only while moving)           ← shadow frustum follows the player
+dayNight.update(dt)                                ← sun, sky, fog colour, voxel tints
+wind uniforms; sun → screen position for rays
+atmo / water / particles / decorations / bubbles / touch / map / hud / settings updates
+planet-bend uniforms  (only after moving > 0.1)
+wrap flash  (camera jumped > 50 units this frame)
+shadow cadence: needsUpdate every ts.shadowInterval frames
+post.render(dt)                                    ← the whole composer chain
+adaptive-resolution governor (2 s window)
+```
+
+### The `World` object
+
+`buildWorld()` returns everything downstream systems share:
+
+- **Voxel data:** `grid` (`VoxelGrid`), `heights` (Int16 column tops), `size`, `wetness`.
+- **Generation outputs:** `plan`, `spawn`, `props` (bridges), `stamps`, `trees`.
+- **Scene objects:**
+    - `group` — the scene root.
+    - `meshes` — the `solid`, `glow` and `edges` groups and their materials.
+    - `streaming` — the chunk streamer.
+    - `decorations` — non-voxel Object3Ds such as the ground detail.
+    - `animated` — the decorations that have an `update(dt, camera)`.
+    - `allPlanetUnis` — every material's planet-bend uniforms.
 
 ---
 
 ## Coordinate system & world constants
 
-Three.js default axes apply throughout: **Y is up**, +X is east, +Z is south. All physics, voxel addressing, and noise sampling use this space directly — no axis remapping anywhere in the codebase.
+Three.js axes throughout: **Y is up**, +X east, +Z south. One voxel is one world unit (a "block", roughly 1 m). Nothing remaps axes anywhere.
 
-| Constant       | Value | Meaning                                                                  |
-| -------------- | ----- | ------------------------------------------------------------------------ |
-| `WORLD.size`   | 512   | World XZ extent in voxels (configurable via `size` param)                |
-| `WORLD.height` | 96    | Maximum Y in voxels                                                      |
-| `WORLD.step`   | 3     | One terrace step height in voxels                                        |
-| `WATER.level`  | 24.35 | Water plane Y (fractional keeps plane above the top shore face)          |
-| `SEA`          | 24    | `Math.floor(WATER.level)` — integer sea level used for voxel comparisons |
-| `CHUNK`        | 16    | Chunk edge length in voxels; chunks are `16×96×16`                       |
+| Constant                | Value       | Defined in         | Meaning                                                                                         |
+| ----------------------- | ----------- | ------------------ | ----------------------------------------------------------------------------------------------- |
+| `WORLD.size`            | 768         | `world/terrain.ts` | World XZ extent in voxels (square, wraps toroidally)                                            |
+| `WORLD.height`          | 96          | `world/terrain.ts` | Grid height in voxels                                                                           |
+| `WORLD.step`            | 2           | `world/terrain.ts` | One terrace (one contour disc) in blocks                                                        |
+| `WORLD.edgeGrid`        | 2           | `world/terrain.ts` | Lattice the contour field is sampled on; forces straight terrace edges                          |
+| `WATER.level`           | 24.35       | `core/palette.ts`  | Water plane Y; fractional so the plane sits just above the top shore face                       |
+| `SEA`                   | 24          | —                  | `Math.floor(WATER.level)`; the integer sea level for voxel comparisons                          |
+| `CHUNK`                 | 16          | `core/voxel.ts`    | Chunk edge in voxels; a chunk is a full-height 16×96×16 column                                  |
+| `REGION_SPACING`        | 30          | `world/planner.ts` | Poisson-disc spacing of planner regions, in blocks                                              |
+| `CELL`                  | 8           | `world/planner.ts` | Planner raster resolution (one cell per 8×8 blocks)                                             |
+| `K`                     | 256 / 192   | `world/terrain.ts` | Feature-length scale. Lengths were authored on a 192-block world and frozen at the 256 tuning   |
+| `AREA`                  | (size/256)² | `world/terrain.ts` | Feature **counts** scale with this, so a bigger world has more features rather than bigger ones |
+| `PLANET_RADIUS_DEFAULT` | 350         | `render/planet.ts` | Visual curvature radius (settings slider: 100–1000)                                             |
 
-**Voxel addressing** — flat array, row-major XZY: `index = x + sx * (z + sz * y)`. Column height cache uses `height[z * sx + x]` (ZX row-major) so a Z-outer loop over the heightfield is cache-friendly.
+- **Voxel addressing:** `VoxelGrid.data` is a dense `Uint8Array` indexed `(y * sz + z) * sx + x`. X varies fastest, then Z, then Y, so each horizontal slab is contiguous. The column-top cache `height` is an `Int16Array` indexed `z * sx + x`, holding `-1` for empty columns. `set()` keeps it up to date incrementally.
+- **Block IDs:** 8-bit, with `0` meaning air. `BLOCK_BY_ID[id]` holds the block's colours, pattern and flags (`isWater`, `emissive`, `sway`, `grassCap`, `lightEdge`, `fringe`). `isSolid()` returns `id !== 0 && !isWater`, so river-water voxels are meshed but you can walk and swim through them.
+- **Toroidal wrap:** the world repeats at its edges. `wrapAxis(v)` (terrain.ts) wraps a coordinate into `[0, WORLD.size)`, and the controller, drone and fly modes apply it to their positions. The chunk streamer measures chunk distance from the player **and** from four ghost positions offset by ±size, so chunks across the seam are already loaded when the wrap happens. `main.ts` spots the jump (over 50 units in one frame) and plays a short aberration/vignette "warp flash".
+- **Noise space:** noise is sampled at raw world coordinates multiplied by a frequency, e.g. `fbm2(n, x * 0.011, z * 0.011, 4)`. So feature size can be read off the call site: a frequency of 0.011 gives features about 90 blocks across.
 
-**Chunk coordinates** — `cx = Math.floor(x / CHUNK)`, clamped to grid. The chunk streamer works in chunk-coordinate space; world-space positions are converted on enqueue.
+---
 
-**Noise space** — all noise calls pass raw world-space `(x, z)` coordinates scaled by a frequency constant at the call site (e.g. `noise2(x * 0.003, z * 0.003)`), so the noise domain stays human-readable: 1 noise unit ≈ 333 world voxels at that frequency.
+## Determinism & seeding
+
+The same seed word must produce the same world on every device and at every tier.
+
+- **Seed word → number:** `hashSeedWord(word)` is a 31-multiplier string hash, `abs % 100000`. `genSeedWord()` builds a pronounceable word from consonant and vowel pools.
+- **URL:** `?seed=<word>` overrides the default. `pushSeedUrl()` always writes the active seed back with `history.replaceState`, so it doesn't clutter the back button. "Generate new world" sets a new word and reloads.
+- **PRNG:** `makeRng(seed)` is mulberry32, with helpers `range`, `int`, `pick`, `chance` and `bell` (the sum of three uniforms, roughly Gaussian on [-1, 1]).
+- **Noise:** `makeNoise2D` / `makeNoise3D(seed)` give value noise on an integer lattice with a quintic fade (`6t⁵ − 15t⁴ + 10t³`). Corner values come from integer `hash2` / `hash3` (murmur-style finaliser), and output is in [-1, 1]. `fbm2(noise, x, z, octaves, lacunarity = 2, gain = 0.5)` sums octaves, and `ridge2` gives ridged noise.
+- **Independent streams:** each generator derives its own seed (`seed ^ 0x5f3a`, `seed + 41`, per-region `seed ^ id * 0x85ebca6b`, and so on) rather than sharing one sequence.
+    - **Rule:** anything optional or tier-dependent must draw from its own RNG stream.
+    - Example: the tier-scaled meadow-sprite layer in `buildGroundDetail()` uses `makeRng(0x9e37 ^ S)`. If it drew from the shared `rng`, a phone and a desktop would place mushrooms, pebbles and everything generated after them differently.
 
 ---
 
 ## Procedural generation pipeline
 
-World generation runs once per seed, fully synchronous inside a web worker handoff. The pipeline is strictly ordered — each stage reads from the previous stage's output and writes its own:
+`buildWorld()` in `world/world.ts` runs these synchronous stages, with a paint yield between each:
 
-```
-hashSeedWord(word)
-  └─► planWorld(seed, size)           → WorldPlan  (island centres, biome regions, river paths)
-        └─► generateTerrain(plan)     → VoxelGrid + heightfield + rivD/rivHalf/rivFlow
-              ├─► buildStructures()   → bridge voxels written into grid
-              ├─► buildStamps()       → scenic + landmark voxels written into grid
-              └─► scatterVegetation() → tree + detail voxels written into grid
-                    └─► chunk streamer meshes chunks on demand as player moves
+```text
+planWorld(seed, size)                   → plan: continents, regions, biomes, elevation, rivers, lakes, scenic sites, landmarks
+generateTerrain(seed, plan)             → grid, heights, wetness, river fields (writes voxels)
+buildStructures(world)                  → bridges written into the grid
+buildStamps(world)                      → scenic scenes + landmarks (reserve their footprints)
+scatterVegetation(world)                → trees/bushes into the grid + the ground-detail decoration
+findSpawn(world)                        → on the first bridge deck, else a spiral search for grass/path/sand
+createWorldChunkStreamer + preload(3)   → spawn chunks meshed on the main thread before the veil lifts
 ```
 
-`WorldPlan` is the contract between planner and all downstream consumers. Terrain, props, stamps, vegetation, and the minimap all read from it — none re-derives island or river geometry independently. This is what makes a seed deterministic: fix the plan, everything downstream is fixed.
+**The plan is the contract.** Terrain, props, stamps, vegetation and the map all read `plan` instead of re-deriving where islands, rivers or biomes are. The stage order is deliberate:
+
+- props run before stamps, so a scene can keep clear of a bridge
+- stamps run before vegetation, so the scatter respects the clearings a scene reserves
+
+### Planner (`world/planner.ts`)
+
+The planner is pure: it writes no voxels, and works on a coarse raster (`CELL = 8` blocks).
+
+1. **Continents:** 4–8 centres placed by _stratified_ sampling.
+    - The map is split into a near-square grid of cells, and each continent gets one randomly chosen cell, jittered within its inner 60%. This gives even coverage without clumping.
+    - Radius is `size × CONTINENT_RADIUS_FRAC` (0.18).
+    - Each continent gets a climate tag (tropical, temperate, arid or tundra). With four or more continents, all four tags are guaranteed to appear.
+2. **Stepping stones:**
+    - For every pair of continents, 1–2 islands are placed along the connecting line, jittered sideways. The waypoints form `bridgeChains: [mainA, …stones, mainB]`.
+    - Then 2–4 small **nearshore islands** are placed just outside every parent island's rim.
+3. **`nearIsland(x, z)`:** distance to the nearest landmass. Each small island's radius is normalised to the continent radius, so terrain can use a single rim threshold for all of them.
+4. **Regions:** centres from a Poisson-disc scatter (bucketed dart throwing, 30-block spacing). Region count therefore grows with world area, and a region stays the same size on screen.
+5. **Macro fields:** sampled once per region, at its centre:
+    - `elevation` comes from `nearIsland` plus FBM, so each island is a massif ringed by shore.
+    - `temperature`, `moisture` and `magic` are FBM at fixed feature sizes (210–320 blocks), so biomes form whole provinces instead of a salt-and-pepper mix.
+6. **Biome rule**, applied in this order: `elevation < 0.15` → SHORE; `> 0.82` → HIGHLAND; `moisture > 0.55 && magic > 0.44` → SAKURA; `moisture > 0.62` → WETLAND; otherwise MEADOW.
+7. **Cell map:** each cell takes its nearest region, but the lookup point is domain-warped first, so the Voronoi borders look organic. The warp grows near island rims. Region adjacency is read off the cell map.
+8. **Elevation field:** per cell, a blend of nearby region elevations weighted by `1/d⁴`. Biomes are hard-edged but relief stays continuous. `elevationAt()` samples the field bilinearly.
+9. **Rivers & lakes (planned):**
+    - Lakes go on low-lying inland regions.
+    - Rivers are traced by **steepest descent with inertia**: each step samples a forward cone, takes the lowest point, then _blends_ that direction with the current heading. Pure descent zig-zags; the blend makes the river commit, overshoot and swing back, which is what produces the meander.
+    - Trunks (order 0) start from the highest regions. Tributaries (1) and streams (2) join the nearest existing channel.
+    - There's no depression filling: the field is smooth enough that inertia carries a river out of shallow basins.
+10. **Scenic sites & landmarks:** scored candidate locations, handed to `stamps.ts`.
+
+Spatial queries go through a bucket grid over the region centres (`nearby()`), so every pass stays linear in world area instead of quadratic.
+
+### Terrain (`world/terrain.ts`)
+
+**Approach: composed, not simulated.** The height field is a stack of hard-edged **contour discs**, each worth exactly one terrace step. Inside a disc the field is exactly constant, so flat ground comes for free. The only gradients are disc edges, and each becomes one clean cliff.
+
+1. **Disc composition:**
+    - **Crowns:** sets of shrinking discs with drifting centres, placed on the highest planned regions. There are `max(2, round(2·AREA))` of them.
+    - **Knolls and dells:** single-step discs on a jittered grid (`GX = round(S/38)` per side), about a third of them negative.
+    - **Sunken glades:** `round(3·AREA)` of them.
+    - Every disc is domain-warped (an `fbm2` offset is added to the distance), so outlines are lobes rather than circles.
+2. **Contour field:**
+    - Evaluated per `edgeGrid` cell, not per column: `sum = (elevationAt − 0.34) × MACRO_RELIEF (12) + Σ discs + fine FBM`, and level = `BASE + step × round(sum)`.
+    - Sampling on the 2-block lattice makes the field piecewise constant. That forces terrace edges into straight runs and right angles, which gives the built, masonry look.
+    - Discs are bucketed by bounding box (32-block buckets), so each cell only tests nearby discs.
+    - Per-cell evaluation gives exactly the same result as per-column and is about 36× cheaper. It's what makes a large world affordable.
+3. **Island mask:** beyond `rimR = islandRadius + FBM` is seabed. Heights within `20·K` and `9·K` of the rim are capped low, so every island ends in a readable plinth wall.
+4. **Clean-up:** `modeFilter` and `despeckle` remove slivers and one-column jitter. A **ledge pass** then adds a shelf to very tall cliffs (3 steps or more), followed by another despeckle.
+5. **Rivers & lakes:**
+    - Channel polylines are smoothed, resampled to one point per block, and stamped into distance fields (`rivD`, `rivHalf`, `rivFord`, `rivSide`).
+    - Width tapers downstream, widens on tight bends (curvature is measured from the path), and narrows at one ford per trunk.
+    - Carving runs _after_ terracing, so gorge walls keep their terrace levels; see [River system (detail)](#river-system-detail).
+6. **Banks, beaches, stairs:** walkability passes. `carveStairs` cuts steps into cliffs until the land is walk-connected.
+7. **Voxel fill:**
+    - Columns get their surface material from the biome, and river-water voxels are added above sea level.
+    - Boulders go on a jittered grid.
+    - `decorateCliffs` adds outcrops and cave mouths below column tops, so walkability never changes.
+    - `addCascades` adds waterfalls where a dry ravine meets a wet reach.
+
+All absolute lengths are authored in blocks × `K`, and feature counts scale with `AREA`. Raising `WORLD.size` therefore adds places rather than stretching the existing ones.
+
+### Startup progress sequence
+
+`buildWorld` drives the loading bar through `onProgress(fraction, label)`. `generateTerrain` gets a sub-callback mapped into the 0.06–0.24 range.
+
+| Progress    | Label                        | Source                                             |
+| ----------- | ---------------------------- | -------------------------------------------------- |
+| 0.02        | drawing the map              | `planWorld`                                        |
+| 0.06        | sculpting the terrain        | `generateTerrain` — contour composition            |
+| 0.14        | carving the rivers           | `generateTerrain` — river fields + carving         |
+| 0.19        | shaping the banks            | `generateTerrain` — walkability, stairs, boulders  |
+| 0.21        | filling the voxels           | `generateTerrain` — voxel fill                     |
+| 0.26        | building the crossings       | `buildStructures`                                  |
+| 0.34        | placing scenes and landmarks | `buildStamps`                                      |
+| 0.40        | growing the forests          | `scatterVegetation` (trees, bushes, ground detail) |
+| 0.50        | finding the path             | `findSpawn`                                        |
+| 0.54 → 0.96 | meshing the world            | spawn-chunk preload (per-chunk sub-progress)       |
+| 1.0         | ready                        | boot screen becomes dismissable                    |
 
 ---
 
-## Noise & procedural patterns
+## Voxel grid, meshing & streaming
 
-### Noise primitives (`src/core/rng.ts`)
+### Face mesher (`meshRegion` in `voxel.ts`)
 
-All world generation uses a single seeded PRNG and two noise families:
+This is a **per-face culling mesher, not a greedy one.** For each solid voxel, every face whose neighbour isn't solid emits one quad. Greedy merging is left out on purpose: per-vertex AO, world-space pattern UVs, grass-fringe height and the edge graph all need per-block corners, and the packed vertex format below keeps the extra quads cheap.
 
-- **`noise2(x, z)`** — value noise: hash two integer cell corners, bilinear interpolation. Fast; used for high-frequency variation (vegetation density, rock scatter, biome detail).
-- **`noise3(x, y, z)`** — 3D value noise; used for cloud shadow, aurora structure, and any effect that needs to vary with height.
-- **`fbm2(x, z, octaves)`** — fractional Brownian motion: sums `octaves` layers of `noise2` with halving amplitude and doubling frequency. The standard terrain macro-shape tool. Each extra octave adds fine detail without changing the large-scale shape.
-- **`rng.range(lo, hi)`** — uniform float from the seeded PRNG; used wherever a non-spatial random number is needed (tree form selection, stamp placement jitter, bridge offset).
+For each face:
 
-### Domain warping
+- **Colour:** `top`, `side` or `bottom` from the block, plus `tint` (the pattern's secondary colour) and `fringeColor` (grass spilling over the edge).
+- **AO:** for each corner, the mesher checks the two in-plane neighbours and the diagonal, in the layer of air in front of the face: `ao = (s1 && s2) ? 0 : (3 − s1 − s2 − corner) / 3`. The quad's triangle split flips when `ao0 + ao2 > ao1 + ao3`, so the AO gradient never creases along the wrong diagonal.
+- **UVs:** world-space in-plane coordinates, so patterns tile seamlessly across neighbouring blocks.
+- **`aData`:** `(ao, pattern | sway << 3, fringe, localV)`, where `localV` is the height within the block, used for the grass fringe.
+- **Edge masks:** which of the face's four borders are real convex or concave cube edges (see [Ink edges](#ink-edges)).
 
-Coastlines and disc boundaries are shaped by **domain-warped noise**: before sampling the island mask, the input coordinates are offset by another noise evaluation:
+Emissive blocks go into a separate `glow` buffer, drawn with an unlit `MeshBasicMaterial` so they feed the bloom.
 
-```ts
-const wx = x + fbm2(x * 0.004, z * 0.004) * warpAmt;
-const wz = z + fbm2(x * 0.004 + 5.2, z * 0.004 + 1.3) * warpAmt;
-const onIsland = dist(wx, wz, centre) < islandRadius;
-```
+**Vertex packing** (`MeshBuffer.toGeometry()`): position `Int16`; normal `Int8`, normalized; colour, tint and fringe `Uint8`, normalized; `aUv` `Int16`; `aData` `Float32`. Indices are `Uint16` when a chunk has at most 65,535 vertices. That's roughly a quarter of the size of an all-float layout, and normalized integer attributes need no shader changes.
 
-The two FBM calls use different offsets (the `+ 5.2`, `+ 1.3`) so they produce uncorrelated warp fields for X and Z. Without the offset they would return the same value and warp diagonally rather than in all directions.
+### Chunk streamer (`createWorldChunkStreamer`)
 
-### Contour disc terracing
+- **Unit:** a 16×16 full-height column, meshed into up to three objects: `terrain-ci-ck` (solid), `glow-ci-ck` and `voxel-edges-ci-ck`.
+- **Desired set:**
+    - Recomputed only when the player's or the camera's _chunk_ changes (`viewKey`).
+    - Distance is measured to the player→camera _segment_, so a drone looking far ahead also loads along its line of view. When wrapping is on, it's measured from five positions: the player plus the four ±size ghosts.
+    - Chunks load within `loadRadius × 16` and unload beyond `(loadRadius + 1) × 16`. The load queue is sorted nearest first.
+- **Worker path:**
+    - `makeChunkWindow()` copies the chunk plus a 2-block margin out of the grid into a transferable `Uint8Array` and posts it.
+    - The worker meshes it (`buildChunkTransferPayload`) and posts the typed arrays back as transferables, so neither direction copies.
+    - One chunk is in flight at a time.
+    - The block registry is sent to the worker at start and again on `invalidateAll()` (palette change).
+- **Fallback path:**
+    - If `Worker` is unavailable or errors, meshing runs on the main thread in `requestIdleCallback` (or `setTimeout`) slices of 6 Y-layers.
+    - Each idle callback runs up to 4 slices, and a timed-out callback still runs at least one, so a busy GPU can't starve streaming.
+- **Unloads** are drained from the frame loop (4 per frame) _and_ from idle callbacks (3 each). The caps stop a chunk-boundary crossing from turning into a garbage-collection spike.
+- **Preload:** before the boot screen lifts, chunks within radius 3 of spawn are meshed synchronously on the main thread.
+- **No fade-in:** chunks appear at full opacity, and distance fog hides the pop at the edge of the stream radius.
+    - An earlier dithered fade was removed.
+    - A shared material only re-uploads uniforms when the bound material changes, so the per-mesh fade value never reached most chunks.
+    - Meanwhile, the `discard` the fade needed switched off early-Z and mobile hidden-surface removal for all terrain.
 
-Rather than smoothly interpolating a heightfield and stepping it post-hoc (which produces terraces of unequal width), each terrace level is baked in directly as a **contour disc**: a domain-warped circle that contributes exactly `WORLD.step = 3` blocks of elevation. The height at any point is:
-
-```ts
-height = SEA + discsBelow(x, z) * WORLD.step;
-```
-
-where `discsBelow` counts how many disc radii the point falls inside. Inside a disc the field is exactly constant — flatness is free, no smoothing needed. Cliffs form naturally at disc boundaries. The FBM warp of each disc radius is what makes the boundaries look organic rather than circular.
-
-### Biome field
-
-Biome assignment is a **threshold on a large-scale noise field** — not Voronoi, not a distance-to-centre function. A single `fbm2` sample at very low frequency (`0.002`) is compared against fixed thresholds to assign `MEADOW`, `ROCK`, `SAND`, or `SHORE`. This gives smooth biome boundaries that follow the terrain's natural ridges rather than cutting across them.
-
-### River meander
-
-River paths are computed by steepest-descent flow through the region graph, then **FBM-displaced laterally** to add meander:
-
-```ts
-const meander = fbm2(t * 8.0, seed) * meanderAmt;
-px += perpX * meander;
-pz += perpZ * meander;
-```
-
-`t` is normalised path position (0 = source, 1 = mouth). Meander amplitude grows with `t` so rivers are straighter in the mountains and wider/more sinuous near the coast — matching how real rivers behave.
-
-### No-texture philosophy
-
-Block colours are baked into vertex buffers at mesh-build time by the greedy mesher. The fragment shader reads only `vColor` — no texture lookups, no UV coordinates. This means:
-
-- **Zero texture memory** — the entire world fits in vertex buffers.
-- **Palette switching is instant** — `setVoxelPalette()` mutates `BLOCK_BY_ID` in place, then `invalidateAll()` rebuilds vertex buffers on next stream tick. No texture upload needed.
-- **Greedy meshing is maximal** — adjacent faces of the same block always share vertex colour exactly, so they can always be merged. A texture atlas would break this (UVs prevent merging faces that span tile boundaries).
-
-Per-vertex AO (4 corner taps per quad) is baked at the same time as colour, so ambient shadow is free at runtime.
+`setLoadRadius(r)` (from the settings panel) forces a re-queue. `invalidateAll()` unloads everything and remeshes it with the current block registry.
 
 ---
 
 ## Rendering pipeline
 
-Post-processing runs on Three.js `EffectComposer` with a HalfFloat HDR target. The chain is:
+`createPostFX()` in `render/postfx.ts` builds a Three.js `EffectComposer` over a HalfFloat HDR target, falling back to UnsignedByte when float render targets aren't supported. MSAA is off (`antialias: false`, `samples: 0`); anti-aliasing is done as a post pass instead.
 
-```
-SceneDepthPass → EdgeMaskPass → Atmosphere → Bloom → Crepuscular → Grade/Output → SMAA
+```text
+SceneDepthPass → [EdgeMaskPass] → Atmosphere → [Bloom] → [Crepuscular] → Grade → [SMAA | FXAA]
 ```
 
-Everything before Grade is linear HDR. Grade performs ACES tone mapping and the sRGB transfer itself (so Three's `OutputPass` is not used — combining them saves one full-resolution copy per frame).
+Bracketed passes depend on the tier or on current state. Everything before Grade is linear HDR. Grade does ACES tone mapping and the sRGB transfer itself, so Three's `OutputPass` isn't used — that saves one full-screen copy.
 
 ### SceneDepthPass
 
-Renders the scene into a dedicated `sceneFBO` that owns a `DepthTexture`. That FBO is **never** part of the composer's ping-pong swap chain, which prevents WebGL feedback loops where a pass reads and writes the same depth buffer. After rendering, colour is blitted to the composer's read buffer.
+Renders the scene into a dedicated `sceneFBO` that owns the `DepthTexture`, then blits the colour into the composer's read buffer. The FBO is never part of the composer's ping-pong pair, so no pass can sample the depth texture while it's attached for writing (that would be a WebGL feedback loop).
 
-### EdgeMaskPass
+### EdgeMaskPass (high tier only)
 
-Renders a separate edge-coverage mask to `edgeMask` (an `UnsignedByteType` render target, no depth). The edge material (`world.meshes.edgeMaterial`) uses `EDGE_LAYER = 2` so the regular scene camera never draws it — only the edge pass does. The resulting texture is sampled by GradeShader to composite ink strokes in display space.
+Re-renders the scene with the camera restricted to `EDGE_LAYER = 2`, into a two-channel coverage mask: `R` for dark ink, `G` for light ink, combined with MAX blending. For this render it turns off shadow-map and matrix updates (both are already current this frame), and it restores renderer state afterwards. See [Ink edges](#ink-edges).
 
-### Atmosphere (`haze` ShaderPass)
+### Atmosphere (`haze`)
 
-One fullscreen pass; does six things off a single depth fetch:
+One full-screen pass that does all of the following from a single depth fetch:
 
-1. **Large-scale AO** — 8-tap depth rosette at wide radius, lavender-tinted. Catches canopy overhangs and cliff bases that per-vertex baked AO misses. Tap count is tier-scaled (`uAOTaps`: 8 / 4 / 4 / 0).
-2. **Cloud shadow** — world-space reconstruction of drifting cloud noise. Very low amplitude; keeps large flat shelves from going dead.
-3. **Distance desaturation** — chroma drops faster than value (matches the reference images). `mix(col, vec3(lum), fog * uDesat)`.
-4. **Aerial perspective** — nudges each pixel toward `skyRadiance(wdir)` by fog amount. This is what erases the horizon line: the colour geometry fades toward is the exact sky colour in that direction (same GLSL function, no seam).
-5. **Ground mist** — second exponential medium with height falloff, integrated analytically along the view ray so it pools in valleys.
-6. **Sun in-scatter and 4-tap defocus** — driven by the already-computed fog amount, so near-free. DoF disabled on `low` and `very-low` tiers.
+1. **Defocus:** up to 4 taps on a rotating pair, with the radius driven by total haze. Off when the tier's `dof` is false.
+2. **Large-scale AO:**
+    - `uAOTaps` (0, 4 or 8) rosette taps at a world-space radius, converted to pixels via `uFocal`. The 4-tap mode uses every other direction.
+    - It catches canopy overhangs and cliff bases that baked AO can't see, and fades out with fog.
+3. **Cloud shadow:** two drifting noise octaves in world space (gated by tier).
+4. **Distance desaturation:** chroma falls off faster than brightness: `mix(col, lum, fog × uDesat)`.
+5. **Aerial perspective:** pulls colour toward `skyRadiance(viewDir)`, the same function the sky dome uses, so there's no seam at the horizon.
+6. **Ground mist:** an exponential height medium integrated analytically along the view ray (`heightAvg`), so mist pools in valleys.
+7. **Sun in-scatter:** a forward-scatter lobe driven by fog and mist.
 
-### UnrealBloomPass
+The fog curve here **must match** the material fog (the `FOG_NEAR` patch in `lighting.ts`, and `uAerialD`). Otherwise surfaces and post effects fade on different schedules and a visible ring appears.
 
-Runs after Atmosphere so haze luminance feeds the bloom — gives the far field a soft luminous edge. Threshold raised to 1.25 (linear) so only genuine emitters and specular hits bloom, not the pastel palette.
+Two shader rules apply here:
 
-### CrepuscularShader
+- **Early-out loops:** loops stop on a uniform (`if (i >= uAOTaps) break`) instead of masking iterations with `step()`, so a 4-tap tier really does half the work.
+- **Explicit LOD:** every texture fetch inside a loop or a per-pixel branch uses `textureLod(…, 0.0)`.
+    - Implicit derivatives are undefined there (ANGLE/D3D warning X3595).
+    - No post buffer has mips, so the result is identical.
 
-8-tap radial march from the sun's screen position. Active only when the sun is near the horizon (`uSunVisible > 0`). `main.ts` projects the sun direction to NDC each frame and updates `uSunScreen`/`uSunVisible`.
+### Bloom
 
-### GradeShader
+`UnrealBloomPass` runs after the atmosphere, so haze brightness feeds into it. Threshold is 1.25 (linear) and strength 0.22. Only emitters bloom (lanterns, and crystals at about 2.2× palette brightness), plus specular glints.
 
-Composites the edge mask over the bloom output (display-space ink — never added before tone mapping, so pale strokes can't become emitters). Then: ACES + sRGB, lift/gamma/gain, saturation, vignette, film grain, chromatic aberration, a "milk" mix (flat lilac lightens the darkest values), and a highlight rolloff knee.
+### Crepuscular rays
 
-### SMAAPass
+An 8-tap radial march toward the sun's screen position. `main.ts` projects the sun each frame. The pass is **enabled only while rays are visible** (sun near the horizon and on screen) and the tier allows taps; otherwise it would be a full-screen copy for nothing.
 
-Final pass; writes directly to the screen. `needsSwap = false` — without this the composer would alternate the scene between rt1 and rt2 each frame, causing the depth texture to detach every other frame and producing a visible full-frame flash.
+### Grade
+
+Display-space colour grading:
+
+- **Tone and colour:**
+    - ACES tone mapping and sRGB
+    - chromatic aberration at the frame edges only
+    - lift/gamma/gain, saturation and split toning
+    - "milk", which lifts the darkest values toward lilac
+    - contrast around mid-grey
+    - a monotonic highlight knee
+- **Ink compositing** from the edge mask. It uses `mix`, never addition, so pale ink can't become an emitter.
+- **Finishing:** a tinted vignette and film grain.
+
+### Anti-aliasing
+
+| Tiers                  | AA   |
+| ---------------------- | ---- |
+| high, mobile-high, mid | SMAA |
+| low                    | FXAA |
+| very-low               | none |
+
+The AA pass sets `needsSwap = false`. Without it, the composer alternates render targets and the depth attachment detaches every other frame, which shows as a full-screen flash.
+
+---
+
+## Ink edges
+
+The illustrated look comes from explicit strokes along genuine cube edges, not from a post-process edge detector.
+
+1. **Edge graph:** while meshing, each emitted face classifies its four borders:
+    - **Convex:** the in-plane neighbour is air.
+    - **Concave:** the neighbour exists and rises in front of the face.
+    - **Flat seam:** anything else. These are never drawn — inking every quad border would draw a waffle grid on every lawn.
+
+    Unit edges are keyed by sorted endpoints and deduplicated across the two faces that share them (`addEdgeFace`).
+
+2. **Ownership:** a 1-block halo is scanned, so an edge on a chunk boundary sees both of its faces. `edgeBelongsToChunk` assigns each edge to exactly one chunk.
+3. **Colour:** an edge gets _light ink_ when it isn't concave and either both of its faces are pale (sRGB luma ≥ 0.61) or a face is flagged `lightEdge` (grass tops). Everything else gets dark ink.
+4. **Runs:** `mergeEdgeRuns` joins collinear unit edges that share normals and colour into long runs. Where light and dark runs meet, the dark runs lose their round caps so they can't bite into the pale stroke.
+5. **Rendering:** runs become `LineSegments2` instances with a custom `ShaderMaterial` (`makeEdgeMaterial`):
+    - screen-space width in CSS pixels (`linewidth`, set by the settings slider)
+    - analytic anti-aliased coverage and round caps
+    - a **manual depth test against the scene depth texture** (`tSceneDepth`) with a distance-scaled bias, so strokes are hidden correctly without z-fighting their own faces
+    - fog and mist applied in the shader, so ink fades with the surface it's drawn on
+
+Only `EdgeMaskPass` draws the edge layer, so ink exists only on the high tier. `B` / ⬡ toggles the ink opacities in the Grade pass.
+
+---
+
+## Materials & shader injection
+
+Most world materials are stock Three.js materials extended through `onBeforeCompile` string replacement, so they keep Three's lighting, shadows and fog:
+
+| Material                      | Base                  | Injected                                                                                                                                                                                                   | Cache key                 |
+| ----------------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| Terrain (`makeVoxelMaterial`) | `MeshLambertMaterial` | procedural patterns (brick, stone, plank, bark, grass, tile), grass fringe, macro colour noise, face shading, sun/ambient tints, baked AO, waterline ink, coloured VSM shadow tint, wind sway, planet bend | `VoxelWorld-voxel-v9`     |
+| Glow                          | `MeshBasicMaterial`   | face shading ×1.5, planet bend                                                                                                                                                                             | `VoxelWorld-glow-v3`      |
+| Ground detail (`DetailField`) | `MeshLambertMaterial` | per-vertex wind (`aDetail` = sway, phase), planet bend. `DoubleSide`, `depthWrite: false`, `renderOrder = 2`                                                                                               | `VoxelWorld-vegdetail-v4` |
+| Water, sky, edges, particles  | `ShaderMaterial`      | written in full                                                                                                                                                                                            | —                         |
+
+Rules:
+
+- **Bump the cache key:** change `customProgramCacheKey` whenever the injected GLSL changes, or Three reuses a stale compiled program.
+- **No textures** apart from the water depth map. Patterns are procedural (`vxNoise`, `vxHash`) on world-space UVs, so a palette switch only rewrites vertex colours.
+- **Shared uniforms:** uniforms used by many meshes live on `material.userData.uniforms` and are copied into `shader.uniforms` in `onBeforeCompile`.
+    - **Per-mesh uniform values don't work with a shared material**, because Three only re-uploads uniforms when the bound material changes.
+- **Wind sway** (terrain leaves):
+    - Bit 3 of `aData.y` flags swayable blocks.
+    - The vertex shader offsets XZ by two summed sines (phase taken from world XZ) × `uWindStrength` × `clamp(y / 28, 0, 1)`.
+    - `main.ts` animates `uWindTime`, `uWindDir` and `uWindStrength`, with a slowly rotating direction and a gust envelope; `_windBase` holds the slider value.
+    - Skipped on very-low.
+- **Fog near-plane patch:**
+    - At import, `lighting.ts` rewrites `THREE.ShaderChunk.fog_fragment` once to subtract `FOG_NEAR` (96) before the exp² curve, which keeps the play area at full colour.
+    - It logs a warning if that chunk changes shape after a Three upgrade.
 
 ---
 
@@ -277,128 +546,385 @@ Returns 0 during daytime (±30% of the cycle around noon), ramping to 1 at midni
 
 ---
 
-## GPU tiering
+## Water
 
-`src/render/gpu-tier.ts`
+`src/world/water.ts`. The water is a single translucent plane at sea level (`transparent`, `depthWrite: false`, drawn with fog), subdivided per tier and displaced in the vertex shader. Rivers above sea level are voxels instead (see [River system (detail)](#river-system-detail)).
 
-### Detection
+### Depth map
 
-Five tiers determined at startup from hardware signals. Signals used:
+`makeDepthMap(world)` bakes a `THREE.DataTexture` in `RGFormat`, one texel per column:
 
-- `navigator.hardwareConcurrency` — logical CPU cores.
-- `navigator.deviceMemory` — GB (absent in Firefox/Safari; falls back to a canvas timing probe: 20× `fillRect(512, 512)` — if it takes >15 ms the device is memory-bandwidth-constrained → 2 GB; otherwise 4 GB).
-- `MAX_TEXTURE_SIZE` from WebGL2 — integrated Intel/AMD caps at 8192; discrete and all Apple Silicon report 16384+. Discriminates desktop discrete from integrated without needing a GPU database.
-- UA mobile detection — `/Mobi|Android|iPad|iPhone|iPod/i` (iPad explicitly matched; it would otherwise route through the desktop path).
-- WebGL2 availability — absence is a strong very-low signal on 7-year-old devices.
+- **R** — signed water depth: `(WATER.level − (top + 1) + DEPTH_RANGE) / (2 × DEPTH_RANGE)`, with `DEPTH_RANGE = 34`. It's signed rather than clamped so the shader has a real path length for absorption, and the shore ink sits at the zero crossing.
+- **G** — river proximity (0–255), from `rivFlow`.
 
-Detection order (first match wins):
+It's baked from the heightfield, not read from the scene depth buffer. The water is drawn into that same buffer, so reading and writing it at once would be undefined. The terrain material samples the same texture to draw the waterline ink on banks.
+
+### Shading
+
+Vertex and fragment shaders share one `WAVE_GLSL` string (`h21`, `n2`, `waveField`):
+
+- **Waves:** `waveField(p, t)` is a sum of four directional sines and returns height plus its analytic derivative. The vertex shader displaces by the height (true geometric crests, ~0.4 blocks), and the fragment shader uses the derivative as the normal. Sharing the code guarantees that lighting matches the geometry.
+- **Effects that all use that one normal:** sun glint, Fresnel sky tint at grazing angles, and a small refraction offset when sampling the bed. There are no reflections, by design; they would fight the flat pastel look.
+- **Beer–Lambert absorption** along the actual view ray, with per-channel extinction: `exp(−depth × uExtinction)`. Red is absorbed first, so depth reads as a hue shift toward blue-green. Path length grows as the camera lowers, so far water darkens while nearby shallows stay clear on the same surface.
+- **Caustic web:** where two drifting noise fields nearly agree, their difference collapses into a bright filament. Two scales at non-integer ratios avoid moiré, and the strength is scaled by depth.
+- **River proximity** (G channel) speeds up the waves, adds a bank-foam band and a slight cool tint.
+- **Alpha** comes from optical depth along the slant (`1 − exp(−slant × density)`), plus a Fresnel term, and is clamped near the shoreline.
+
+Plane subdivision by tier is 64 (high), 32 (mobile-high, mid), 16 (low) and 4 (very-low).
+
+---
+
+## Planet bend
+
+`src/render/planet.ts`. The world is flat in data and physics, and only _looks_ curved. `PLANET_BEND_GLSL` is pasted into every world material: terrain, glow, water, ground detail and particles.
+
+```glsl
+void applyPlanetBend(inout vec3 worldPos, inout vec3 worldNormal) {
+  vec2  d2   = worldPos.xz - uPlayerXZ;
+  float r2   = dot(d2, d2);
+  worldPos.y -= r2 / (2.0 * uPlanetRadius);       // parabolic approximation of a sphere
+  float r    = sqrt(r2);
+  if (r > 0.001) {
+    worldNormal.xz -= (d2 / r) * (r / uPlanetRadius) * worldNormal.y;   // tilt normals to match
+    worldNormal = normalize(worldNormal);
+  }
+}
+```
+
+- **Bend origin:** `main.ts` calls `updatePlanetUniforms()` on every entry of `world.allPlanetUnis`, but only once the bend origin has moved more than 0.1 units.
+    - In flight modes the origin is the camera; otherwise it's the controller.
+- **Chunk bounds:** chunk bounding spheres are computed on unbent geometry. Bending only lowers far vertices, so frustum culling stays conservative.
+
+---
+
+## GPU tiering & performance
+
+### Detection (`detectGpuTier()` in `render/gpu-tier.ts`)
+
+`?tier=<name>` forces a tier, for testing on real devices. Otherwise detection uses these signals:
+
+| Signal                                    | Why                                                                                                                                                                  |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| WebGL2 context                            | Required by the renderer. If it's missing, `main.ts` stops with a message before detection runs                                                                      |
+| `WEBGL_debug_renderer_info` renderer name | The only reliable way to tell integrated from discrete GPUs, and to spot software renderers. On Windows, ANGLE reports `MAX_TEXTURE_SIZE = 16384` even for Intel UHD |
+| iPadOS detection                          | iPadOS reports a desktop Mac user-agent, so it's detected as `Macintosh` UA + `maxTouchPoints > 1`                                                                   |
+| `MAX_TEXTURE_SIZE`                        | On Apple devices, 16384 means an A12 (2018) or newer chip                                                                                                            |
+| `hardwareConcurrency`, `deviceMemory`     | `deviceMemory` exists only in Chromium and is capped at 8; when missing it counts as "enough"                                                                        |
+
+The probe context is released with `WEBGL_lose_context`, because mobile Safari caps how many live contexts a page can hold.
+
+Rules, first match wins:
+
+```text
+software renderer (SwiftShader / llvmpipe / Basic Render)           → very-low
+mobile:
+  Apple GPU / iPad / iPhone   → maxTex ≥ 16384 ? mobile-high : mid
+  cores ≤ 4 or mem ≤ 2        → very-low
+  Mali-T / Adreno 3xx–5xx / PowerVR                                 → low
+  cores ≥ 8 and mem ≥ 6       → mobile-high        (e.g. Galaxy S22 Ultra)
+  cores ≥ 6 and mem ≥ 3       → mid, else low
+desktop:
+  cores ≤ 4 or mem ≤ 2        → low
+  not integrated, cores ≥ 8, mem ≥ 6, maxTex ≥ 16384                → high
+  cores ≥ 6 ? mid : low
+```
+
+Getting the tier slightly wrong is cheap, because the [adaptive-resolution governor](#adaptive-resolution) corrects for it at runtime.
+
+### Settings table (`TIER_SETTINGS`)
+
+| Tier        | DPR cap | Shadow px | Blur | Shadow every | Extent | Far  | Bloom | AO  | DoF | Rays | Ink | Cloud | AA   | Stream | Water sub | Particles | Detail ×, dist |
+| ----------- | ------- | --------- | ---- | ------------ | ------ | ---- | ----- | --- | --- | ---- | --- | ----- | ---- | ------ | --------- | --------- | -------------- |
+| high        | 2       | 4096      | 12   | 1 frame      | 120    | 6000 | ✓     | 8   | ✓   | 8    | ✓   | ✓     | SMAA | 12     | 64        | 1200      | 1.0, 140       |
+| mobile-high | 1.5     | 2048      | 8    | 2            | 110    | 3000 | ✓     | 4   | ✓   | 4    | —   | ✓     | SMAA | 11     | 32        | 700       | 0.55, 90       |
+| mid         | 1.25    | 2048      | 8    | 2            | 120    | 3000 | ✓     | 4   | ✓   | 4    | —   | ✓     | SMAA | 11     | 32        | 600       | 0.6, 100       |
+| low         | 1       | 1024      | 4    | 3            | 100    | 1500 | —     | 0   | —   | 0    | —   | —     | FXAA | 8      | 16        | 200       | 0.25, 70       |
+| very-low    | 1       | 512       | 4    | 6            | 80     | 1200 | —     | 0   | —   | 0    | —   | —     | none | 6      | 4         | 0         | 0, 50          |
+
+Each tier value is used in one place:
+
+- **`dprCap`:** applied as `min(devicePixelRatio, cap) × dprScale`, so it can only lower native DPR.
+- **Shadow size and stream radius:** become the _defaults_ of the settings panel via `setTierDefaults()`. A user can override them, and the override is stored.
+- **Detail density:** scales the meadow-sprite layer at generation time. `0` keeps only the authored sparse tufts.
+- **Detail distance:** a per-batch distance cull applied every frame (`DetailField` `update()`).
+- **Shadow cadence:** when `shadowInterval > 1`, `renderer.shadowMap.autoUpdate` is false. `main.ts` then sets `needsUpdate` every N frames, and `DayNight` also sets it whenever the sun moves noticeably (more than 0.009 in Y).
+
+### Adaptive resolution
+
+`main.ts` samples frame rate over 2-second windows (ignoring frames over 250 ms, such as tab switches):
+
+- Below 40 fps, `dprScale` drops by 0.1, down to a minimum of 0.6.
+- Above 57 fps, it climbs back by 0.1, up to 1.
+
+Each change calls `renderer.setDprScale()` and then the normal resize path, which resizes the composer and all its targets.
+
+### Robustness
+
+- **No WebGL2:** readable message on the boot screen instead of a blank page.
+- **`webglcontextlost`:** reload after 300 ms. The URL carries the seed, so it's the same world. Rebuilding every GPU resource in place would be a lot of code for a rare event.
+- **No float render targets** (`EXT_color_buffer_float` / `_half_float` both missing):
+    - HDR targets fall back to `UnsignedByteType`.
+    - Shadows switch from VSM (which needs RG16F moments) to PCF.
+
+### Performance principles
+
+These are applied across the codebase. Keep them when adding features:
+
+- **Don't use `discard` in opaque world shaders.** It disables early-Z and tile-based hidden-surface removal on mobile GPUs for every fragment of the material. (Edges and the ground detail are the exceptions: they're thin or depth-write-off and drawn last.)
+- **Break out of loops on a uniform** rather than masking iterations, so lower tiers really do less work.
+- **Turn passes off when their output isn't visible** (crepuscular rays when the sun is off-screen, EdgeMask below high tier).
+- **Hidden meshes skip the shadow pass too.** VSM renders shadow _receivers_ as well as casters, so distance-culling the ground detail saves the shadow pass as well as the main pass.
+- **Throttle per-frame work by change:**
+    - planet-bend uniforms update only after the player moves
+    - `followTarget` runs only while moving
+    - the streamer re-queues only on a chunk change
+    - map and settings redraw only while open
+- **Avoid per-frame allocation:** scratch vectors are module-level (`_sunWorld`, `_sunNDC`), and `DayNight` exposes `sunDir` by reference.
+- **Matrix updates are manual** (`scene.matrixWorldAutoUpdate = false`); only moving objects update theirs.
+- **Pack vertex data** (see [Face mesher](#face-mesher-meshregion-in-voxelts)).
+
+---
+
+## Input & controls
+
+Bindings follow `../planet-explorer` wherever the feature exists in both projects. Keyboard and touch expose the same actions, and both call the same functions in `main.ts`:
+
+| Action               | Keyboard             | Touch                            | Implementation                                   |
+| -------------------- | -------------------- | -------------------------------- | ------------------------------------------------ |
+| Move / look          | WASD, arrows / mouse | left joystick / right-half swipe | `FPCamera.getWish()`, `applyTouchLook()`         |
+| Jump / ascend        | Space                | ↑ (held)                         | `getJumpEdge()`; `touchAltAxis = 1` in the air   |
+| Descend              | C                    | ↓ (held)                         | `drainDroneAltDelta()`                           |
+| Sprint               | Shift                | ⚡ (held)                        | `touchSprint` injects `ShiftLeft` into `_keys`   |
+| Cycle walk→drone→fly | F                    | ✈ (icon shows the next mode)     | `cycleMode()`                                    |
+| Land                 | L (also from fly)    | 🛬 (visible while airborne)      | `land()`                                         |
+| Map                  | M                    | 🗺                                | `map.toggle()`                                   |
+| Dog sit / stand      | Y                    | 🐕                               | `dog.toggleSit()`                                |
+| Settings             | G or `` ` ``         | ⚙ (HUD)                          | `settings` panel keydown / `hud.onSettingsClick` |
+| Edges                | B                    | ⬡                                | `toggleEdges()`                                  |
+| Time of day          | [ / ]                | ◀ / ▶                            | `stepTime(±0.125)`                               |
+| Pause                | Esc                  | —                                | `pause.ts`                                       |
+
+### Desktop
+
+- **Pointer lock:** `FPCamera` requests pointer lock on a mouse `pointerdown` (never for touch pointers), and the boot-screen click also requests it.
+- **When actions run:** gameplay keys run only while `canAct()` (locked or touch). L is the exception: it works even when unlocked, so Esc then L still lands.
+- **Mouse look:** yaw/pitch at 0.0021 rad/px, with pitch clamped to ±(π/2 − 0.05).
+    - In drone mode, mouse X turns the drone's heading instead, and mouse Y is deliberately ignored, so drifting the mouse never climbs.
+- **Settings panel:** opening it releases pointer lock so the sliders can be used. Its G/backquote shortcut is ignored while typing a seed word.
+
+### Touch (`ui/touch-controls.ts`)
+
+- **Detection:** `isTouchDevice = (ontouchstart || maxTouchPoints > 0) && matchMedia('(pointer: coarse)')`. The coarse-pointer test stops touchscreen laptops from getting touch UI.
+- **Joystick:** a nippleJS dynamic joystick in a `#joy-zone` div covering the left half of the screen.
+    - It feeds `fpCam.setTouchMove(x, y)`, which stores the raw axes.
+    - `getWish()` converts them to world space every frame using the current yaw, so a swipe-to-turn while holding the stick steers immediately.
+- **Swipe-to-look:** raw `touchstart`/`touchmove` events on the canvas. The first touch on the right half becomes the look finger, at 0.004 rad/px.
+- **Buttons:**
+    - Held buttons (↑ ↓ ⚡) use `touchstart`/`touchend`/`touchcancel`; tap buttons use `touchend`. All of them `stopPropagation` so a tap isn't also treated as look.
+    - `update()` shows 🛬 only while airborne and changes the cycle icon to show the next mode.
+- **Layout:**
+    - The button column wraps into extra columns (`flex-wrap: wrap-reverse`) instead of running off the top of short screens.
+    - On screens under 500 px tall the buttons shrink to 46 px.
+- **No pointer lock on touch:** pointer lock freezes touch coordinates, which used to make the joystick read zero. `touchActive = true` lets `canAct()` and `getWish()` work without lock.
+
+### Altitude input — `drainDroneAltDelta(dt)`
 
 ```ts
-// very-low: no WebGL2, or weak mobile
-if (mobile && (!hasWebGL2 || cores <= 4 || estimatedMem <= 2)) return 'very-low';
-// low: weak desktop
-if (cores <= 4 || estimatedMem <= 2) return 'low';
-// mobile-high: flagship phone/tablet (≥8 cores, ≥4 GB on mobile)
-if (mobile && cores >= 8 && estimatedMem >= 4) return 'mobile-high';
-// high: desktop discrete GPU (large texture units exclude integrated)
-if (!mobile && cores >= 8 && estimatedMem >= 6 && maxTexSize >= 16384) return 'high';
-// mid: everything else with ≥6 cores, ≥3 GB
-if (cores >= 6 && estimatedMem >= 3) return 'mid';
-return 'low';
+const keyAxis = (Space ? 1 : 0) - (KeyC ? 1 : 0);
+const scrollRate = dt > 0 ? this._droneAltDelta / dt : 0; // wheel gives a position delta → convert to a rate
+this._droneAltDelta = 0;
+return scrollRate + (keyAxis + this.touchAltAxis) * 12; // m/s; the caller multiplies by dt once
 ```
 
-Known device routing:
-
-| Device                                         | Tier                              |
-| ---------------------------------------------- | --------------------------------- |
-| Samsung Galaxy S22 Ultra (8-core, 12 GB)       | mobile-high                       |
-| Apple iPad Pro M2 (8-core, Safari: probe→4 GB) | mobile-high                       |
-| Apple iPad Air M2 (8-core, 4 GB)               | mobile-high                       |
-| Apple iPad Air A14 (6-core, 4 GB)              | mid                               |
-| MacBook Air M2 (8-core, 8 GB, maxTex=16384)    | high                              |
-| Intel UHD laptop (8-core, 16 GB, maxTex=8192)  | mid                               |
-| 2019 mid-range phone (6-core, 3 GB)            | mid                               |
-| Budget phone (4-core, 2 GB)                    | low (desktop) / very-low (mobile) |
-| 7-year-old phone (no WebGL2)                   | very-low                          |
-
-### Settings table
-
-| Tier        | DPR cap | Shadow (px) | Blur samples | Bloom | AO taps | DoF | Crep. taps | Edge mask | Stream radius |
-| ----------- | ------- | ----------- | ------------ | ----- | ------- | --- | ---------- | --------- | ------------- |
-| high        | 2×      | 3072        | 12           | ✓     | 8       | ✓   | 8          | ✓         | 12            |
-| mobile-high | 1.5×    | 2048        | 8            | ✓     | 4       | ✓   | 4          | —         | 11            |
-| mid         | 1.25×   | 2048        | 8            | ✓     | 4       | ✓   | 4          | —         | 11            |
-| low         | 1×      | 1024        | 4            | —     | 0       | —   | 0          | —         | 8             |
-| very-low    | 1×      | 512         | 4            | —     | 0       | —   | 0          | —         | 6             |
-
-`EdgeMaskPass` is disabled on all mobile tiers — it doubles draw calls for little visual gain on smaller screens. `dprCap` is applied as `min(window.devicePixelRatio, cap)` so it can only reduce the native DPR, never raise it.
-
-On `low` and `very-low`, `renderer.shadowMap.autoUpdate = false`. `DayNight.update()` sets `renderer.shadowMap.needsUpdate = true` once per animation frame — correct cadence without re-rendering the shadow map multiple times per frame, saving meaningful fill-rate on constrained hardware.
+It returns a **rate**, not a delta. (Fly mode once applied it without `* dt`, and climbed at about 720 m/s.)
 
 ---
 
-## Voxel world & chunking
+## Player systems
 
-### Grid
+### Character controller (`player/controller.ts`)
 
-`VoxelGrid` is a dense `Uint8Array` of size `sx × sy × sz`. Block IDs are 8-bit; 0 = air. `height[x*sz + z]` caches the highest solid voxel per column for fast ground queries (used by drone terrain-follow, character physics, map bake).
+The player is an AABB (radius 0.38; 1.02 while swimming) swept against the voxel grid one axis at a time. It's cheap, and at these speeds it never tunnels. `main.ts` runs it in fixed 1/60 s sub-steps.
 
-### Greedy mesher
+- **Feel:**
+    - Ground acceleration 118, air acceleration 46, friction 14.5, max speed 13.5, gravity 58, jump velocity 20.5, terminal velocity −70.
+    - Coyote time is 0.12 s and jump buffering 0.14 s, and jump height is variable.
+- **Step-up:**
+    - Rises of up to 1.25 are taken in stride: the body is placed on top and the _drawn_ height (`visualY`) eases up to meet it.
+    - Rises of up to 3.3 can be climbed onto.
+- **Swimming:**
+    - Whether you swim depends on the depth of the bed under you, not on your own height in the water. Testing your own height creates a feedback loop: buoyancy lifts you out of swimming, then gravity drops you back in.
+    - Hysteresis between entering (1.7) and leaving (1.25) stops it chattering at the boundary.
+    - Buoyancy is a critically-damped spring to a float line 1.05 below the surface.
+    - The controller scans ±4 blocks for `isWater` voxels, so river water above sea level supplies its own surface height.
+- **Wrap:** position is wrapped with `wrapAxis()` after each move.
+- **`Input` class:** shared key state plus a `paused` flag. Menus set `paused` and restore its previous value on close; the navigator and the dog respect it.
 
-Runs per chunk in a worker. For each axis direction and each slice, merges adjacent faces of the same block type into quads. Block colours are read from `BLOCK_BY_ID` at mesh-build time and baked into vertex buffers — no texture lookups at runtime. Per-vertex AO (4 taps at each quad corner) is baked at the same time.
+### Camera modes
 
-### Chunk streaming
+Exactly one mode owns the camera each frame. `fpCam.flyActive` / `droneActive` tell `FPCamera.update()` to step aside.
 
-`createWorldChunkStreamer()` in `voxel.ts`. Chunk size `CHUNK = 16`. Default stream radius 12 chunks (~192 blocks). Each frame, `streaming.update(playerPos, cameraPos)` enqueues new chunks within the radius and unloads those beyond `loadRadius + unloadPadding`.
+- **Walk (`FPCamera.update`):** eye height 1.75, plus head bob (0.022 m at 2.2 Hz × speed) while grounded.
+- **Drone (`player/drone.ts`):** a state machine `idle → rising → cruising` (plus `landing`).
+    - **Enter:** scans upward for clear air, then rises to `max(18, clearance + 4, current altitude)`. Entering from fly mode skips the rise.
+    - **Cruise:** terrain-follow is a P-controller on a smoothed ground target: `smoothed += (raw − smoothed) × min(1, dt × 3.5)`, then vertical velocity `= clamp(error × 4, ±14)`.
+    - **Speed and steering:** cruise speed 18, sprint 45; A/D or mouse X turns the heading; touch joystick Y below zero brakes.
+    - **Land:** descends at 90 m/s until 2.5 blocks above ground, then hands back to walk mode. Any upward input (Space, ↑ or the scroll wheel) aborts the landing.
+    - **Exit:** `exit()` leaves immediately, without landing; this is the F-cycle step from drone to fly.
+- **Fly (`player/fly.ts`):** free 6-DoF movement at speed 20 (sprint 60).
+    - The terrain floor (surface + 1.75) is smoothed downward at up to 8 m/s, so flying over a cliff doesn't snap you down.
+    - A probe 6 blocks ahead pushes you upward (up to 14 m/s) before you hit a wall.
+    - Leaving fly mode (F or L) places the controller on the ground directly beneath the camera.
 
-### LOD fade
+`cycleMode()` in `main.ts` handles the mode transitions, including resetting yaw/pitch and syncing the controller position.
 
-Freshly loaded chunks fade in over ~0.5 s via a `uLodAlpha` uniform and Bayer 4×4 ordered dither in the fragment shader. The update loop only iterates `fadingMeshes` (a `Set`) — O(fading), not O(all loaded chunks). Meshes remove themselves from the set when `lodAlpha` reaches 1.
+### Character (`player/character.ts`)
 
----
-
-## World planner
-
-`src/world/planner.ts` — `planWorld(seed, size)` runs before terrain generation and returns a `WorldPlan` that terrain, props, and the map all read from.
-
-### Island layout
-
-3–5 main islands are scattered by dart throwing with minimum separation (`islandMinSep = islandRadius * 2.2`) and a margin from the world boundary. Between each pair of main islands, 1–2 stepping-stone islands are placed at interpolated positions with a perpendicular jitter, giving organic rather than straight chains.
-
-```
-islandRadius    = size * 0.21   (per-island radius)
-steppingRadius  = islandRadius * 0.35
-islandMinSep    = islandRadius * 2.2
-```
-
-`plan.islandCenters` and `plan.stoneIslands` are the authority on where land is — every downstream consumer (terrain mask, bridge placement, minimap) derives from them rather than hard-coding a coastline fraction.
-
-### Bridge chains
-
-`bridgeChains` is an array of waypoint lists: `[mainA, ...stones, mainB]`. `props.ts` walks each chain and places a wooden arch bridge between consecutive waypoints, landing on the nearest solid ground at each end.
-
----
-
-## Terrain generation
-
-`src/world/terrain.ts` — `generateTerrain(seed, size)`.
-
-The heightfield is built as a stack of **contour discs**: each disc is a domain-warped circle (using FBM noise to make the boundary organic) worth exactly one terrace step (`WORLD.step = 3` blocks). Inside a disc the field is exactly constant — flatness is free, cliffs are the disc boundaries.
-
-Post-processing passes:
-
-1. **River carving** — after terracing, a river path is carved as a smooth channel (un-stepped) through the valley.
-2. **Ledge pass** — splits the tallest cliffs with long horizontal shelves.
-3. **Stair carving** — cuts walkable steps into cliff faces until the world is fully walk-connected.
-4. **Biome field** — large-scale noise assigns surface material (meadow / rock / sand) as regions.
-
-### River flow bake
-
-At the end of `generateTerrain()`, `rivFlow` (`Uint8Array`, one byte per column) is computed from the river distance field (`rivD`) and half-width (`rivHalf`). It is packed into the **G channel** of the water depth map (R = signed depth). The water shader reads it as `rivProx` to multiply wave speed and add bank foam tint.
+A procedural voxel traveller, animated from `speed01`, `grounded`, `vy`, `heading`, `groundY` and `swimming` (jump, step and land events trigger poses). It lives on render layer 1, which the first-person camera disables, but it still casts shadows, so the player sees their own shadow. Its root position is driven from `controller.pos` and `controller.visualY`.
 
 ---
 
-## River system
+## Navigation & the dog
+
+### `NavigationSurface` (`player/pathfinding.ts`)
+
+A 2.5D walkability graph shared by **everything that walks** — the click-to-move navigator and the dog — so they all agree on what's walkable.
+
+- **Two layers per map cell:** layer 0 is natural ground or swimmable water; layer 1 is bridge decks, installed from `world.props.bridges`.
+- **8-connected moves**, with diagonals costing √2. A diagonal is legal only if at least one of its two L-shaped routes around the corner is clear, which stops the path cutting through touching corners of trunks, posts or cliff blocks.
+- **Step limits:** max step up 3.3 and max drop 3.35, matching the controller.
+- **Validity cache:** a `Uint8Array` per node with values 0 (unknown), 1 (walkable) or 2 (blocked), filled lazily. The world never changes after generation, so the cache never needs invalidating.
+
+### Click-to-move navigator
+
+- **Picking a destination:** a mouse click (less than 6 px of movement between down and up) raycasts against the terrain group, snaps to `surface.nearestNode()`, and shows a pulse ring where it hit.
+- **Search:** A* with a binary min-heap, **time-sliced** to 1.75 ms per frame and capped at 420k expansions, so a long route never causes a hitch.
+- **Following the route:** the navigator outputs the same world-space wish vector as the keyboard, so acceleration, collision, stepping, swimming and animation stay with the `Controller`.
+- **Cancelling:** any manual movement cancels the route. Getting stuck triggers a replan.
+
+### Dog (`player/dog.ts`)
+
+A companion, not a follower. Two design decisions:
+
+1. **It navigates on the shared `NavigationSurface`.** A pet with its own idea of what's walkable would walk through cliffs, and would be a second system to keep in sync.
+2. **It has no physics body.** It rides the navigation surface directly (ground height per cell, eased at 14/s), so there's nothing to fall through or collide with.
+
+Behaviour states:
+
+| State    | What the dog does                                                                                          |
+| -------- | ---------------------------------------------------------------------------------------------------------- |
+| `rest`   | Sits or stands near the player                                                                             |
+| `wander` | Trots (4.4 m/s) to points within 6.5 of the _player_                                                       |
+| `follow` | Runs (7.6 m/s, faster than the player) along an A* path when beyond the 9-block leash, until it's within 3 |
+
+- **Replanning and recovery:** the dog replans when the player has moved 3.5 from the goal, and warps next to the player when more than 72 away or unreachable.
+- **Personal space:** a 1.5-block gap is enforced as a position clamp, not a steering force, so it can't lose to a path that runs through the player.
+- **Hops:** height changes over 0.55 become a ballistic hop (at most 3.45, matching the nav surface's limit), timed so the dog is at full height before it crosses the lip.
+- **Sit pose:** _solved_ from the rig geometry rather than tuned by eye. The body pitches nose-up by 0.5 rad, and the drop and hind-leg fold are derived so all four paws stay on the ground.
+- **Commands:** Y or 🐕 toggles a standing order to sit (with a speech bubble). After a "stand" command, a 5 s grace period stops it sitting again by itself straight away.
+
+---
+
+## Vegetation
+
+### Trees & bushes (`world/vegetation.ts`)
+
+Trees are voxels written into the grid, so they get meshing, AO, edges and collision for free. `plantTree()` supports fourteen silhouettes:
+
+| Form       | Silhouette                                                | Primary biomes                    |
+| ---------- | --------------------------------------------------------- | --------------------------------- |
+| `round`    | Classic round crown                                       | All                               |
+| `stack`    | Tiered stacking                                           | All                               |
+| `twin`     | Two-lobed top                                             | All                               |
+| `bunch`    | Tight cluster                                             | All                               |
+| `nub`      | Small compact cap                                         | All (small scale)                 |
+| `spire`    | Tall narrow cone                                          | HIGHLAND, CONIFER                 |
+| `umbrella` | Flat wide canopy                                          | MEADOW, SHORE                     |
+| `broad`    | Low spreading crown                                       | MEADOW, WETLAND                   |
+| `tall`     | Birch/poplar: very tall bare trunk, small airy crown      | MEADOW                            |
+| `layered`  | Pagoda/cedar: 2–4 tiered horizontal discs with gaps       | SAKURA                            |
+| `weeping`  | Weeping cherry: wide drooping skirt, lifted central crown | SAKURA                            |
+| `palm`     | Curved trunk, frond canopy with satellite clusters        | SHORE (double-weighted)           |
+| `dead`     | Bare skeletal stubs, optional lean caps                   | HIGHLAND (double-weighted), SHORE |
+| `mangrove` | Aerial-root spread base, tiered canopy by scale           | WETLAND (double-weighted)         |
+
+`pickForm(scale, rng)` restricts forms by scale (large trees may be `palm`, medium `mangrove`, small-medium `dead`). The per-biome `BIOME_FLORA` tables bias the choice through weighted repetition in their `forms` arrays. Grove placement uses fixed-seed noise fields (`N_GROVE`, etc.) rather than the shared RNG, so forest layout doesn't depend on how many random draws came before it. An `occupied` mask records trunk cells for later passes.
+
+### Ground detail (`buildGroundDetail` + `world/veg-detail.ts`)
+
+Sub-voxel decoration that can't be expressed as blocks, collected into a `DetailField`:
+
+| Primitive    | Geometry                                       | Used for                                                     |
+| ------------ | ---------------------------------------------- | ------------------------------------------------------------ |
+| `tuft`       | two crossed, tapered quads                     | grass tufts, reeds, flower and mushroom stems                |
+| `blade`      | one thin quad at a random angle (cheaper)      | meadow grass blades (some tall, with pale seed tips)         |
+| `fern`       | three leaning tufts                            | fern blocks                                                  |
+| `flowerHead` | two crossed flat petal squares + a pale centre | lone wildflowers                                             |
+| `petal`      | one flat quad, rotated in plan                 | fallen petals under large crowns and on blossom drifts       |
+| `box`        | six-sided sub-voxel box                        | pebbles, lichen, flower heads, mushroom caps, crystal shards |
+
+**Placement** (one pass over every column, plus mushroom, crystal and petal passes):
+
+- **Reeds:** wet shallows within ±2 of sea level.
+- **Ferns:** on fern blocks.
+- **Grass:** tufts on all grass, plus the tier-scaled meadow blades on lush areas (a `meadow` FBM field).
+- **Flowers:** drifts where a separate flower FBM field is high, and lone wildflowers elsewhere.
+- **Small details:** pebbles, lichen on stone, mushrooms in damp groves (more likely next to `occupied` trunks), and crystals near landmarks and on high rock.
+
+The meadow blades and lone wildflowers are scaled by `world.detail.density` and drawn from their **own RNG stream** (see [Determinism](#determinism--seeding)).
+
+**Build** (`DetailField.build`):
+
+- **Batches:** quads are bucketed into 48-block spatial batches, each with exact-size typed arrays and its own `Mesh`, so frustum culling works per batch.
+- **Material:** one `MeshLambertMaterial` for all batches. Wind is in the vertex shader: `aDetail = (sway, phase)`, where sway is 0 at the root and 1 at the tip, combined with a travelling swell and a flutter.
+- **Draw state:** `depthWrite: false`, so thousands of blades don't paint the depth buffer and pick up ink, and `renderOrder = 2`, so they draw after the terrain.
+- **Shadows:** batches receive shadows but don't cast them.
+- **Culling:** `update(dt, camera)` hides batches beyond `detailDistance` (plus the batch radius) every frame.
+
+At 768² this comes to about 226k quads at high tier and about 90k at very-low.
+
+---
+
+## Scene stamps
+
+`src/world/stamps.ts` — `buildStamps(world, rng)` runs after props (so stamps can see bridges) and before vegetation (so the scatter pass respects cleared areas).
+
+### Scenic grammars
+
+Each grammar re-validates the terrain before building. A site whose conditions are not met downgrades to the next grammar in the preference list rather than building on wrong terrain.
+
+| Grammar           | Requires                          | Generates                                                                       |
+| ----------------- | --------------------------------- | ------------------------------------------------------------------------------- |
+| `waterfallGarden` | 6+ block cliff with water at foot | Cascade, plunge pool, spray rocks, viewing deck, framing trees, lanterns, reeds |
+| `stoneCrossing`   | River node with dry banks         | Stepping stones, plank jetty, framing trees, reeds                              |
+| `lilyPond`        | Level clearing near waterline     | Excavated basin, sand rim, lily pads, leaning tree                              |
+| `blossomGrove`    | Level open ground                 | Torii gate, swept floor, great tree, secondary ring, lanterns                   |
+| `cliffOverlook`   | Level ground with 7+ block drop   | Paved terrace, parapet, bench, lanterns, one tree                               |
+| `hotSpring`       | Dry inland mid-elevation ground   | Oval RIVER_WATER pool on STONE_WARM floor, boulder rim, leaf-moss scatter       |
+
+Separation: `MIN_SEPARATION = 34` blocks between any two scene centres. Quotas (`QUOTA`) cap each kind per 256×256 area so one type does not dominate. `hotspring` quota: 2 per area.
+
+### Landmark grammars
+
+One pass per continent after scenic stamps. Seven kinds, 2–3 per continent slot, shuffled per seed. Each landmark reserves its footprint against the vegetation scatter pass. All seven kinds are registered in `map.ts` and appear on the minimap as landmark circles.
+
+| Grammar             | Generates                                                                                                                              |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `twistedSpire`      | 3×3 warm-stone base, 14–22 block drifting pale-stone shaft (shifts 1 block each 4 levels, max ±2), cap block                           |
+| `obelisk`           | 3×3 base, 8–13 block straight shaft, lanterns on either side                                                                           |
+| `monolithRing`      | 7–8 standing stones at radius 10–13, every-other lintel, PATH floor                                                                    |
+| `tombstoneField`    | 14–22 scattered upright slabs 2–4 blocks tall, random lean caps                                                                        |
+| `floatingBiosphere` | Ovoid voxel body floating 20–32 blocks above terrain (grass cap → soil → warm-stone core), 8 stalactite drips below, small tree on top |
+| `ancientWell`       | Stone rim (3×3 ring), STONE_PALE crossbeam, PATH clearing radius 5, scattered worn stones                                              |
+| `ruinedArch`        | Two pillars 5–7 blocks tall, partial lintel (1–2 centre blocks missing), rubble scatter                                                |
+
+The floating biosphere uses `T.put()` at `floatY + dy` offsets, bypassing the heightfield entirely. Stalactite length tapers from `STONE_WARM` (tip) through `STONE_PALE` to `STONE` (base).
+
+The ruined arch spans along the X axis; the gap is randomised per seed so no two arches look identical. `ancientWell` is the most common ancient-ruin type and appears in flat inland clearings.
+
+---
+
+## River system (detail)
 
 Rivers are planned in `planner.ts`, carved in `terrain.ts`, and rendered as voxel blocks above sea level.
 
@@ -406,19 +932,24 @@ Rivers are planned in `planner.ts`, carved in `terrain.ts`, and rendered as voxe
 
 `planWorld` builds `plan.rivers`: an array of `{ order: 0|1|2, points: [x,z][], source, tributary?, outflow? }`.
 
-- **Trunks (order 0)** — traced from the highest-elevation region nodes downslope to the coast. One per main island, traced by steepest-descent with FBM meander jitter. Tail-trimmed to exclude ocean-side points (`elevationAt < SHORE_ELEV = 0.15`).
+- **Trunks (order 0)** — traced from the highest-elevation region nodes downslope to the coast. One per main island, traced by _steepest descent with inertia_ (see [Planner](#planner-worldplannerts), step 9). Tail-trimmed to exclude ocean-side points (`elevationAt < SHORE_ELEV = 0.15`).
 - **Tributaries (order 1)** — sourced from 50th-percentile elevation regions, up to `trunkCount × 5` total. Each joins the nearest existing channel within a snap radius of 18 region units.
 - **Streams (order 2)** — fine branches from lower mid-elevation regions, up to `min(trunkCount × 4, 32)` total. Join nearest channel within `REGION_SPACING × 8`.
 
 ### Carving (`terrain.ts`)
 
-For each river channel point, a half-width `rivHalf[i]` is computed. Width by tier:
+For each river channel point, a half-width `rivHalf[i]` is computed. Width by channel order (all × `K = 256/192`, plus FBM jitter and up to +6 on the outside of tight bends; fords ×0.55):
 
 - Trunk: `3.2 + t × 5.4` (t = 0 at source, 1 at mouth)
 - Tributary: `2.2 + t × 2.6`
 - Stream: `1.2 + t × 1.4`
 
-The carved channel bed is set to `SEA - sinkFraction × channelLength` for the wet reach (below `SEA + 7`); above that it is a dry ravine. `SEA = Math.floor(WATER.level) = 24`.
+The water surface is one global plane, so a channel is only wet where its bed lies below it:
+
+- **Above `SEA + 7`:** the column becomes a dry ravine. Its floor is notched one terrace below the surrounding height (two along the centreline), and never below `SEA + 1`.
+- **At or below `SEA + 7`:** the column is carved into the wet channel, deeper mid-channel and shallower at the ford so it can be waded.
+
+The point where a dry ravine meets a wet reach is where `addCascades()` places its waterfalls. `SEA = Math.floor(WATER.level) = 24`.
 
 ### RIVER_WATER voxels (`terrain.ts`)
 
@@ -448,195 +979,53 @@ Rivers are drawn on the minimap in `bakeTerrain()` after the terrain image is wr
 
 ---
 
-## Water shader
+## UI
 
-`src/world/water.ts`
+All UI is plain DOM, created by each module and styled by an injected `<style>` block with no framework. Overlays stack by `z-index`:
 
-### Depth map
+| z-index | Element       |
+| ------- | ------------- |
+| 5       | `#joy-zone`   |
+| 10      | `#touch-btns` |
+| 20      | `#hud`        |
+| 30      | `#bubbles`    |
+| 44      | `#map`        |
+| 45      | `#pause`      |
+| 46      | `#settings`   |
+| 50      | `#boot`       |
 
-`makeDepthMap(world)` bakes a `THREE.DataTexture` in `RGFormat`:
+Every overlay that takes input sets `input.paused` while it's open and restores the previous value when it closes.
 
-- **R** — signed water depth: `(WATER.level − (top+1) + DEPTH_RANGE) / (2 × DEPTH_RANGE)`, range ±34 world units. Signed rather than clamped so the shader has a real path length for Beer-Lambert integration, and the waterline dark edge is drawn at the zero-crossing (clamped fields have no gradient at the shore).
-- **G** — river proximity 0–255 from `rivFlow`.
+- **HUD (`hud.ts`):**
+    - The place name fades in on start.
+    - The desktop shortcut hints (F, M, Y, Esc) are hidden on touch or narrow screens.
+    - The time-of-day chip is always shown; the altitude/speed chip only in drone mode.
+    - The ⚙ button appears once the boot screen is dismissed.
+    - `update()` writes text every frame, so keep it cheap.
+- **Settings (`settings.ts`):** outline width, zoom limits (legacy, from the third-person rig), fog on/off and start distance, stream radius (with live loaded/queued counts), shadow resolution (0–4096 in steps of 512, where 0 is off), planet radius, day speed, wind, palette, seed field and a "new world" button. The header shows the frame rate.
+    - **Persistence:** values are saved under `localStorage['VoxelWorld.settings']` together with a `_version`. `load()` migrates old versions. v3 resets the stream radius and shadow size to the tier defaults, because earlier versions saved desktop values on every device.
+    - **Reset** returns to `DEFAULTS`, which `setTierDefaults()` has already adjusted for this device.
+- **Pause (`pause.ts`):** Esc opens it. It has Resume, Map, and a bindings list: `KEYBOARD_BINDINGS` or `TOUCH_BINDINGS`, chosen by `isTouchDevice` and kept in the same action order.
+- **Map (`map.ts`):** see [Map](#map) below.
+- **Bubbles (`bubbles.ts`):** pooled DOM speech bubbles anchored to an `Object3D`, projected to the screen each frame. The dog's sit and stand commands use them.
 
-### Wave field
-
-Surface normal is computed from the **analytic derivative** of a sum of sin waves (`waveField(uv, time)` returns `vec3(nx, 1, nz)`). All angular effects — sun glint, Fresnel, refraction offset — hang off this one normal so they all agree with the visible wave.
-
-### Beer-Lambert absorption
-
-```glsl
-float depth = max(0.0, waterLevel - sceneY); // actual path length
-vec3 absorb = exp(-depth * uExtinction);      // per-channel extinction
-```
-
-Red goes first (`uExtinction.r` highest), which is why deep water reads as blue-green. Path length grows as the camera lowers, so far water darkens and near shallows stay clear from the same surface — a lerp keyed on position cannot do this.
-
-### River proximity
-
-`rivProx` from the G channel drives two effects:
-
-- Wave speed multiplier: `float riverSpeed = 1.0 + rivProx * 1.8`
-- Bank foam: `smoothstep` band near the shore blended toward `vec3(0.90, 0.92, 0.96)`
-- Subtle blue tint: `col * vec3(0.88, 0.95, 1.06) * rivProx * 0.28`
-
-Water plane subdivision: 64×64 on `high`, 32×32 on `mobile-high`/`mid`/`low`, 4×4 on `very-low`.
-
----
-
-## Planet bend
-
-`src/render/planet.ts`
-
-The vertex shader snippet `PLANET_BEND_GLSL` is pasted into every material that needs curvature (voxel mesh, water, vegetation, particles):
-
-```glsl
-void applyPlanetBend(inout vec3 worldPos, inout vec3 worldNormal) {
-  vec2  d2   = worldPos.xz - uPlayerXZ;
-  float r2   = dot(d2, d2);
-  float drop = r2 / (2.0 * uPlanetRadius);   // parabolic approximation to sphere
-  worldPos.y -= drop;
-  float r   = sqrt(r2);
-  float ang = r / uPlanetRadius;
-  if (r > 0.001) {
-    vec2 axis = d2 / r;
-    worldNormal.xz -= axis * ang * worldNormal.y;
-    worldNormal = normalize(worldNormal);
-  }
-}
-```
-
-`uPlanetRadius` defaults to 350. Physics stay flat — only the vertex positions and normals are bent. Normal correction (`worldNormal.xz -= axis * ang * worldNormal.y`) keeps lighting consistent on the curved surface.
-
-`updatePlanetUniforms(unis, pos)` pushes the player's (x, z) to every registered material's `uPlayerXZ`. It is called in `main.ts` only when the player moves more than 0.1 units:
-
-```ts
-if (Math.abs(bendOrigin.x - _lastPlanetX) + Math.abs(bendOrigin.z - _lastPlanetZ) > 0.1) {
-    for (const unis of world.allPlanetUnis) updatePlanetUniforms(unis, bendOrigin);
-}
-```
-
-`world.allPlanetUnis` collects terrain, water, and particle uniform objects so a single loop hits everything.
-
----
-
-## Player systems
-
-### Character controller
-
-`Controller` in `src/player/controller.ts`. AABB physics: sub-steps at 1/60 s fixed tick, WASD wish vector projected onto the ground plane, jump impulse + gravity, step-up for 1-block ledges, swimming in water volume. `speed01` and `heading` are passed to the character mesh for animation.
-
-### Drone mode
-
-`createDroneMode(grid)` in `src/player/drone.ts`.
-
-State machine: `idle → rising → cruising`. On `enter()`, state becomes `rising` and the drone lifts to `hoverAltitude` (default 12 blocks above ground, or current height if already higher).
-
-**Terrain-follow (cruising):**
-
-```ts
-smoothedTargetY += (rawTargetY - smoothedTargetY) * Math.min(1, dt * heightSmoothRate);
-const error = smoothedTargetY - camera.position.y;
-const vertV = clamp(error * heightPGain, -vertVelMax, vertVelMax);
-camera.position.y += vertV * dt;
-```
-
-- `heightSmoothRate = 3.5` — lerp rate for the ground-height target. Lower values cause the drone to lag behind steep terrain.
-- `heightPGain = 4.0` — proportional gain.
-- `vertVelMax = 14.0 m/s` — enough for steep slopes at cruise speed.
-
-`altitudeDelta` from `drainDroneAltDelta(dt)` adjusts `hoverAltitude` each frame. Landing: `hoverAltitude` decreases at `landingDescentRate = 45 m/s` until the camera is within `landingCompleteHeight = 2.5` blocks of the ground.
-
-Touch joystick Y: negative values brake `speedMult = max(0, 1 + joyY)`; positive or zero = full cruise speed.
-
-### Fly mode
-
-`createFlyMode(grid)` in `src/player/fly.ts`. Free movement in any direction; terrain acts as a floor. `drainDroneAltDelta(dt)` returns a **rate in m/s** — caller applies `* dt` once. (A previous bug had fly mode apply `altDelta` without `* dt`, causing ~720 m/s altitude change per second.)
-
----
-
-## Touch controls
-
-`src/ui/touch-controls.ts` — only instantiated when `isTouchDevice` is true.
-
-**Detection:** `('ontouchstart' in window || navigator.maxTouchPoints > 0) && window.matchMedia('(pointer: coarse)').matches`. The `pointer: coarse` media query is the reliable discriminator — Windows laptops report `maxTouchPoints > 0` even without a touchscreen, but they use a fine (mouse) pointer.
-
-**Joystick:** nippleJS dynamic joystick in a `#joy-zone` div covering the left half. On `move`, calls `fpCam.setTouchMove(v.x, v.y)` which sets `_joyX`, `_joyY` and converts to a `_touchWish` world-space vector. On `end`, zeros both.
-
-**Swipe-to-look:** raw `touchstart`/`touchmove` on the right half (clientX ≥ innerWidth/2). Calls `fpCam.applyTouchLook(dyaw, dpitch)`.
-
-**Button events** use the `held()` helper for Space/C (altitude) and Shift (sprint), and `touchend` listeners for tap-only actions (mode cycle, land, map, sit, edges, time step). Mode changes go through the same `cycleMode()` / `land()` functions in `main.ts` that the F / L keys call, so keyboard and touch cannot drift apart.
-
-**`touchActive = true`** bypasses the `isLocked` check in `canAct()` and `getWish()`, so touch devices never need pointer lock.
-
-### `drainDroneAltDelta(dt)` design
-
-```ts
-drainDroneAltDelta(dt = 0): number {
-  const keyAxis = (this._keys.has('Space') ? 1 : 0) - (this._keys.has('KeyC') ? 1 : 0);
-  const scrollRate = dt > 0 ? this._droneAltDelta / dt : 0;
-  this._droneAltDelta = 0;
-  return scrollRate + (keyAxis + this.touchAltAxis) * 12;
-}
-```
-
-Returns **m/s rate** (not a delta). The drone/fly caller does `hoverAltitude += result * dt`. Scroll wheel accumulates a raw position delta (`_droneAltDelta -= e.deltaY * 0.02`); dividing by `dt` converts it back to a rate so `rate * dt` restores the original per-frame offset. Mouse Y movement is intentionally **not** wired to altitude — any upward mouse drift would cause continuous climb.
-
----
-
-## Minimap
+### Map
 
 `src/ui/map.ts`
 
-`bakeTerrain()` iterates every column, reads `BLOCK_BY_ID[id].top` for the highest solid block, and writes an RGBA pixel. Water columns use the water palette colours. The canvas is redrawn on player move; `invalidateTerrain()` forces a full rebake (called after palette switches).
+`bakeTerrain()` reads `BLOCK_BY_ID[id].top` for each column's highest block and writes one RGBA pixel per column, with water columns using the water palette colours. It runs on first open, and again only after `invalidateTerrain()` (palette switches). While the map is open, `update()` redraws the cached terrain each frame, with rivers, landmarks and the player arrow on top. While it's closed, `update()` does nothing.
 
-### Player arrow
+#### Player arrow
 
 The heading arrow always reflects where the camera is facing — `fpCam.camera.rotation.y + Math.PI` converts Three.js camera convention (forward = -Z) to map-north-up heading regardless of walk, fly, or drone mode. Previously the arrow switched source between `fpCam` and `controller.heading`, causing it to snap when entering drone mode; it now reads camera yaw unconditionally.
 
-### Compass labels
+#### Compass labels
 
 N/E/S/W labels are drawn at fixed canvas-edge positions each frame, rotated opposite to the player heading so the correct compass point always faces up.
 
-### Touch
+#### Touch
 
-On touch devices the map button wires to the same `map.toggle()` as the M key. Touch tap-outside-panel closes the map.
-
----
-
-## Seed & URL
-
-`src/core/rng.ts` — `genSeedWord()` generates a random human-readable word from a fixed word list. `hashSeedWord(word)` hashes it to a 32-bit integer for use as the noise seed.
-
-On startup (`main.ts`):
-
-1. `currentSeedWord` is generated randomly.
-2. If `?seed=<word>` is present in the URL, it overrides the generated word.
-3. `hashSeedWord(currentSeedWord)` → `SEED` (used for all world generation).
-4. `pushSeedUrl(currentSeedWord)` writes `?seed=<word>` to the URL immediately so the seed is always visible, even on first load.
-
-`pushSeedUrl(word)` uses `history.replaceState` (not `pushState`) so the browser back button is not cluttered.
-
-### Startup progress sequence
-
-`buildWorld` (`src/world/world.ts`) drives the loading bar via an `onProgress(fraction, label)` callback. Each step yields to the browser before the next synchronous block so the label is visible before the work starts. `generateTerrain` receives a sub-callback that maps its internal 0–1 range into the 0.06–0.24 window.
-
-| Progress    | Label                        | Source                                                                                                         |
-| ----------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| 0.02        | drawing the map              | `planWorld` — continent layout, region graph, river routing                                                    |
-| _(yield)_   |                              | browser paints before synchronous terrain block                                                                |
-| 0.06        | sculpting the terrain        | `generateTerrain` — macro relief discs, contour field                                                          |
-| 0.14        | carving the rivers           | `generateTerrain` — river distance field + bank carving                                                        |
-| 0.19        | shaping the banks            | `generateTerrain` — walkability, stairs, boulders                                                              |
-| 0.21        | filling the voxels           | `generateTerrain` — voxel fill loop                                                                            |
-| 0.26        | building the crossings       | `buildStructures` — bridges, stepping stones                                                                   |
-| 0.34        | placing scenes and landmarks | `buildStamps` — scenic stamps (groves, hot springs, overlooks…) + landmark structures (spires, wells, arches…) |
-| 0.40        | growing the forests          | `scatterVegetation` — trees, mushrooms, crystals                                                               |
-| 0.50        | finding the path             | `findSpawn` — locate a good player start position                                                              |
-| 0.54 → 0.96 | meshing the world            | chunk streaming preload (per-chunk sub-progress)                                                               |
-| 1.0         | ready                        | loading overlay fades out                                                                                      |
-
-The settings panel's seed input and the pause menu's **Generate new world** button both call `pushSeedUrl(newWord)` then `location.reload()`, which re-enters the startup path with the new seed in the URL.
+On touch devices the 🗺 button wires to the same `map.toggle()` as the M key. Touch tap-outside-panel closes the map.
 
 ---
 
@@ -648,43 +1037,44 @@ The settings panel's seed input and the pause menu's **Generate new world** butt
 
 ### `VoxelPalette` interface
 
+Each palette stores top-face hex colours only. `setVoxelPalette()` derives side, bottom, tint, `topTint` and fringe colours by darkening the top colour (×0.88/0.78 for grass and foliage, ×0.9/0.8 for soil, sand and stone).
+
 ```ts
 interface VoxelPalette {
-    blocks: {
-        GRASS_TOP;
-        GRASS_SIDE;
-        SOIL;
-        SAND;
-        STONE;
-        STONE_PALE;
-        STONE_WARM;
-        LEAF_ROUND;
-        LEAF_SPIRE;
-        LEAF_PALM;
-        LEAF_BROAD;
-        LEAF_WEEPING;
-    };
-    sky: { zenith: number; horizon: number; haze: number; ground: number; sunTint: number };
-    light: { sunColor: number; skyColor: number; groundColor: number };
-    water: { shoal: number; shallow: number; deep: number; extinction: THREE.Vector3 };
-    petals: number[]; // array of hex colours for petal particles
+    label: string;
+    grass: number;
+    grassLight: number;
+    grassDeep: number; // also drive the *_STONE grass variants
+    soil: number;
+    sand: number;
+    stone: number;
+    stonePale: number;
+    stoneWarm: number;
+    foliage: [number, number, number, number, number, number]; // LEAF_PINK, BLUSH, LILAC, CREAM, MINT, ROSE
+    water: { shoal: number; shallow: number; deep: number };
+    sky: { zenith: number; horizon: number; ground: number; haze: number; sunTint: number };
+    light: { sunColor; sunIntensity; skyColor; groundColor; hemiIntensity; ambient; fillColor; fillIntensity };
+    petals: [number, number, number, number, number, number];
     grade: {
-        lift: THREE.Color;
-        gamma: THREE.Color;
-        gain: THREE.Color;
-        saturation: number;
-        bloom: { strength: number; radius: number; threshold: number };
+        exposure;
+        lift: [r, g, b];
+        gamma: [r, g, b];
+        gain: [r, g, b];
+        saturation;
+        contrast;
+        vignette;
+        bloom: { strength; radius; threshold };
     };
 }
 ```
 
-Five palettes are defined: **Autumn** (default), **Spring**, **Alpine**, **Desert**, **Alien**.
+Five palettes are defined: **Autumn** (default), **Spring**, **Alpine**, **Desert** and **Alien**. `activePaletteName` records the current one.
 
 ### Initialisation pattern
 
-Palette-driven module exports (`GRASS_TOP`, `SKY`, `LIGHT`, `WATER`, `PETAL_COLORS`, `GRADE`, etc.) are initialised to zero/empty with a helper `z = () => new THREE.Color(0)`. The module ends with `setVoxelPalette('Autumn')` which mutates every export in place, so imports always see valid colours — even in a module loaded before the call would be placed in main.ts.
+Palette-driven exports (`SKY`, `LIGHT`, `WATER`, `PETAL_COLORS`, `GRADE`, and the colours of palette-driven blocks) are created as placeholders (`z = () => new THREE.Color(0)`). The module ends with `setVoxelPalette('Autumn')`, which fills every one of them in place. So any importer sees valid colours, and later switches mutate the same objects rather than replacing them.
 
-Non-palette constants (PATH, PLANK, BEAM, TRUNK, CRYSTAL, CLOTH, ROOF, etc.) are hardcoded hex literals and are never modified by `setVoxelPalette`.
+Non-palette blocks (PATH, PLANK, BEAM, TRUNK, CRYSTAL, CLOTH, ROOF and so on) keep fixed colours, and `setVoxelPalette` never touches them.
 
 ### `setVoxelPalette(name)`
 
@@ -740,30 +1130,6 @@ Petal layers use an `aColor` `InstancedBufferAttribute` baked at geometry creati
 
 ---
 
-## Wind sway
-
-Leaf and shrub blocks sway in the breeze. The sway flag is packed into the `aData.y` vertex attribute alongside the block's pattern byte: `aData.y = pattern | (sway ? 8 : 0)`. The GLSL vertex shader checks bit 3 (`aData.y >= 8.0`) to detect swayable geometry.
-
-### Vertex shader
-
-```glsl
-if (aData.y >= 8.0) {
-  float heightT = clamp(transformed.y / 28.0, 0.0, 1.0);
-  float wave = sin(uTime * 1.4 + transformed.x * 0.3 + transformed.z * 0.21) * 0.045
-             + sin(uTime * 2.1 + transformed.z * 0.18)                        * 0.022;
-  transformed.x += wave * heightT * uWindStrength;
-  transformed.z += wave * 0.4 * heightT * uWindStrength;
-}
-```
-
-`heightT = transformed.y / 28.0` uses world Y after planet bend is partially applied, so the sway amplitude correctly grows from base to crown regardless of tree height. The previous version used `aData.w` (a baked per-vertex scalar that had been repurposed), which produced flat sway with no height-based amplification.
-
-### Controls
-
-`uWindStrength` is a user-settable uniform on `material.userData.uniforms` (key `_windBase` tracks the raw slider value). Wind is skipped entirely on the `very-low` tier. The guard `if (wu._windBase > 0)` correctly checks the scalar — the previous `if (wu.uWindStrength)` tested the uniform object itself (always truthy) and never skipped.
-
----
-
 ## Boot screen
 
 The loading overlay (`#boot` in `index.html`) shows a spinning CSS 3D voxel cube while the world generates.
@@ -791,105 +1157,57 @@ When the `.ready` class is added, `#boot.ready .ls-emblem { opacity: 0 }` fades 
 
 ---
 
-## Performance fixes
+## Debugging & diagnostics
 
-Applied across the codebase:
+### URL parameters
 
-| #   | File           | Fix                                                                                                                                                                                                                            |
-| --- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1   | `gpu-tier.ts`  | WebGL probe context released with `WEBGL_lose_context` after reading `MAX_TEXTURE_SIZE`, preventing the probe canvas from holding a GPU context indefinitely.                                                                  |
-| 2   | `main.ts`      | Wind guard corrected: `wu._windBase > 0` (scalar) instead of `if (wu.uWindStrength)` (always-truthy uniform object).                                                                                                           |
-| 3   | `voxel.ts`     | Wind sway height factor uses world Y (`transformed.y / 28.0`) instead of `aData.w`, giving correct crown-amplified sway.                                                                                                       |
-| 4   | `day-night.ts` | `shadowMap.needsUpdate` guarded behind a sun-elevation delta threshold (>0.009 in Y). Shadows only re-render when the sun moves visibly, halving shadow cost on static scenes.                                                 |
-| 5   | `main.ts`      | `atmo.followTarget()` skipped when the player is stationary — only called when `manualMovement`, `fly.active`, or `drone.active`.                                                                                              |
-| 6   | `main.ts`      | `clock.update()` restored before `clock.getDelta()`. `THREE.Timer.getDelta()` returns the cached `_delta` field; it does **not** call `update()` internally. Removing it caused `rawDt = 0` every frame, freezing all physics. |
-| 7   | `gpu-tier.ts`  | `very-low` water subdivision reduced from 8×8 to 4×4.                                                                                                                                                                          |
-| 8   | `main.ts`      | Wind calculation skipped entirely on `very-low` tier — the uniform object is never fetched.                                                                                                                                    |
+| Parameter    | Effect                                                                              |
+| ------------ | ----------------------------------------------------------------------------------- |
+| `?seed=word` | Choose the world. Always present after load                                         |
+| `?tier=name` | Force a GPU tier (`high`, `mobile-high`, `mid`, `low`, `very-low`)                  |
+| `?shadow=N`  | Diagnostic shadow-map size, used only if the tier gives none                        |
+| `?capture=1` | `preserveDrawingBuffer: true`, so `canvas.toDataURL()` works for screenshot tooling |
 
----
+### `window.__game`
 
-## Scene stamps
+`main.ts` exposes the live objects: `scene`, `renderer`, `fpCam`, `world`, `controller`, `character`, `post`, `atmo`, `water`, `particles`, `navigator`, `map`, `pause`, `settings`, `hud`, `input`, `dog`, `bubbles`, `tier`, `dayNight`, `drone` and `fly`. `window.__fps` holds the frame rate, smoothed over 0.75 s.
 
-`src/world/stamps.ts` — `buildStamps(world, rng)` runs after props (so stamps can see bridges) and before vegetation (so the scatter pass respects cleared areas).
+Useful console snippets:
 
-### Scenic grammars
+```js
+__game.tier; // detected tier
+__game.renderer.info.render; // draw calls / triangles last frame
+__game.world.streaming.loadedCount; // chunks resident
+__game.dayNight.timeOfDay = 0.75; // jump to dusk
+__game.controller.pos.set(400, 60, 400); // teleport (walk mode)
+const gl = __game.renderer.getContext(); // which GPU did we get?
+gl.getParameter(gl.getExtension('WEBGL_debug_renderer_info').UNMASKED_RENDERER_WEBGL);
+```
 
-Each grammar re-validates the terrain before building. A site whose conditions are not met downgrades to the next grammar in the preference list rather than building on wrong terrain.
+### Testing on devices
 
-| Grammar           | Requires                          | Generates                                                                       |
-| ----------------- | --------------------------------- | ------------------------------------------------------------------------------- |
-| `waterfallGarden` | 6+ block cliff with water at foot | Cascade, plunge pool, spray rocks, viewing deck, framing trees, lanterns, reeds |
-| `stoneCrossing`   | River node with dry banks         | Stepping stones, plank jetty, framing trees, reeds                              |
-| `lilyPond`        | Level clearing near waterline     | Excavated basin, sand rim, lily pads, leaning tree                              |
-| `blossomGrove`    | Level open ground                 | Torii gate, swept floor, great tree, secondary ring, lanterns                   |
-| `cliffOverlook`   | Level ground with 7+ block drop   | Paved terrace, parapet, bench, lanterns, one tree                               |
-| `hotSpring`       | Dry inland mid-elevation ground   | Oval RIVER_WATER pool on STONE_WARM floor, boulder rim, leaf-moss scatter       |
-
-Separation: `MIN_SEPARATION = 34` blocks between any two scene centres. Quotas (`QUOTA`) cap each kind per 256×256 area so one type does not dominate. `hotspring` quota: 2 per area.
-
-### Landmark grammars
-
-One pass per continent after scenic stamps. Seven kinds, 2–3 per continent slot, shuffled per seed. Each landmark reserves its footprint against the vegetation scatter pass. All seven kinds are registered in `map.ts` and appear on the minimap as landmark circles.
-
-| Grammar             | Generates                                                                                                                              |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `twistedSpire`      | 3×3 warm-stone base, 14–22 block drifting pale-stone shaft (shifts 1 block each 4 levels, max ±2), cap block                           |
-| `obelisk`           | 3×3 base, 8–13 block straight shaft, lanterns on either side                                                                           |
-| `monolithRing`      | 7–8 standing stones at radius 10–13, every-other lintel, PATH floor                                                                    |
-| `tombstoneField`    | 14–22 scattered upright slabs 2–4 blocks tall, random lean caps                                                                        |
-| `floatingBiosphere` | Ovoid voxel body floating 20–32 blocks above terrain (grass cap → soil → warm-stone core), 8 stalactite drips below, small tree on top |
-| `ancientWell`       | Stone rim (3×3 ring), STONE_PALE crossbeam, PATH clearing radius 5, scattered worn stones                                              |
-| `ruinedArch`        | Two pillars 5–7 blocks tall, partial lintel (1–2 centre blocks missing), rubble scatter                                                |
-
-The floating biosphere uses `T.put()` at `floatY + dy` offsets, bypassing the heightfield entirely. Stalactite length tapers from `STONE_WARM` (tip) through `STONE_PALE` to `STONE` (base).
-
-The ruined arch spans along the X axis; the gap is randomised per seed so no two arches look identical. `ancientWell` is the most common ancient-ruin type and appears in flat inland clearings.
+- **Real devices:** use the dev server on the LAN (`npx vite --host`), then try each tier with `?tier=`.
+- **Desktop emulation:** Chrome DevTools device emulation (or Playwright `devices[...]`) sets the touch and mobile signals. However, headless Chrome renders with **SwiftShader**, which detection correctly classifies as very-low, so add `?tier=` when emulating. To see real GPU behaviour on Windows, including ANGLE/D3D shader warnings, launch Chrome with `--use-angle=d3d11`.
+- **Shader warnings:** ANGLE prints HLSL line numbers, which don't map to GLSL. To find which program a warning belongs to, iterate `renderer.info.programs` and check `gl.getProgramInfoLog(p.program)`.
 
 ---
 
-## Vegetation detail
+## Conventions & gotchas
 
-`src/world/vegetation.ts` — `plantTree()` supports fourteen silhouette forms:
-
-| Form       | Silhouette                                                 | Primary biomes                    |
-| ---------- | ---------------------------------------------------------- | --------------------------------- |
-| `round`    | Classic round crown                                        | All                               |
-| `stack`    | Tiered stacking                                            | All                               |
-| `twin`     | Two-lobed top                                              | All                               |
-| `bunch`    | Tight cluster                                              | All                               |
-| `nub`      | Small compact cap                                          | All (small scale)                 |
-| `spire`    | Tall narrow cone                                           | HIGHLAND, CONIFER                 |
-| `umbrella` | Flat wide canopy                                           | MEADOW, SHORE                     |
-| `broad`    | Low spreading crown                                        | MEADOW, WETLAND                   |
-| `tall`     | Birch/poplar — very tall bare trunk, small airy crown      | MEADOW                            |
-| `layered`  | Pagoda/cedar — 2–4 tiered horizontal discs with gaps       | SAKURA                            |
-| `weeping`  | Weeping cherry — wide drooping skirt, lifted central crown | SAKURA                            |
-| `palm`     | Curved trunk, frond canopy with satellite clusters         | SHORE (double-weighted)           |
-| `dead`     | Bare skeletal stubs, optional lean caps                    | HIGHLAND (double-weighted), SHORE |
-| `mangrove` | Aerial-root spread base, tiered canopy by scale            | WETLAND (double-weighted)         |
-
-`pickForm(scale, rng)` selects a form based on tree scale: large trees (`scale > 0.72`) may be `palm`; medium (`scale > 0.46`) may be `mangrove`; small-medium (`scale > 0.26`) may be `dead`. `BIOME_FLORA` per-biome tables further bias toward biome-appropriate forms via weighted repetition in the `forms` array. Updated biomes:
-
-- **SHORE** — adds `'palm'` (×2), `'dead'`; `scale` range widened to `[0.16, 0.7]`
-- **WETLAND** — adds `'mangrove'` (×2) alongside `'broad'`, `'weeping'`, `'tall'`
-- **HIGHLAND** — adds `'dead'` (×2) alongside `'spire'`, `'layered'`
-
-### Ground detail: mushrooms and crystals
-
-`buildGroundDetail()` scatters sub-voxel geometry using the `DetailField` (`F.tuft`, `F.box`, `F.petal`, `F.fern`) into a single animated mesh.
-
-**Mushrooms** appear in forested, damp spots (`wetness > 0.08`, grove noise `> 0.05`). Each cluster is 1–3 mushrooms: a thin `F.tuft` stem + a flat `F.box` cap (4× wider than tall). Probability doubles within 1 block of a tree base (`occupied` array from the tree scatter pass).
-
-**Crystals** appear near landmarks (within radius 14) and at elevated rocky ground (`top > sea + 8`). Each cluster is 1–4 narrow-tall `F.box` shards: width 0.07–0.12, height 0.32–0.68, with a 50 % chance of a smaller satellite shard offset by 0.16 blocks. Colors: lilac (amethyst), rose, mint (aquamarine), blush. The `world.stamps` array is read inside `buildGroundDetail` — it is populated by `buildStamps` which runs before vegetation.
-
----
-
-## Water vertex displacement
-
-`src/world/water.ts` shares a `WAVE_GLSL` constant between vertex and fragment shaders. This constant defines:
-
-- `h21(p)` — cheap hash
-- `n2(p)` — value noise
-- `waveField(p, t) → vec3(height, dNx, dNz)` — sum of four directional sin waves
-
-The vertex shader displaces `vWorld.y += wave.x` before applying planet bend, so the water mesh has true geometric crests (~0.4 blocks peak-to-trough at the default amplitudes). The fragment shader evaluates the same `waveField` for the analytic surface normal `(−dNx, 1, −dNz)`, guaranteeing the lighting normal matches the displaced geometry exactly. Sharing the constant is what enforces this — a separate definition would let amplitudes drift.
+- **Colours are linear.** Palette colours are stored linear. `THREE.Color.getHex()` encodes to sRGB. Never call `convertLinearToSRGB()` before handing a colour to Three, because lights, fog and clear colour all expect linear values.
+- **Manual matrix updates.** `scene.matrixWorldAutoUpdate` is false after startup.
+    - Anything that moves must call `updateMatrixWorld()` itself, as the character, dog, sun, sky and pulse do.
+    - Static meshes set `matrixAutoUpdate = false`.
+    - If you add a moving object and it doesn't move on screen, this is why.
+- **`clock.update()` must run before `clock.getDelta()`.** `THREE.Timer.getDelta()` doesn't update itself; without the call, `dt` is 0 and physics freezes.
+- **Shared materials can't have per-mesh uniform values** (see [Materials](#materials--shader-injection)). Use attributes or separate materials.
+- **Bump `customProgramCacheKey`** whenever injected GLSL changes.
+- **Inside loops and per-pixel branches, use `textureLod`** for every texture fetch (see [Atmosphere](#atmosphere-haze)).
+- **New world materials** must include `PLANET_BEND_GLSL` and register their uniforms in `world.allPlanetUnis`. Otherwise they won't curve with the rest of the world.
+- **Fog consistency:** any shader that fades with distance must use the same near-plane fog (`FOG_NEAR`, `aerialD`), or a ring appears where the two disagree.
+- **Optional or tier-dependent generation must use its own RNG stream** (see [Determinism](#determinism--seeding)).
+- **Palette changes must propagate** to every place that cloned a colour (see [Live palette switch propagation](#live-palette-switch-propagation-maints-onpalettechange)).
+- **Wind guard:** test `_windBase > 0`, the scalar, not `uWindStrength`, the uniform object, which is always truthy.
+- **Generation order is a contract:** plan → terrain → props → stamps → vegetation. A pass may only read results from passes before it.
+- **Comments explain _why_.** Most modules open with a design note, and constants carry the reasoning behind their values. When you change a tuned number, update its comment.
+- **`ponytail:` comments** mark deliberate simplifications that have a known ceiling, along with the upgrade path. Search for them before optimising.
