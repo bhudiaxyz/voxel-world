@@ -314,17 +314,20 @@ export class DetailField {
             transformed.x += w * a;
             transformed.z += w * a * 0.55;
             transformed.y -= abs(w) * a * 0.18;   // tips dip as they bend
-            // A gust band flattens the blades downwind as it passes — the
-            // visible "wave" rolling across a meadow.
+            // A gust band rolls across the meadow and makes the blades it passes
+            // over swing harder — back and forth along the wind, not just pushed
+            // one way. Only a small part of it is a steady downwind lean; the
+            // rest is a symmetric oscillation, so blades sway both ways.
             float g = gustAt(transformed.xz, uGustTime, uWindDir) * uGustStr * sway * sway;
-            transformed.xz += uWindDir * g * 0.55;
-            transformed.y -= g * 0.22;
+            float swing = sin(uGustTime * 2.5 + phase * 2.3 + dot(transformed.xz, uWindDir) * 0.35);
+            transformed.xz += uWindDir * g * (swing * 0.45 + 0.12);
+            transformed.y -= abs(swing) * g * 0.16;
             applyPlanetBend(transformed, objectNormal);
           }
         `,
                 );
         };
-        mat.customProgramCacheKey = () => 'VoxelWorld-vegdetail-v5';
+        mat.customProgramCacheKey = () => 'VoxelWorld-vegdetail-v7';
 
         // Every primitive emitted by DetailField is an isolated four-vertex quad.
         // Count those quads by spatial cell first, then fill exact-size typed

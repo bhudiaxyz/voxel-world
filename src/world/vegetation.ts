@@ -1495,7 +1495,7 @@ function buildGroundDetail(world: any, rng: any, occupied?: Uint8Array) {
         }
     }
 
-    return F.build({ windAmp: 0.09, windSpeed: 1.0, drawDistance: world.detail?.distance ?? 140 });
+    return F.build({ windAmp: 0.09, windSpeed: 0.8, drawDistance: world.detail?.distance ?? 140 });
 }
 
 function flatEnough(h: any, S: number, x: number, z: number, r: number, tol: number) {
