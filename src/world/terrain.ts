@@ -1057,15 +1057,39 @@ export function generateTerrain(
         for (let x = BANK_R; x < S - BANK_R; x++) {
             const i = z * S + x;
             if (heights[i] <= SEA || !isChan(i)) continue;
+            // Lowest DRY land around the column (above sea, not channel). Sea
+            // columns are excluded: next to the ocean the reference is the
+            // plane, which the voxels already sit above by definition.
             let bank = Infinity;
             for (let dz = -BANK_R; dz <= BANK_R; dz++)
                 for (let dx = -BANK_R; dx <= BANK_R; dx++) {
                     const j = (z + dz) * S + (x + dx);
-                    if (!isChan(j)) bank = Math.min(bank, heights[j]);
+                    if (!isChan(j) && heights[j] > SEA) bank = Math.min(bank, heights[j]);
                 }
             // A wide reach can have no bank in range — fall back to its own height.
             if (!Number.isFinite(bank)) bank = heights[i];
             riverSurf[i] = Math.max(SEA + 1, Math.min(heights[i], bank - 1));
+        }
+    }
+    /* A river on a slope: one column's banks can be higher than the next
+     * column's downstream. Relax the surface so no water block is more than
+     * one block above any 4-neighbour's water surface (or above a dry bank).
+     * The river then steps down with the land instead of standing over the
+     * lower bank. A few passes settle it; cascades still form where the drop is
+     * genuine, because a step is allowed — just not a wall. */
+    for (let pass = 0; pass < 6; pass++) {
+        for (let z = BANK_R; z < S - BANK_R; z++) {
+            for (let x = BANK_R; x < S - BANK_R; x++) {
+                const i = z * S + x;
+                let s = riverSurf[i];
+                if (s < 0) continue;
+                for (const j of [i - 1, i + 1, i - S, i + S]) {
+                    const n = riverSurf[j];
+                    if (n >= 0) s = Math.min(s, n + 1);
+                    else if (heights[j] > SEA && !isChan(j)) s = Math.min(s, heights[j]);
+                }
+                riverSurf[i] = Math.max(SEA + 1, s);
+            }
         }
     }
     for (let z = BANK_R; z < S - BANK_R; z++) {
