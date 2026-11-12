@@ -1874,22 +1874,52 @@ const FRAG_DECL = /* glsl */ `
       smoothstep(0.0, 0.07, f.x) * smoothstep(0.0, 0.07, 1.0 - f.x),
       smoothstep(0.0, 0.13, f.y) * smoothstep(0.0, 0.13, 1.0 - f.y));
     float h = vxHash(floor(p) + 3.7);
-    vec3 face = base * (0.965 + h * 0.07);
-    face = mix(face, face * 1.06, step(0.88, h));   // occasional weathered brick
-    return mix(mortar, face, m);
+    vec3 face = base * (0.92 + h * 0.16);
+    face = mix(face, face * 1.08, step(0.88, h));   // occasional weathered brick
+    // Pitted fired surface, and chipped corners.
+    face *= 0.95 + vxNoise(uv * 14.0) * 0.08;
+    float corner = length(max(abs(f - 0.5) - vec2(0.42, 0.36), 0.0));
+    face = mix(face, mortar, smoothstep(0.02, 0.05, corner) * step(0.7, vxHash(floor(p) + 9.0)));
+    return mix(mortar * 0.9, face, m);
   }
 
+  /**
+   * Rock: angular facets (a cell-noise of flat planes at different shades),
+   * hairline cracks along facet boundaries, mottling and fine speckle.
+   * Works directly in luminance — the block's tint is only ~10% off its base,
+   * so mixing toward it barely registered and the stone read as flat paint.
+   */
   vec3 patStone(vec2 uv, vec3 base, vec3 tint) {
-    float n = vxNoise(uv * 1.6) * 0.6 + vxNoise(uv * 4.3) * 0.3 + vxNoise(uv * 11.0) * 0.1;
-    vec3 col = mix(base, tint, smoothstep(0.42, 0.78, n));
-    col *= 0.98 + vxNoise(uv * 23.0) * 0.04;
-    return col;
+    vec2 p = uv * 1.7;
+    vec2 cell = floor(p);
+    float best = 9.0, second = 9.0, id = 0.0;
+    for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
+      vec2 o = vec2(float(i), float(j));
+      vec2 c = cell + o;
+      vec2 pt = o + vec2(vxHash(c + 2.1), vxHash(c + 6.7));
+      float d = length(fract(p) - pt);
+      if (d < best) { second = best; best = d; id = vxHash(c + 4.4); }
+      else if (d < second) second = d;
+    }
+    float facet = 0.86 + id * 0.24;                                  // flat planes, ±12%
+    float crack = 1.0 - smoothstep(0.015, 0.06, second - best);     // hairline joints
+    float mottle = vxNoise(uv * 3.3) * 0.6 + vxNoise(uv * 8.1) * 0.4;
+    float speck = vxHash(floor(uv * 16.0));
+    vec3 col = base * facet * (0.93 + mottle * 0.14);
+    col = mix(col, mix(col, tint, 0.6), smoothstep(0.55, 0.85, mottle) * 0.5);   // lichen-ish tint patches
+    col *= 0.97 + step(0.82, speck) * 0.07 - step(speck, 0.08) * 0.08;           // speckle
+    return col * (1.0 - crack * 0.28);
   }
 
+  /** Turf: broad light/dark patches, clumps, and a fine blade stipple. */
   vec3 patGrassTop(vec2 uv, vec3 base, vec3 tint) {
-    float n = vxNoise(uv * 5.5) * 0.55 + vxNoise(uv * 14.0) * 0.45;
-    vec3 col = mix(base, tint, smoothstep(0.40, 0.80, n));
-    col *= 0.985 + vxHash(floor(uv * 6.0)) * 0.03;
+    // (Not named "patch" — that is a reserved word in GLSL ES 3.00.)
+    float turf = vxNoise(uv * 0.9) * 0.6 + vxNoise(uv * 2.6) * 0.4;    // ~1-block patches
+    float clump = vxNoise(uv * 5.5) * 0.55 + vxNoise(uv * 12.0) * 0.45;
+    vec3 col = base * (0.88 + turf * 0.22);
+    col = mix(col, tint * 1.04, smoothstep(0.45, 0.85, clump) * 0.55);
+    float stip = vxHash(floor(uv * 9.0));
+    col *= 0.96 + step(0.78, stip) * 0.08 - step(stip, 0.12) * 0.07;
     return col;
   }
 
@@ -1904,21 +1934,76 @@ const FRAG_DECL = /* glsl */ `
   }
 
   vec3 patPlank(vec2 uv, vec3 base, vec3 tint) {
-    // Parallel board joints along world X, plus very low-amplitude grain.
-    // This is material-specific illustration, never a generic voxel grid.
+    // Boards along world X: a dark joint between boards, per-board tone,
+    // flowing grain lines, the occasional knot, and nail heads at the ends.
     float f = fract(uv.x);
-    float seam = 1.0 - smoothstep(0.018, 0.145, min(f, 1.0 - f));
-    // Each deck board spans across the bridge, so its fine grain follows the
-    // other UV axis while the stronger joint repeats down the bridge length.
-    float grain = sin(uv.y * 15.0 + sin(uv.x * 1.8) * 1.4) * 0.5 + 0.5;
-    vec3 col = base * (0.972 + grain * 0.040);
-    return mix(col, tint * 0.78, seam * 0.66);
+    float board = floor(uv.x);
+    float seam = 1.0 - smoothstep(0.018, 0.12, min(f, 1.0 - f));
+    float tone = vxHash(vec2(board, 1.0));
+    float g = uv.y * 11.0 + sin(uv.y * 1.3 + board) * 2.0 + vxNoise(vec2(f * 3.0, uv.y * 0.8)) * 2.4;
+    float grain = sin(g) * 0.5 + 0.5;
+    vec3 col = base * (0.90 + tone * 0.18) * (0.94 + grain * 0.10);
+    // Knot: a dark oval with rings, one in a few boards.
+    vec2 kc = vec2(board + 0.5, floor(uv.y * 0.5) * 2.0 + vxHash(vec2(board, 5.0)) * 2.0);
+    float kd = length((uv - kc) * vec2(3.0, 1.2));
+    float knot = step(0.72, vxHash(vec2(board, floor(uv.y * 0.5)))) * (1.0 - smoothstep(0.18, 0.4, kd));
+    col = mix(col, tint * 0.6, knot * (0.6 + sin(kd * 30.0) * 0.2));
+    // Nail heads near each board end.
+    vec2 nf = fract(uv * vec2(1.0, 1.0)) - vec2(0.5, 0.08);
+    col *= 1.0 - (1.0 - smoothstep(0.025, 0.05, length(nf * vec2(1.0, 1.6)))) * 0.35;
+    return mix(col, tint * 0.62, seam * 0.75);
   }
 
-  vec3 patBark(vec2 uv, vec3 base, vec3 tint) {
-    float grain = sin(uv.x * 13.0 + sin(uv.y * 2.2) * 1.8) * 0.5 + 0.5;
-    float fine = sin(uv.x * 31.0 + uv.y * 0.7) * 0.5 + 0.5;
-    return mix(base, tint, (grain * 0.16 + fine * 0.06));
+  /**
+   * Bark: deep vertical furrows between raised plates, plates broken by
+   * horizontal cracks, with a lighter worn ridge on each plate. On the top /
+   * bottom faces (cut ends) it shows growth rings instead.
+   */
+  vec3 patBark(vec2 uv, vec3 base, vec3 tint, bool endGrain, vec3 pos) {
+    if (endGrain) {
+      // Rings around the trunk centre (block centre is a good approximation).
+      vec2 c = fract(pos.xz) - 0.5;
+      float r = length(c) * 7.0 + vxNoise(pos.xz * 4.0) * 0.6;
+      float ring = sin(r * 6.2832) * 0.5 + 0.5;
+      vec3 wood = mix(base * 1.45, tint * 1.25, 0.5);
+      return wood * (0.86 + ring * 0.14) * (1.0 - smoothstep(0.38, 0.5, length(c)) * 0.35);
+    }
+    float x = uv.x * 5.0 + vxNoise(vec2(uv.y * 0.9, uv.x * 0.6)) * 1.4;   // furrows wander
+    float col0 = floor(x);
+    float fx = fract(x);
+    float furrow = 1.0 - smoothstep(0.0, 0.22, min(fx, 1.0 - fx));      // dark grooves
+    // Plates broken by horizontal cracks at irregular heights per column.
+    float y = uv.y * (1.6 + vxHash(vec2(col0, 3.0)) * 1.2) + vxHash(vec2(col0, 7.0)) * 4.0;
+    float fy = fract(y);
+    float crack = 1.0 - smoothstep(0.0, 0.07, min(fy, 1.0 - fy));
+    float plate = vxHash(vec2(col0, floor(y)));
+    float ridge = smoothstep(0.35, 0.5, fx) * (1.0 - smoothstep(0.5, 0.65, fx));  // worn crest
+    vec3 col = base * (0.88 + plate * 0.24) * (1.0 + ridge * 0.16);
+    col = mix(col, tint, vxNoise(uv * 3.0) * 0.3);
+    col *= 1.0 - furrow * 0.45 - crack * 0.25 * (1.0 - furrow);
+    col *= 0.95 + vxHash(floor(uv * 18.0)) * 0.1;                        // fibre grain
+    return col;
+  }
+
+  /**
+   * Water voxels (rivers above sea level): flowing ripple lines, soft caustic
+   * light, foam flecks and a brighter sheen on the tops; murky depth on sides.
+   */
+  vec3 patWater(vec2 uv, vec3 base, vec3 tint, bool top, float t) {
+    if (!top) {
+      // Side of a water column: darker with depth, faint moving light bands.
+      float band = sin(uv.y * 5.0 - t * 1.2 + vxNoise(uv * 1.3) * 2.0) * 0.5 + 0.5;
+      return base * (0.72 + band * 0.12);
+    }
+    vec2 flow = uv + vec2(t * 0.45, t * 0.12);
+    float a = vxNoise(flow * 1.6), b = vxNoise(flow * 1.6 * 1.37 + 9.1 - vec2(t * 0.2, 0.0));
+    float web = pow(max(1.0 - abs(a - b) * 3.5, 0.0), 3.0);               // caustic light
+    float ripple = sin(flow.x * 7.0 + vxNoise(flow * 0.8) * 4.0) * 0.5 + 0.5;
+    vec3 col = mix(base * 0.86, tint * 1.12, ripple * 0.35);
+    col += vec3(0.85, 0.95, 1.0) * web * 0.22;
+    float foam = smoothstep(0.82, 0.93, vxNoise(flow * 3.3 + 4.0));
+    col = mix(col, vec3(0.92, 0.96, 1.0), foam * 0.45);
+    return col;
   }
 
   /* ---- added so that no voxel is a flat colour -----------------------
@@ -1929,7 +2014,10 @@ const FRAG_DECL = /* glsl */ `
   /** Crumbly earth: clods, small dark pits and the odd pale pebble. */
   vec3 patSoil(vec2 uv, vec3 base, vec3 tint) {
     float n = vxNoise(uv * 2.3) * 0.5 + vxNoise(uv * 6.1) * 0.3 + vxNoise(uv * 15.0) * 0.2;
-    vec3 col = mix(base, tint, smoothstep(0.35, 0.75, n) * 0.7);
+    // Clods: ±14% luminance, plus faint horizontal layering on the walls.
+    vec3 col = base * (0.86 + n * 0.28) * (0.97 + sin(uv.y * 6.2 + vxNoise(uv * 1.2) * 2.5) * 0.03);
+    col = mix(col, tint, smoothstep(0.55, 0.85, n) * 0.35);
+    col *= 0.96 + vxHash(floor(uv * 14.0)) * 0.08;                  // grit
     vec2 cell = floor(uv * 5.0);
     float h = vxHash(cell + 1.3);
     float d = length(fract(uv * 5.0) - 0.5);
@@ -1941,27 +2029,80 @@ const FRAG_DECL = /* glsl */ `
     return col;
   }
 
-  /** Sand: fine grain plus soft wind ripples running across the tops. */
+  /**
+   * Sand: dense multi-coloured grain (light and dark grains, not just noise),
+   * wind ripples with a lit crest and shaded trough on the tops, the odd
+   * shell/pebble, and compacted strata on the sides.
+   */
   vec3 patSand(vec2 uv, vec3 base, vec3 tint, bool top) {
-    float grain = vxHash(floor(uv * 14.0)) * 0.6 + vxNoise(uv * 9.0) * 0.4;
-    vec3 col = base * (0.955 + grain * 0.09);
+    float g1 = vxHash(floor(uv * 22.0));
+    float g2 = vxHash(floor(uv * 13.0) + 5.0);
+    vec3 col = base * (0.93 + g2 * 0.10);
+    col *= 1.0 + step(0.86, g1) * 0.10 - step(g1, 0.10) * 0.12;          // light/dark grains
     if (top) {
-      float rip = sin(uv.x * 4.2 + uv.y * 1.3 + vxNoise(uv * 0.7) * 3.0) * 0.5 + 0.5;
-      col = mix(col, mix(col, tint, 0.5), smoothstep(0.65, 0.95, rip) * 0.55);
+      float ph = uv.x * 3.6 + uv.y * 1.1 + vxNoise(uv * 0.6) * 3.4;
+      float rip = sin(ph);
+      // Lit windward slope, shaded lee — reads as relief, not stripes.
+      col *= 1.0 + smoothstep(0.2, 0.9, rip) * 0.08 - smoothstep(-0.2, -0.9, rip) * 0.10;
+      col = mix(col, tint, smoothstep(0.6, 0.9, vxNoise(uv * 1.1)) * 0.25);   // damp/dry patches
+      float shell = step(0.985, vxHash(floor(uv * 4.0) + 3.3));
+      col = mix(col, vec3(0.96, 0.93, 0.88), shell * (1.0 - smoothstep(0.08, 0.2, length(fract(uv * 4.0) - 0.5))));
     } else {
-      // Sides show faint horizontal strata.
-      col *= 0.97 + sin(uv.y * 9.0 + vxNoise(uv * 1.5) * 2.0) * 0.03;
+      // Compacted horizontal strata of slightly different colour.
+      float s = sin(uv.y * 7.0 + vxNoise(uv * vec2(0.4, 1.5)) * 2.5);
+      col = mix(col, tint * 0.92, smoothstep(0.3, 0.9, s) * 0.35);
+      col *= 0.96 + smoothstep(0.85, 1.0, s) * 0.08;
     }
     return col;
   }
 
-  /** Leaf mass: soft dappled clumps with faint darker gaps — foliage, not polka dots. */
+  /**
+   * One leaf in a cell: a pointed ellipse (lens) at a random angle, with a
+   * midrib. Returns (coverage, shade, rib) — coverage 0..1, shade is a per-leaf
+   * brightness, rib marks the vein.
+   */
+  vec3 leafCell(vec2 p, vec2 cell) {
+    float h = vxHash(cell + 1.7);
+    float ang = h * 6.2832;
+    vec2 c = vec2(vxHash(cell + 4.3), vxHash(cell + 8.9)) * 0.5 + 0.25;   // centre, inset
+    vec2 d = p - (cell + c);
+    vec2 q = vec2(cos(ang) * d.x + sin(ang) * d.y, -sin(ang) * d.x + cos(ang) * d.y);
+    float len = 0.42 + vxHash(cell + 2.2) * 0.22, wid = len * 0.42;
+    // Lens: width tapers to a point at both ends.
+    float taper = max(1.0 - (q.x * q.x) / (len * len), 0.0);
+    float edge = abs(q.y) / max(wid * taper, 1e-3);
+    float cover = (1.0 - smoothstep(0.80, 1.0, edge)) * step(abs(q.x), len);
+    float rib = (1.0 - smoothstep(0.0, 0.06, abs(q.y))) * cover * step(-len * 0.8, q.x);
+    return vec3(cover, vxHash(cell + 6.1), rib);
+  }
+
+  /**
+   * Leaf mass: overlapping pointed leaves at random angles, each with its own
+   * shade and a faint midrib, layered two deep, with dark gaps showing into the
+   * crown between them and broad clumping on top.
+   */
   vec3 patLeaf(vec2 uv, vec3 base, vec3 tint) {
-    float clump = vxNoise(uv * 2.4) * 0.55 + vxNoise(uv * 5.7) * 0.30 + vxNoise(uv * 11.0) * 0.15;
-    vec3 col = mix(base * 0.93, mix(base, tint, 0.4) * 1.04, smoothstep(0.30, 0.72, clump));
-    // Small irregular gaps where the eye sees into the crown.
-    float gap = smoothstep(0.78, 0.92, vxNoise(uv * 7.3 + 3.0));
-    return col * (1.0 - gap * 0.10);
+    vec3 col = base * 0.66;                            // the shadowed interior of the crown
+    // Two staggered layers: the second is offset and smaller so leaves overlap.
+    for (int layer = 0; layer < 2; layer++) {
+      float s = layer == 0 ? 3.2 : 4.6;
+      vec2 p = uv * s + (layer == 0 ? vec2(0.0) : vec2(0.37, 0.61));
+      vec2 cell = floor(p);
+      // Check this cell and its neighbours so leaves can cross cell borders.
+      for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
+        vec2 cc = cell + vec2(float(i), float(j));
+        vec3 lf = leafCell(p, cc);
+        if (lf.x <= 0.001) continue;
+        vec3 leafCol = mix(base, tint * 1.08, lf.y * 0.75) * (0.86 + lf.y * 0.24);
+        leafCol *= 1.0 - lf.z * 0.16;                 // midrib
+        // Front layer sits slightly brighter (more light reaches it).
+        leafCol *= layer == 1 ? 1.06 : 0.97;
+        col = mix(col, leafCol, lf.x);
+      }
+    }
+    // Broad clumping so a crown has sunlit and shaded masses, not uniform noise.
+    col *= 0.90 + vxNoise(uv * 0.8) * 0.20;
+    return col;
   }
 
   /** Cobbled path: irregular rounded stones in a darker bed. */
@@ -1978,8 +2119,11 @@ const FRAG_DECL = /* glsl */ `
       else if (d < second) second = d;
     }
     float mortar = 1.0 - smoothstep(0.03, 0.11, second - best);
-    vec3 stone = base * (0.92 + id * 0.16);
-    return mix(stone, tint * 0.72, mortar * 0.8);
+    // Each cobble is domed: lighter in its middle, darker toward its rim.
+    float dome = 1.0 - smoothstep(0.0, 0.55, best);
+    vec3 stone = base * (0.84 + id * 0.26) * (0.86 + dome * 0.22);
+    stone *= 0.95 + vxNoise(uv * 11.0) * 0.1;                           // worn surface
+    return mix(stone, tint * 0.55, mortar * 0.85);
   }
 
   /** Woven cloth: fine over-under weave, a little uneven. */
@@ -1988,8 +2132,11 @@ const FRAG_DECL = /* glsl */ `
     float wx = sin(p.x * 3.14159) * 0.5 + 0.5, wy = sin(p.y * 3.14159) * 0.5 + 0.5;
     float over = mod(floor(p.x) + floor(p.y), 2.0);
     float weave = mix(wx, wy, over);
-    vec3 col = base * (0.94 + weave * 0.10);
-    return mix(col, tint, vxNoise(uv * 3.0) * 0.12);
+    vec3 col = base * (0.88 + weave * 0.18);
+    col *= 1.0 - (1.0 - smoothstep(0.0, 0.12, min(fract(p.x), fract(p.y)))) * 0.12;   // thread gaps
+    // Soft folds and a little sun-fading.
+    col *= 0.92 + (sin(uv.x * 2.1 + vxNoise(uv * 0.7) * 3.0) * 0.5 + 0.5) * 0.12;
+    return mix(col, tint, vxNoise(uv * 3.0) * 0.2);
   }
 
   /** Crystal: hard-edged facets with bright edges. */
@@ -2004,8 +2151,9 @@ const FRAG_DECL = /* glsl */ `
   /** Generic fallback so no block is ever a flat colour. */
   vec3 patSurface(vec2 uv, vec3 base, vec3 tint) {
     float n = vxNoise(uv * 3.1) * 0.6 + vxNoise(uv * 9.3) * 0.4;
-    vec3 col = mix(base, tint, smoothstep(0.35, 0.8, n) * 0.35);
-    return col * (0.97 + vxHash(floor(uv * 8.0)) * 0.06);
+    vec3 col = base * (0.88 + n * 0.22);
+    col = mix(col, tint, smoothstep(0.45, 0.85, n) * 0.4);
+    return col * (0.94 + vxHash(floor(uv * 10.0)) * 0.12);
   }
 `;
 
@@ -2034,13 +2182,21 @@ const FRAG_BODY = /* glsl */ `
     vec2 fw = fwidth(vUvW);
     float footprint = max(fw.x, fw.y);
     float detail = (1.0 - smoothstep(0.06, 0.22, footprint)) * (1.0 - smoothstep(40.0, 120.0, viewDist));
+
+    // Per-block tone: each voxel of a material is a touch lighter or darker
+    // than its neighbours (±4%), so a big slab reads as built from blocks
+    // rather than one flat sheet. Keyed on the block cell, nudged inward along
+    // the normal so a face belongs to its own block. 1-block coarse, so it
+    // cannot alias and needs no distance fade.
+    vec3 blockCell = floor(vPosW - vNrmW * 0.5);
+    col *= 0.96 + vxHash3(blockCell + 0.37) * 0.08;
     if (detail > 0.002) {
       vec3 t;
       bool top = vNrmW.y > 0.5;
       if      (pat == 1.0)  t = patBrick(vUvW, col, vTintV);
       else if (pat == 2.0)  t = patStone(vUvW, col, vTintV);
       else if (pat == 3.0)  t = patPlank(vUvW, col, vTintV);
-      else if (pat == 4.0)  t = patBark(vUvW, col, vTintV);
+      else if (pat == 4.0)  t = patBark(vUvW, col, vTintV, abs(vNrmW.y) > 0.5, vPosW);
       else if (pat == 5.0)  t = patGrassTop(vUvW, col, vTintV);
       else if (pat == 6.0)  t = patTile(vUvW, col, vTintV);
       else if (pat == 7.0)  t = patSoil(vUvW, col, vTintV);
@@ -2049,6 +2205,7 @@ const FRAG_BODY = /* glsl */ `
       else if (pat == 10.0) t = patCobble(vUvW, col, vTintV);
       else if (pat == 11.0) t = patCloth(vUvW, col, vTintV);
       else if (pat == 12.0) t = patCrystal(vUvW, col, vTintV);
+      else if (pat == 13.0) t = patWater(vUvW, col, vTintV, top, uCausticTime);
       else                  t = patSurface(vUvW, col, vTintV);
       col = mix(col, t, detail);
     }
@@ -2271,7 +2428,7 @@ export function makeVoxelMaterial() {
             );
         mat.userData.shader = shader;
     };
-    mat.customProgramCacheKey = () => 'VoxelWorld-voxel-v13';
+    mat.customProgramCacheKey = () => 'VoxelWorld-voxel-v16';
     return mat;
 }
 

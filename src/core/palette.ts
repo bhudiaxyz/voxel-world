@@ -72,7 +72,8 @@ export const PATTERN = {
     COBBLE: 10,
     CLOTH: 11,
     CRYSTAL: 12,
-    // 13–15 free. The mesher packs the id into 4 bits (bit 4 is the sway flag).
+    WATER: 13,
+    // 14–15 free. The mesher packs the id into 4 bits (bit 4 is the sway flag).
 };
 
 /* ------------------------------------------------------------------ *

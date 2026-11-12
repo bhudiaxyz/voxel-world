@@ -49,6 +49,11 @@ export const DEFAULT_SHADOW_RESOLUTION = 3072;
 // setting and nearby off-screen casters while keeping the texels dense.
 const SHADOW_EXTENT = 120;
 
+/** Sun distance from its (player-following) target. Close enough that the
+ *  shadow camera's depth range is tight; far enough that the ±extent frustum
+ *  still contains the tallest casters (terrain tops out at 96). */
+export const SUN_DIST = 200;
+
 /**
  * Aerial-perspective density. FogExp2 is 1 - exp(-(density*d)^2), which is the
  * curve we want: nearly transparent up close, then it falls off a cliff.
@@ -144,7 +149,7 @@ export class Atmosphere {
 
         /* ---- key light ----------------------------------------------- */
         const sun = new THREE.DirectionalLight(LIGHT.sunColor.clone(), RIG.sun);
-        sun.position.copy(LIGHT.sunDir).multiplyScalar(worldSize * 1.1);
+        sun.position.copy(LIGHT.sunDir).multiplyScalar(SUN_DIST);
         sun.castShadow = true;
 
         // The frustum follows the player, so a fixed view-sized extent keeps the
@@ -155,8 +160,18 @@ export class Atmosphere {
         sun.shadow.camera.right = S;
         sun.shadow.camera.top = S;
         sun.shadow.camera.bottom = -S;
-        sun.shadow.camera.near = 1;
-        sun.shadow.camera.far = worldSize * 3.2;
+        /* Tight depth range around the player.
+         *
+         * VSM stores depth and depth² in a half-float RG target (~3 decimal
+         * digits). Spread over the old 1–2458 range (near 1, far worldSize×3.2,
+         * sun 845 units out) that was far too coarse to tell neighbouring
+         * terrain apart at grazing sun angles, and the Chebyshev bound stepped
+         * — visible as broad light/dark stripes fanning out across flat grass
+         * from every tree. The frustum only needs to span the ±extent box and
+         * the 96-block height range from SUN_DIST away, so 50–400 covers it with
+         * ~6× the precision. SUN_DIST is shared with DayNight. */
+        sun.shadow.camera.near = SUN_DIST - 150;
+        sun.shadow.camera.far = SUN_DIST + 200;
         const requestedRes = ts.shadowRes > 0 ? ts.shadowRes : SHADOW_RES;
         // Every WebGL2 device supports ≥4096 textures; no probe context needed.
         const shadowRes = Math.min(requestedRes, 4096);

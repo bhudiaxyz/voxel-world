@@ -3,6 +3,7 @@
  * palette blending. All palette colours are linear (no sRGB conversion).
  */
 import * as THREE from 'three';
+import { SUN_DIST } from './lighting';
 
 // Minimal interface for what we need from Atmosphere (lighting.js).
 interface AtmoLike {
@@ -152,13 +153,10 @@ export class DayNight {
         this._moonDir.copy(this._sunDir).multiplyScalar(-1);
 
         const atmo = this.atmo;
-        const S = atmo.worldSize;
 
         // Position sun relative to shadow target so followTarget() keeps working.
-        atmo.sun.position
-            .copy(this._sunDir)
-            .multiplyScalar(S * 1.1)
-            .add(atmo.sun.target.position);
+        // SUN_DIST (not worldSize×1.1) keeps the shadow depth range tight; see lighting.ts.
+        atmo.sun.position.copy(this._sunDir).multiplyScalar(SUN_DIST).add(atmo.sun.target.position);
         atmo.sun.updateMatrixWorld();
 
         // Intensities

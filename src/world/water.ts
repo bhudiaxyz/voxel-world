@@ -242,6 +242,18 @@ export function createWater(size: any, depthMap: any, tier: string = 'high', wat
         // intensity at a much larger scale than the web itself.
         float swell = n2(uv * 0.055 + vec2(uTime * 0.021, -uTime * 0.017));
         vec3 N = normalize(vec3(-wave.y, 1.0, -wave.z));
+        // Fine capillary ripples on top of the wave trains: a cheap finite
+        // difference of drifting noise, faded with distance so it never aliases.
+        // This is what stops the surface reading as smooth glass up close.
+        {
+          float rd = length(cameraPosition.xz - uv);
+          float near = 1.0 - smoothstep(18.0, 70.0, rd);
+          if (near > 0.01) {
+            vec2 rp = uv * 1.9 + vec2(uTime * 0.35, uTime * 0.21);
+            float h0 = n2(rp), hx = n2(rp + vec2(0.07, 0.0)), hz = n2(rp + vec2(0.0, 0.07));
+            N = normalize(N + vec3(h0 - hx, 0.0, h0 - hz) * 2.6 * near);
+          }
+        }
 
         /* --- depth, along the view ray ------------------------------------
          * The lookup gives the vertical drop to the bottom. What actually
@@ -329,6 +341,23 @@ export function createWater(size: any, depthMap: any, tier: string = 'high', wat
           float path = pow(max(dot(N, Hm), 0.0), 38.0);
           float sparkle = smoothstep(0.55, 0.95, h21(floor(uv * 3.0) + floor(uTime * 6.0)));
           col += uMoonColor * uMoonLight * (path * (0.35 + sparkle * 0.9) + fres * 0.06) * above;
+        }
+
+        /* --- whitecaps -------------------------------------------------------
+         * Out on open, deep water the steepest wave crests break into foam.
+         * Keyed on the wave slope (steep = crest) gated by a drifting noise so
+         * caps come and go in patches rather than lining every crest, and only
+         * past the shelf so lakes near the shore stay calm. */
+        {
+          float steep = length(wave.yz);
+          float open = smoothstep(4.0, 12.0, shore) * (1.0 - rivProx);
+          float capNoise = n2(uv * 0.21 + vec2(uTime * 0.05, -uTime * 0.03));
+          float cap = smoothstep(0.55, 0.85, steep * 3.2) * smoothstep(0.5, 0.75, capNoise) * open;
+          // Break the cap into streaks of foam.
+          cap *= smoothstep(0.35, 0.7, n2(uv * 2.4 + vec2(uTime * 0.6, 0.0)));
+          col = mix(col, vec3(0.93, 0.96, 1.0), cap * 0.65 * above);
+          // Deep open water is a richer, darker blue toward the horizon.
+          col = mix(col, uDeep * 0.85, open * 0.18);
         }
 
         /* --- bank foam -------------------------------------------------------

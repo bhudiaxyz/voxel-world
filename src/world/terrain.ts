@@ -88,6 +88,9 @@ export const RIVER_WATER = registerBlock('RIVER_WATER', {
     top: lin(0x4fa8bc),
     side: lin(0x3d97ae),
     bottom: lin(0x2e8899),
+    // Tint is the lighter ripple / sheen colour patWater mixes toward.
+    tint: lin(0x7cc8d8),
+    pattern: PATTERN.WATER,
     rough: 0.05,
     isWater: true,
 });
@@ -1023,22 +1026,63 @@ export function generateTerrain(
      * number of outcrops or cascades spread over sixteen times the area is not
      * "the same world, bigger" — it is a sparser world, and the sparseness is
      * exactly what makes a large map feel like an empty one. */
-    // Fill river channels above sea level with passable river-water voxels so
-    // the carved gorge looks wet. Three blocks deep — enough to trigger swimming
-    // and to show colour from walking level. Columns at or below sea level are
-    // already flooded by the water plane and need no voxels.
-    const RIVER_FILL = 3;
-    for (let z = 0; z < S; z++) {
-        for (let x = 0; x < S; x++) {
+    /* ---- river water above sea level: carve, then fill -----------------
+     *
+     * Columns at or below sea level are flooded by the water plane and need
+     * nothing. Above it, the channel is filled with passable RIVER_WATER voxels.
+     *
+     * This used to stack three water blocks ON TOP of the column
+     * (heights + 1 .. heights + 3). Wherever the earlier carve had left the bed
+     * level with its banks — every stretch above SEA + 7 is only notched a
+     * block or two — that stood the river up as a raised teal wall. Water must
+     * sit INSIDE its banks, so:
+     *
+     *   1. The water surface for a column is one block below the LOWEST bank
+     *      around it (non-channel columns within BANK_R), so it can never top
+     *      the shore.
+     *   2. The bed is carved down to the surface minus a depth that is 1 at the
+     *      channel edge and up to RIVER_DEPTH at the centreline — a rounded
+     *      channel, deep enough to swim mid-stream.
+     *   3. Water fills bed + 1 .. surface. All of it is at or below the banks.
+     *
+     * `heights` is lowered to match, because collision, navigation, the map and
+     * the vegetation pass all read it. */
+    const RIVER_DEPTH = 3;
+    const BANK_R = 3;
+    const isChan = (i: number) => rivHalf[i] > 0 && rivD[i] < rivHalf[i];
+    // Water surface per channel column, computed from the UNCARVED banks first
+    // so carving one column can't lower its neighbour's reference.
+    const riverSurf = new Int16Array(S * S).fill(-1);
+    for (let z = BANK_R; z < S - BANK_R; z++) {
+        for (let x = BANK_R; x < S - BANK_R; x++) {
             const i = z * S + x;
-            if (heights[i] <= SEA) continue;
-            const d = rivD[i];
-            const hw = rivHalf[i];
-            if (hw <= 0 || d >= hw) continue; // outside channel
-            for (let dy = 1; dy <= RIVER_FILL; dy++) {
-                const wy = heights[i] + dy;
-                if (wy < WORLD.height) grid.set(x, wy, z, RIVER_WATER.id);
-            }
+            if (heights[i] <= SEA || !isChan(i)) continue;
+            let bank = Infinity;
+            for (let dz = -BANK_R; dz <= BANK_R; dz++)
+                for (let dx = -BANK_R; dx <= BANK_R; dx++) {
+                    const j = (z + dz) * S + (x + dx);
+                    if (!isChan(j)) bank = Math.min(bank, heights[j]);
+                }
+            // A wide reach can have no bank in range — fall back to its own height.
+            if (!Number.isFinite(bank)) bank = heights[i];
+            riverSurf[i] = Math.max(SEA + 1, Math.min(heights[i], bank - 1));
+        }
+    }
+    for (let z = BANK_R; z < S - BANK_R; z++) {
+        for (let x = BANK_R; x < S - BANK_R; x++) {
+            const i = z * S + x;
+            const surf = riverSurf[i];
+            if (surf < 0) continue;
+            // 0 at the channel edge → 1 on the centreline.
+            const centre = clamp(1 - rivD[i] / Math.max(rivHalf[i], 1), 0, 1);
+            const depth = 1 + Math.round(centre * (RIVER_DEPTH - 1));
+            const bed = Math.max(1, surf - depth);
+            // Carve: clear everything above the bed, then lay a bed block.
+            for (let y = heights[i]; y > bed; y--) grid.set(x, y, z, 0);
+            if (bed < heights[i]) grid.set(x, bed, z, SAND.id);
+            heights[i] = Math.min(heights[i], bed);
+            // Fill: water from bed + 1 to the surface (below the banks).
+            for (let y = bed + 1; y <= surf && y < WORLD.height; y++) grid.set(x, y, z, RIVER_WATER.id);
         }
     }
 
