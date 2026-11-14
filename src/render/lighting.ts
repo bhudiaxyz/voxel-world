@@ -179,15 +179,21 @@ export class Atmosphere {
         // Voxels are 1 unit. The old normalBias of 0.5 was half a block, which
         // slid every shadow half a block off its caster (peter-panning at every
         // terrace lip). A tenth of a block kills acne without visible detachment.
-        sun.shadow.bias = -0.00018;
-        sun.shadow.normalBias = 0.1;
+        //
+        // `bias` is in NORMALISED depth, so its world-space size scales with the
+        // shadow camera's range. When that range was tightened from ~2450 to 350
+        // units (SUN_DIST), -0.00018 shrank from ~0.44 blocks to ~0.06 and flat
+        // grass began self-shadowing in parallel stripes (acne bands). Scaled
+        // back up to keep the same ~0.4-block world bias.
+        sun.shadow.bias = -0.0012;
+        sun.shadow.normalBias = 0.15;
         // VSM's separable blur: enough softness to match the painted reference,
         // with enough samples that the penumbra is smooth rather than speckled.
-        sun.shadow.radius = 2.25;
+        sun.shadow.radius = 3.0;
         sun.shadow.blurSamples = ts.shadowBlurSamples ?? 12;
         // Darker cast shadows (was 0.48, which let half the light through and
         // made every tree, rock and landmark shadow read as a faint smudge).
-        sun.shadow.intensity = 0.7;
+        sun.shadow.intensity = 0.62;
         // Keep this fully dynamic. A day/night system can animate the sun every
         // frame and both terrain and player shadows will respond immediately.
         sun.shadow.autoUpdate = true;
