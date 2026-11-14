@@ -42,8 +42,8 @@ const STYLE = `
 #touch-btns button:active { background: rgba(192,88,40,0.30); }
 #btn-edges.active { border-color: rgba(192,88,40,1); background: rgba(192,88,40,0.25); }
 #btn-land { display: none; }
-/* Roll pair: bottom-left above the joystick area, so it never collides with
-   the right-hand column however that wraps on a short screen. */
+/* Roll pair: top-left — clear of the right-hand column however that wraps on
+   a short screen, and of the HUD time chip bottom-left. */
 #touch-roll {
   position: fixed;
   left: max(20px, env(safe-area-inset-left));
