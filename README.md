@@ -52,7 +52,8 @@ Bindings follow [planet-explorer](../planet-explorer) wherever the feature exist
 | Input        | Action                                         |
 | ------------ | ---------------------------------------------- |
 | WASD         | Move (A/D steer in drone mode)                 |
-| Mouse        | Look                                           |
+| Mouse        | Look (in drone mode: steer + look up/down)     |
+| Q / E        | Roll / bank the camera (drone and fly)         |
 | Space        | Jump / ascend (hold in water to swim up)       |
 | C            | Descend (fly or drone)                         |
 | Shift        | Sprint                                         |
@@ -73,7 +74,8 @@ Click in the viewport to capture the pointer. Press Esc to release it. While lan
 | Control          | Action                                     |
 | ---------------- | ------------------------------------------ |
 | Left joystick    | Move / steer (joystick Y brakes the drone) |
-| Swipe right half | Look                                       |
+| Swipe right half | Look (in drone mode: steer + look up/down) |
+| ⟲ / ⟳ (top left) | Roll / bank (drone and fly)                |
 | ↑                | Jump / ascend                              |
 | ↓                | Descend (fly or drone)                     |
 | ⚡               | Sprint                                     |
