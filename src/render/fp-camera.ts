@@ -5,6 +5,8 @@ const SENSITIVITY = 0.0021;
 const PITCH_LIMIT = Math.PI / 2 - 0.05;
 const HEAD_BOB_AMP = 0.022; // metres of vertical oscillation
 const HEAD_BOB_HZ = 2.2; // cycles per second at full sprint
+/** Max camera roll from Q/E in drone/fly mode (radians, ~34°). */
+const ROLL_MAX = 0.6;
 
 export class FPCamera {
     camera: THREE.PerspectiveCamera;
@@ -33,9 +35,16 @@ export class FPCamera {
     _joyX = 0;
     _joyY = 0;
     private _prevSpace: boolean;
-    // Drone mouse/altitude accumulators — drained each frame by DroneMode (Task 9)
-    private _droneMX: number;
+    // Drone altitude accumulator (scroll wheel) — drained each frame.
     private _droneAltDelta: number;
+    /**
+     * Camera roll (radians) for drone and fly mode — Q/E or the touch ⟲⟳
+     * buttons, as planet-explorer. Eased toward the held input and sprung back
+     * to level on release, so the horizon never stays crooked by accident.
+     */
+    roll = 0;
+    /** Touch roll input: -1 (⟲ left), 0, +1 (⟳ right). */
+    touchRoll = 0;
 
     constructor(aspect: number, domElement: HTMLElement, cameraFar = 6000) {
         this.camera = new THREE.PerspectiveCamera(72, aspect, 0.1, cameraFar);
@@ -55,7 +64,6 @@ export class FPCamera {
         this._bobPhase = 0;
         this._wishV = new THREE.Vector3();
         this._prevSpace = false;
-        this._droneMX = 0;
         this._droneAltDelta = 0;
 
         this._bindEvents();
@@ -75,13 +83,10 @@ export class FPCamera {
 
         document.addEventListener('mousemove', (e: MouseEvent) => {
             if (!this.isLocked) return;
-            if (this.droneActive) {
-                this._droneMX += e.movementX;
-                // Mouse Y is intentionally NOT wired to altitude — any tiny upward
-                // mouse drift would cause continuous climb. Space/C/scroll handle it.
-                return;
-            }
-            // fly mode shares direct yaw/pitch update (falls through here intentionally)
+            // Walk, fly AND drone all share direct yaw/pitch (as planet-explorer).
+            // In the drone, yaw steers the heading and pitch only tilts the camera
+            // — it never changes altitude (Space/C/scroll own that), so mouse
+            // drift cannot cause a climb.
             this.yaw -= e.movementX * SENSITIVITY;
             this.pitch -= e.movementY * SENSITIVITY;
             this.pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, this.pitch));
@@ -182,11 +187,20 @@ export class FPCamera {
         return this._keys.has(code);
     }
 
-    /** Drain accumulated drone yaw input since last call. */
-    drainDroneMX(): number {
-        const v = this._droneMX;
-        this._droneMX = 0;
-        return v;
+    /**
+     * Advance camera roll toward the held Q/E (or touch ⟲⟳) input. Only meant
+     * for drone and fly mode; walking resets it to level. Returns the roll.
+     */
+    updateRoll(dt: number, airborne: boolean): number {
+        const input = airborne
+            ? (this._keys.has('KeyE') ? 1 : 0) - (this._keys.has('KeyQ') ? 1 : 0) + this.touchRoll
+            : 0;
+        const target = Math.max(-1, Math.min(1, input)) * ROLL_MAX;
+        // Lean in briskly, settle back a little slower so it feels like banking.
+        const rate = input !== 0 ? 4.0 : 2.5;
+        this.roll += (target - this.roll) * Math.min(1, dt * rate);
+        if (!airborne) this.roll = 0;
+        return this.roll;
     }
 
     /**

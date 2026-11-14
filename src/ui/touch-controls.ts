@@ -42,6 +42,27 @@ const STYLE = `
 #touch-btns button:active { background: rgba(192,88,40,0.30); }
 #btn-edges.active { border-color: rgba(192,88,40,1); background: rgba(192,88,40,0.25); }
 #btn-land { display: none; }
+/* Roll pair: bottom-left above the joystick area, so it never collides with
+   the right-hand column however that wraps on a short screen. */
+#touch-roll {
+  position: fixed;
+  left: max(20px, env(safe-area-inset-left));
+  top: max(20px, env(safe-area-inset-top));
+  display: none; flex-direction: row; gap: 12px;
+  pointer-events: auto; z-index: 10;
+}
+#touch-roll button {
+  width: 52px; height: 52px; border-radius: 50%;
+  border: 1.5px solid rgba(192,88,40,0.45);
+  background: rgba(7,7,10,0.45); color: #e8dcc1;
+  font-size: 22px; line-height: 1; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none; touch-action: manipulation;
+}
+#touch-roll button:active { background: rgba(192,88,40,0.30); }
+@media (max-height: 500px) {
+  #touch-roll button { width: 44px; height: 44px; font-size: 18px; }
+}
 `;
 
 export interface TouchControls {
@@ -115,6 +136,16 @@ export function createTouchControls(fpCam: FPCamera, dom: HTMLElement): TouchCon
     <button id="btn-time-forward" aria-label="Step time forward">▶</button>
   `;
     document.body.appendChild(btns);
+
+    // Roll (Q/E) — a small column left of the main buttons, airborne only.
+    const rollBtns = document.createElement('div');
+    rollBtns.id = 'touch-roll';
+    rollBtns.style.display = 'none';
+    rollBtns.innerHTML = `
+    <button id="btn-roll-left"  aria-label="Roll left">⟲</button>
+    <button id="btn-roll-right" aria-label="Roll right">⟳</button>
+  `;
+    document.body.appendChild(rollBtns);
 
     // ---- left joystick (WASD) -----------------------------------------------
     const manager = nipplejs.create({
@@ -235,6 +266,17 @@ export function createTouchControls(fpCam: FPCamera, dom: HTMLElement): TouchCon
             fpCam.touchSprint = false;
         },
     );
+    // ⟲ / ⟳ roll (Q / E) — held; the camera eases back to level on release.
+    held(
+        'btn-roll-left',
+        () => (fpCam.touchRoll = -1),
+        () => (fpCam.touchRoll = 0),
+    );
+    held(
+        'btn-roll-right',
+        () => (fpCam.touchRoll = 1),
+        () => (fpCam.touchRoll = 0),
+    );
 
     // ---- tap-only buttons wired externally via returned setters -------------
     const tap = (id: string, fn: () => void) =>
@@ -260,6 +302,12 @@ export function createTouchControls(fpCam: FPCamera, dom: HTMLElement): TouchCon
         onTimeForward: (fn) => tap('btn-time-forward', fn),
         onMap: (fn) => tap('btn-map', fn),
         update(droneActive: boolean, landing: boolean, flyActive: boolean) {
+            // Roll buttons only make sense in the air (planet-explorer shows them in fly).
+            const airborne = droneActive || flyActive;
+            if (rollBtns.style.display !== (airborne ? 'flex' : 'none')) {
+                rollBtns.style.display = airborne ? 'flex' : 'none';
+                if (!airborne) fpCam.touchRoll = 0;
+            }
             const land = document.getElementById('btn-land')! as HTMLElement;
             const fly = document.getElementById('btn-fly')! as HTMLElement;
             // Land: shown in either air mode (planet-explorer), hidden mid-landing.
@@ -279,6 +327,7 @@ export function createTouchControls(fpCam: FPCamera, dom: HTMLElement): TouchCon
             manager.destroy();
             joyZone.remove();
             btns.remove();
+            rollBtns.remove();
             style.remove();
         },
     };

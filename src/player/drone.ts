@@ -6,7 +6,6 @@ const DRONE = {
     cruiseSpeed: 18,
     sprintSpeed: 45,
     hoverAltitude: 15,
-    yawSensitivity: 0.7,
     /** Minimum hover height on entering the drone (was 18 — a big launch). */
     enterLiftHeight: 6,
     keyYawSpeed: 1.4,
@@ -31,7 +30,8 @@ export interface DroneMode {
         dt: number,
         camera: THREE.PerspectiveCamera,
         keys: Set<string>,
-        mouseDeltaX: number,
+        /** Shared look state (FPCamera): yaw = heading, pitch/roll = camera only. A/D steer it. */
+        look: { yaw: number; pitch: number; roll: number },
         altitudeDelta: number,
         joyX?: number,
         joyY?: number,
@@ -102,25 +102,31 @@ export function createDroneMode(grid: VoxelGrid): DroneMode {
             dt: number,
             camera: THREE.PerspectiveCamera,
             keys: Set<string>,
-            mouseDeltaX: number,
+            look: { yaw: number; pitch: number; roll: number },
             altitudeDelta: number,
             joyX = 0,
             joyY = 0,
         ): boolean {
             if (state === 'idle') return false;
             camera.rotation.order = 'YXZ';
-            camera.rotation.z = 0;
 
-            // Yaw: mouse
-            yaw -= mouseDeltaX * DRONE.yawSensitivity * 0.001;
+            /* Look is shared with walk and fly mode (as planet-explorer): the
+             * caller's yaw is the HEADING, pitch tilts only the camera so you can
+             * look down at the terrain or up at the sky while the drone keeps
+             * flying level, and roll is the Q/E bank. A/D and joystick X steer by
+             * turning the shared yaw, so mouse, keys and touch all agree. */
+            if (keys.has('KeyA') || keys.has('ArrowLeft')) look.yaw += DRONE.keyYawSpeed * dt;
+            if (keys.has('KeyD') || keys.has('ArrowRight')) look.yaw -= DRONE.keyYawSpeed * dt;
+            look.yaw -= joyX * DRONE.keyYawSpeed * dt;
+            yaw = look.yaw;
+            const applyLook = () => camera.rotation.set(look.pitch, yaw, look.roll);
 
             if (state === 'rising') {
                 currentSpeed = 0;
                 const gY = grid.surfaceY(camera.position.x, camera.position.z);
                 const targetY = gY + hoverAltitude;
                 camera.position.y += (targetY - camera.position.y) * Math.min(1, dt * 8);
-                camera.rotation.y = yaw;
-                camera.rotation.x = 0;
+                applyLook();
                 if (Math.abs(camera.position.y - targetY) < 0.8) {
                     smoothedTargetY = camera.position.y;
                     state = 'cruising';
@@ -142,10 +148,7 @@ export function createDroneMode(grid: VoxelGrid): DroneMode {
             const sprinting = keys.has('ShiftLeft') || keys.has('ShiftRight');
             currentSpeed = sprinting ? DRONE.sprintSpeed : DRONE.cruiseSpeed;
 
-            // A/D + joystick X steer (yaw); always advance forward
-            if (keys.has('KeyA') || keys.has('ArrowLeft')) yaw += DRONE.keyYawSpeed * dt;
-            if (keys.has('KeyD') || keys.has('ArrowRight')) yaw -= DRONE.keyYawSpeed * dt;
-            yaw -= joyX * DRONE.keyYawSpeed * dt;
+            // Always advance forward along the heading.
             // joyY < 0 brakes proportionally; 0 or positive = full cruise speed
             const speedMult = joyY < 0 ? Math.max(0, 1 + joyY) : 1;
             camera.position.x -= Math.sin(yaw) * currentSpeed * speedMult * dt;
@@ -194,8 +197,7 @@ export function createDroneMode(grid: VoxelGrid): DroneMode {
             const hardFloor = Math.max(gY, WORLD.seaLevel) + 2.0;
             if (camera.position.y < hardFloor) camera.position.y = hardFloor;
 
-            camera.rotation.y = yaw;
-            camera.rotation.x = 0;
+            applyLook();
 
             // Landing complete when close enough to ground
             if (isLanding && camera.position.y <= gY + DRONE.landingCompleteHeight) {

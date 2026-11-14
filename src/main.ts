@@ -404,6 +404,8 @@ async function start(): Promise<void> {
         character.root.updateMatrixWorld(true);
         dog.update(dt);
 
+        // Q/E (or touch ⟲⟳) bank the camera in drone and fly mode; level when walking.
+        fpCam.updateRoll(dt, fly.active || drone.active);
         if (fly.active) {
             const altInput = fpCam.drainDroneAltDelta(dt);
             if (flyLanding && altInput > 0) flyLanding = false; // pulling up aborts, as in the drone
@@ -420,12 +422,13 @@ async function start(): Promise<void> {
             } else {
                 fly.update(dt, fpCam.camera, fpCam._keys, fpCam.yaw, fpCam.pitch, altInput, fpCam._joyX, fpCam._joyY);
             }
+            fpCam.camera.rotation.z = fpCam.roll;
         } else if (drone.active) {
             const done = drone.update(
                 dt,
                 fpCam.camera,
                 fpCam._keys,
-                fpCam.drainDroneMX(),
+                fpCam, // shared look: yaw = heading, pitch/roll = camera (A/D steer it)
                 fpCam.drainDroneAltDelta(dt),
                 fpCam._joyX,
                 fpCam._joyY,
