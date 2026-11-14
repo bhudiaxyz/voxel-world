@@ -781,6 +781,7 @@ Bindings follow `../planet-explorer` wherever the feature exists in both project
 | Map                  | M                    | 🗺                                | `map.toggle()`                                   |
 | Dog sit / stand      | Y                    | 🐕                               | `dog.toggleSit()`                                |
 | Settings             | G or `` ` ``         | ⚙ (HUD)                          | `settings` panel keydown / `hud.onSettingsClick` |
+| Roll (drone/fly)     | Q / E                | ⟲ / ⟳ (held, top-left)           | `fpCam.updateRoll()` → `camera.rotation.z`       |
 | Edges                | B                    | ⬡                                | `toggleEdges()`                                  |
 | Time of day          | [ / ]                | ◀ / ▶                            | `stepTime(±0.125)`                               |
 | Pause                | Esc                  | —                                | `pause.ts`                                       |
@@ -789,8 +790,9 @@ Bindings follow `../planet-explorer` wherever the feature exists in both project
 
 - **Pointer lock:** `FPCamera` requests pointer lock on a mouse `pointerdown` (never for touch pointers), and the boot-screen click also requests it.
 - **When actions run:** gameplay keys run only while `canAct()` (locked or touch). L is the exception: it works even when unlocked, so Esc then L still lands.
-- **Mouse look:** yaw/pitch at 0.0021 rad/px, with pitch clamped to ±(π/2 − 0.05).
-    - In drone mode, mouse X turns the drone's heading instead, and mouse Y is deliberately ignored, so drifting the mouse never climbs.
+- **Mouse look:** yaw/pitch at 0.0021 rad/px, with pitch clamped to ±(π/2 − 0.05). Walk, fly and drone all share `fpCam.yaw`/`pitch`, as in planet-explorer.
+    - In drone mode, yaw is the heading and pitch tilts only the camera, so you can look down at the terrain or up at the sky while the drone keeps flying level. Pitch never changes altitude; Space/C/scroll own that.
+- **Roll (Q/E, touch ⟲⟳):** drone and fly mode only. `fpCam.updateRoll(dt, airborne)` eases `fpCam.roll` toward ±`ROLL_MAX` (0.6 rad) while a key is held, and springs it back to level on release so the horizon never stays crooked. It's applied as `camera.rotation.z`. The touch ⟲⟳ pair sits top-left, shown only when airborne.
 - **Settings panel:** opening it releases pointer lock so the sliders can be used. Its G/backquote shortcut is ignored while typing a seed word.
 
 ### Touch (`ui/touch-controls.ts`)
@@ -849,7 +851,7 @@ Exactly one mode owns the camera each frame. `fpCam.flyActive` / `droneActive` t
 - **Drone (`player/drone.ts`):** a state machine `idle → rising → cruising` (plus `landing`).
     - **Enter:** rises to `max(enterLiftHeight (6), obstruction clearance + 3, current altitude)`. Clearance only applies when something is actually overhead. Entering from fly mode skips the rise. (The minimum used to be 18, a big launch.)
     - **Cruise:** terrain-follow is a P-controller on a smoothed ground target: `smoothed += (raw − smoothed) × min(1, dt × 3.5)`, then vertical velocity `= clamp(error × 4, ±14)`.
-    - **Speed and steering:** cruise speed 18, sprint 45; A/D or mouse X turns the heading; touch joystick Y below zero brakes.
+    - **Speed and steering:** cruise speed 18, sprint 45. The drone always flies forward along `fpCam.yaw`. Mouse X, touch swipe, A/D and joystick X all turn it, the latter two by nudging the shared yaw. Touch joystick Y below zero brakes. `update()` takes the look state (`{ yaw, pitch, roll }`, i.e. `fpCam`) and sets `camera.rotation = (pitch, yaw, roll)`.
     - **Land:** the hover target drops at 90 m/s, and while landing the camera follows with its own limits: `landingSinkRate` (40 blocks/s, versus the cruise cap of 7) and `landingEase` (`dt × 9`, versus 3). It lands in about a second from 50 blocks up, then hands back to walk mode at 2.5 blocks above ground. Before, the cruise descent cap _was_ the landing speed, which took several seconds. Any upward input (Space, ↑ or the scroll wheel) aborts the landing.
     - **Exit:** `exit()` leaves immediately, without landing; this is the F-cycle step from drone to fly.
 - **Fly (`player/fly.ts`):** free 6-DoF movement at speed 20 (sprint 60).
