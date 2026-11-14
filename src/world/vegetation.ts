@@ -23,6 +23,8 @@ import { WATER, BLOCKS, BLOCK_BY_ID, PATTERN, registerBlock } from '../core/pale
 import { clamp, smoothstep, makeNoise2D, fbm2, makeRng } from '../core/rng';
 import { DetailField } from './veg-detail';
 import { BIOME } from './planner';
+import { plantPortedTree, PORTED_SPECIES, FORM_BARK, DOMED, addDome, LEAF_GREENS } from './trees';
+import { CLIMATE_SHRUBS, plantCactus, plantSnag } from './plants';
 
 const c = (hex: number) => new THREE.Color(hex);
 
@@ -307,6 +309,17 @@ const SPECIES: Species[] = [
     { name: 'spruce', climates: [3, 1], alt: [16, 30], weight: 1.2, scale: [0.35, 0.85] },
     { name: 'juniper', climates: [2, 3], alt: [14, 30], weight: 0.9, scale: [0.2, 0.5] },
     { name: 'snag', climates: [0, 1, 2, 3], alt: [20, 40], weight: 0.6, scale: [0.3, 0.7] },
+    // Ported from voxel-planet (built by trees.ts). Its zones — coast ≤3,
+    // lowland ≤7, midland ≤11, highland ≤15, treeline 16+ — map onto the same
+    // altitude scale this table uses.
+    { name: 'emergent', climates: [0], alt: [3, 9], weight: 0.8, scale: [0.6, 1.0] },
+    { name: 'dragon', climates: [0, 2], alt: [0, 4], weight: 0.5, scale: [0.4, 0.9] },
+    { name: 'cherry', climates: [0, 1], alt: [3, 10], weight: 0.9, scale: [0.4, 0.9] },
+    { name: 'jacaranda', climates: [0, 2], alt: [3, 9], weight: 0.6, scale: [0.4, 0.9] },
+    { name: 'maple', climates: [1], alt: [7, 14], weight: 1.1, scale: [0.4, 0.9] },
+    { name: 'aspen', climates: [1, 3], alt: [8, 18], weight: 0.9, scale: [0.4, 0.9] },
+    { name: 'redwood', climates: [1, 3], alt: [12, 20], weight: 0.6, scale: [0.5, 1.0] },
+    { name: 'krummholz', climates: [1, 3, 2], alt: [18, 34], weight: 1.0, scale: [0.2, 0.6] },
 ];
 const ALT_SOFT = 3;
 /** Forms whose silhouette the generic foliage tufts would blur, or that have no leaves. */
@@ -361,6 +374,14 @@ const CANOPY_LIGHT = new Map([
     [BLOCKS.LEAF_LILAC, BLOCKS.LEAF_BLUSH],
     [BLOCKS.LEAF_CREAM, BLOCKS.LEAF_BLUSH],
     [BLOCKS.LEAF_BLUSH, BLOCKS.LEAF_CREAM],
+    // Greens: each lit by the next brighter shade, so two-tone crowns get sunlit tops.
+    [LEAF_GREENS[0], LEAF_GREENS[1]], // deep → mid
+    [LEAF_GREENS[1], LEAF_GREENS[2]], // mid → fresh
+    [LEAF_GREENS[2], LEAF_GREENS[3]], // fresh → lime
+    [LEAF_GREENS[3], LEAF_GREENS[4]], // lime → yellow-green
+    [LEAF_GREENS[4], LEAF_GREENS[3]],
+    [LEAF_GREENS[5], LEAF_GREENS[2]], // blue-green → fresh
+    [LEAF_GREENS[6], LEAF_GREENS[3]], // sage → lime
 ]);
 
 const GRASS_IDS = new Set(
@@ -445,18 +466,23 @@ export function plantTree(grid: any, x: number, y: number, z: number, rng: any, 
     const pale = CANOPY_LIGHT.get(leaf) || leaf;
     const twoTone = opts.twoTone ?? rng.chance(0.62);
 
-    // Birch and snag trunks are pale; baobab, kapok and juniper are dark and
-    // characterful. Everything else keeps the old mixed bark.
+    // Species ported from voxel-planet have their own disc-stacking builders.
+    if (PORTED_SPECIES.includes(form)) {
+        const t = plantPortedTree(grid, x, y, z, rng, form, scale, [leaf, pale]);
+        if (t) return t;
+    }
+
+    // Bark by form (voxel-planet's bark styles: papery birch, scaly conifer,
+    // ringed palm, smooth, deadwood); everything else keeps the old mixed bark.
     const trunkBlock =
-        form === 'birch' || form === 'snag'
-            ? BLOCKS.TRUNK_PALE
-            : form === 'baobab' || form === 'kapok' || form === 'juniper'
+        FORM_BARK[form] ??
+        (form === 'baobab' || form === 'kapok'
+            ? BLOCKS.TRUNK
+            : rng.chance(0.55)
               ? BLOCKS.TRUNK
-              : rng.chance(0.55)
-                ? BLOCKS.TRUNK
-                : rng.chance(0.5)
-                  ? BLOCKS.TRUNK_PALE
-                  : TRUNK_ROSE;
+              : rng.chance(0.5)
+                ? BLOCKS.TRUNK_PALE
+                : TRUNK_ROSE);
 
     const unit = scale >= 0.42 ? 2 : 1;
     const large = scale >= 0.72;
@@ -935,6 +961,10 @@ export function plantTree(grid: any, x: number, y: number, z: number, rng: any, 
         }
     }
 
+    // Dome (voxel-planet): give over half the not-meant-to-be-flat crowns a
+    // tapering rounded top, so a forest is not a sea of flat 1–2 layer slabs.
+    if (DOMED.has(form)) addDome(fillBox, rng, topY - canopyY, large, unit, dx, dz, leaf.id, lightId);
+
     // Scatter extra foliage tufts around the crown to break the uniform silhouette
     // and add height variation — smaller clusters at random heights and offsets.
     // Skipped where the silhouette IS the species (conifers, columns, hanging
@@ -1194,6 +1224,25 @@ export function scatterVegetation(world: any, rng: any) {
     const speciesRng = makeRng(0x5bec ^ S);
     /** 0..1, drives blossom hue by region so a stand reads as one species. */
     const hue = (x: any, z: any) => (fbm2(N_HUE, x * 0.0085 + 40, z * 0.0085 - 17, 2) + 1) * 0.5;
+    /** 0..1 field (~70-block stands) choosing which green a stand wears. */
+    const greenField = (x: any, z: any) => (fbm2(N_HUE, x * 0.013 - 91, z * 0.013 + 53, 2) + 1) * 0.5;
+    /**
+     * Leaf for a tree at (x, z): a real green about 70% of the time (shade from
+     * the green field, so a stand shares a tone but neighbouring stands differ),
+     * otherwise the biome palette colour as an accent. Sakura stays mostly
+     * blossom. Fixed-seed noise only — no RNG draws, so placement is unchanged.
+     */
+    const pickLeaf = (x: any, z: any) => {
+        const band = floraAt(x, z).leaves;
+        const accent = band[clamp(Math.floor(hue(x, z) * band.length), 0, band.length - 1)];
+        const isSakura = plan && plan.biomeAt(x, z) === BIOME.SAKURA;
+        const greenShare = isSakura ? 0.3 : 0.7;
+        // A second, fine-grained noise decides green vs accent per tree.
+        const pickN = (fbm2(N_HUE, x * 0.21 + 7, z * 0.21 - 3, 1) + 1) * 0.5;
+        if (pickN > greenShare) return accent;
+        const g = clamp(Math.floor(greenField(x, z) * LEAF_GREENS.length), 0, LEAF_GREENS.length - 1);
+        return LEAF_GREENS[g];
+    };
 
     const siteOk = (x: any, z: any, needFlat: any, tol: any) => {
         const i = z * S + x;
@@ -1209,8 +1258,7 @@ export function scatterVegetation(world: any, rng: any) {
          * so neighbouring stands in one province differ without ever crossing into
          * another province's species. Before, hue chose everything and a sakura
          * region could come out mint. */
-        const band = flora.leaves;
-        const leaf = band[clamp(Math.floor(hue(x, z) * band.length), 0, band.length - 1)];
+        const leaf = pickLeaf(x, z);
         const t = plantTree(grid, x, heights[i] + 1, z, rng, {
             scale,
             leaf,
@@ -1249,7 +1297,7 @@ export function scatterVegetation(world: any, rng: any) {
     /* ---- grove cores ------------------------------------------------
      * Seed the densest points of the grove field with big trees first, so the
      * woodland has structure before the dart-throwing fills in around it.    */
-    for (let attempt = 0, n = Math.round(900 * AREA); attempt < n; attempt++) {
+    for (let attempt = 0, n = Math.round(900 * 1.15 * AREA); attempt < n; attempt++) {
         const x = rng.int(10, S - 11),
             z = rng.int(10, S - 11);
         if (grove(x, z) < 0.34) continue;
@@ -1259,7 +1307,7 @@ export function scatterVegetation(world: any, rng: any) {
     }
 
     /* ---- the woodland ----------------------------------------------- */
-    for (let attempt = 0, n = Math.round(9000 * AREA); attempt < n; attempt++) {
+    for (let attempt = 0, n = Math.round(9000 * 1.15 * AREA); attempt < n; attempt++) {
         const x = rng.int(5, S - 6),
             z = rng.int(5, S - 6);
         const i = z * S + x;
@@ -1280,8 +1328,8 @@ export function scatterVegetation(world: any, rng: any) {
          * there — so multiplying by 1.65 added no trees at all and the biomes
          * arrived with a 1.3x spread instead of the 3x they specify. Leaving
          * headroom is what lets the plan actually be visible on the ground. */
-        dens = Math.min(dens, 0.55) * biomeTrees(x, z);
-        if (!rng.chance(dens * 0.85)) continue;
+        dens = Math.min(dens, 0.62) * biomeTrees(x, z);
+        if (!rng.chance(dens * 0.85 * 1.15)) continue; // ×1.15: +15% tree density
 
         // Trees run large in the grove cores and thin to saplings at the fringe.
         const core = smoothstep(0.0, 0.45, g);
@@ -1289,7 +1337,7 @@ export function scatterVegetation(world: any, rng: any) {
         // giants are the same code path with different bounds.
         const [lo, hi] = floraAt(x, z).scale;
         const scale = clamp(rng.range(lo, hi) + core * (hi - lo) * 0.55, 0.1, 1.0);
-        const rad = scale > 0.72 ? 6 : scale > 0.46 ? 4 : scale > 0.26 ? 3 : 2;
+        const rad = scale > 0.72 ? 5 : scale > 0.46 ? 4 : scale > 0.26 ? 3 : 2; // big-tree gap 6→5 for +15% density
         if (!free(x, z, rad)) continue;
 
         /* Altitude decides the species.
@@ -1313,8 +1361,7 @@ export function scatterVegetation(world: any, rng: any) {
             const [slo, shi] = species.scale;
             // Keep the grove-core size boost, but within the species' own range.
             const sScale = clamp(slo + (shi - slo) * (0.35 * speciesRng() + core * 0.65), 0.1, 1.0);
-            const band = floraAt(x, z).leaves;
-            const leaf = band[clamp(Math.floor(hue(x, z) * band.length), 0, band.length - 1)];
+            const leaf = pickLeaf(x, z);
             const t = plantTree(grid, x, heights[i] + 1, z, speciesRng, { scale: sScale, leaf, form: species.name });
             trees.push(t);
             claim(x, z, Math.max(2, Math.floor(t.w / 2)));
@@ -1330,7 +1377,7 @@ export function scatterVegetation(world: any, rng: any) {
      * rock and a 1-block slope, and picks *only* by altitude and climate:
      * up here the blossom forms would look out of place. Thins with height so
      * the very tops stay bare. */
-    for (let attempt = 0, n = Math.round(2600 * AREA); attempt < n; attempt++) {
+    for (let attempt = 0, n = Math.round(2600 * 1.15 * AREA); attempt < n; attempt++) {
         const x = speciesRng.int(5, S - 6),
             z = speciesRng.int(5, S - 6);
         const i = z * S + x;
@@ -1343,8 +1390,7 @@ export function scatterVegetation(world: any, rng: any) {
         if (!free(x, z, 3)) continue;
         const sp = pickSpecies(plan ? plan.climateAt(x, z) : 1, alt, wetness[i] > 0.3, speciesRng);
         if (!sp) continue;
-        const band = floraAt(x, z).leaves;
-        const leaf = band[clamp(Math.floor(hue(x, z) * band.length), 0, band.length - 1)];
+        const leaf = pickLeaf(x, z);
         const sScale = speciesRng.range(sp.scale[0], sp.scale[1]);
         const t = plantTree(grid, x, heights[i] + 1, z, speciesRng, { scale: sScale, leaf, form: sp.name });
         trees.push(t);
@@ -1357,7 +1403,7 @@ export function scatterVegetation(world: any, rng: any) {
      * nowhere to grow. A sparse pass along the low, wet margins of rivers and
      * lakes gives them their place. */
     const WET_SPECIES = SPECIES.filter((s) => s.wet);
-    for (let attempt = 0, n = Math.round(1400 * AREA); attempt < n; attempt++) {
+    for (let attempt = 0, n = Math.round(1400 * 1.15 * AREA); attempt < n; attempt++) {
         const x = speciesRng.int(5, S - 6),
             z = speciesRng.int(5, S - 6);
         const i = z * S + x;
@@ -1371,8 +1417,7 @@ export function scatterVegetation(world: any, rng: any) {
         const fits = WET_SPECIES.filter((s) => s.climates.includes(climate) && alt <= s.alt[1] + ALT_SOFT);
         if (!fits.length) continue;
         const sp = speciesRng.pick(fits);
-        const band = floraAt(x, z).leaves;
-        const leaf = band[clamp(Math.floor(hue(x, z) * band.length), 0, band.length - 1)];
+        const leaf = pickLeaf(x, z);
         const t = plantTree(grid, x, heights[i] + 1, z, speciesRng, {
             scale: speciesRng.range(sp.scale[0], sp.scale[1]),
             leaf,
@@ -1396,7 +1441,13 @@ export function scatterVegetation(world: any, rng: any) {
         if (!free(x, z, 3)) continue;
         if (!rng.chance(smoothstep(-0.35, 0.3, grove(x, z)) * 0.75 + 0.12)) continue;
 
-        const palette = floraAt(x, z).bushes;
+        // Mostly real leaf-green shrubs for the continent's climate (voxel-planet),
+        // with the biome's blossom bushes as flowering accents — undergrowth was
+        // all pastel lumps. The choice draws from speciesRng so the shared stream
+        // (and everything placed after this) is unchanged.
+        const blossom = floraAt(x, z).bushes;
+        const greens = CLIMATE_SHRUBS[plan ? plan.climateAt(x, z) : 1];
+        const palette = speciesRng() < 0.65 ? greens : blossom;
         const base = rng.chance(0.78) ? rng.pick(palette) : rng.pick(BUSHES);
         const n = rng.int(1, 3);
         for (let k = 0; k < n; k++) {
@@ -1420,6 +1471,28 @@ export function scatterVegetation(world: any, rng: any) {
         if (grid.isSolid(x, heights[i] + 1, z)) continue;
         if (!rng.chance(0.24)) continue;
         plantBush(grid, heights, S, x, z, rng, rng.chance(0.8) ? SCRUB : BUSH_MAUVE, rng.chance(0.25) ? 1 : 0);
+    }
+
+    /* ---- cacti on arid ground, snags anywhere (voxel-planet) ----------------
+     * Own RNG stream like the species passes. Cacti need dry, level sand or
+     * grass on an arid continent; snags are sparse everywhere above the shore,
+     * a little more common up high. */
+    for (let attempt = 0, n = Math.round(1600 * AREA); attempt < n; attempt++) {
+        const x = speciesRng.int(6, S - 7),
+            z = speciesRng.int(6, S - 7);
+        const i = z * S + x;
+        const alt = heights[i] - sea;
+        if (alt < 1) continue;
+        const top = grid.get(x, heights[i], z);
+        if (!GRASS_IDS.has(top) && top !== BLOCKS.SAND.id) continue;
+        if (grid.isSolid(x, heights[i] + 1, z) || wetness[i] > 0.25 || !free(x, z, 2)) continue;
+        const arid = plan ? plan.climateAt(x, z) === 2 : false;
+        if (arid && speciesRng.chance(0.35)) {
+            if (plantCactus(grid, heights, S, x, z, speciesRng)) claim(x, z, 2);
+        } else if (speciesRng.chance(0.03 + smoothstep(10, 26, alt) * 0.06)) {
+            plantSnag(grid, heights, S, x, z, speciesRng);
+            claim(x, z, 2);
+        }
     }
 
     /* ---- ferns, thick moss, tall shrubs, tall grass ----------------- */

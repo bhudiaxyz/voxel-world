@@ -402,6 +402,9 @@ function finishMeshChunk(state: any) {
         record.glow = new THREE.Mesh(glow.toGeometry(), meshes.glowMaterial);
         record.glow.name = `glow-${ci}-${ck}`;
         record.glow.matrixAutoUpdate = false;
+        // Lanterns, crystals and cascades are solid voxels too: they cast shadows
+        // like every other block (they don't receive them — they emit light).
+        record.glow.castShadow = true;
         meshes.glow.add(record.glow);
     }
     if (edgeMap.size > 0) {
@@ -564,6 +567,9 @@ function restoreMeshChunk(payload: any, ci: any, ck: any, meshes: any) {
         record.glow = new THREE.Mesh(glowGeometry, meshes.glowMaterial);
         record.glow.name = `glow-${ci}-${ck}`;
         record.glow.matrixAutoUpdate = false;
+        // Lanterns, crystals and cascades are solid voxels too: they cast shadows
+        // like every other block (they don't receive them — they emit light).
+        record.glow.castShadow = true;
         meshes.glow.add(record.glow);
     }
     if (payload.edges) {
@@ -1146,7 +1152,9 @@ function meshRegion(
                         uvs,
                         ao,
                         patternPacked,
-                        block.fringe || 0,
+                        // Bark blocks have no grass fringe, so that slot carries the
+                        // bark style as -(2 + style); the frag shader decodes it.
+                        block.barkStyle !== undefined ? -(2 + block.barkStyle) : block.fringe || 0,
                         localV,
                     );
                 }
@@ -1988,8 +1996,102 @@ const FRAG_DECL = /* glsl */ `
     return col;
   }
 
-  vec3 patBark(vec2 uv, vec3 base, vec3 tint, bool endGrain, vec3 pos) {
-    return endGrain ? patBarkEnd(base, tint, pos) : patBarkSide(uv, base, tint);
+  /* ---- bark styles (ported from voxel-planet) ---------------------------
+   * Selected by the block's barkStyle, carried in aData.z as -(2 + style).
+   * uv.x runs around the trunk, uv.y up it (true for side faces here). */
+
+  /** Jittered cellular noise: (F1, F2, cell id). */
+  vec3 _cells(vec2 p) {
+    vec2 i = floor(p), f = fract(p);
+    float d1 = 8.0, d2 = 8.0, id = 0.0;
+    for (int y = -1; y <= 1; y++)
+      for (int x = -1; x <= 1; x++) {
+        vec2 g = vec2(float(x), float(y));
+        vec2 o = vec2(vxHash(i + g), vxHash(i + g + 17.3));
+        float d = length(g + o - f);
+        if (d < d1) { d2 = d1; d1 = d; id = vxHash(i + g + 5.1); }
+        else if (d < d2) d2 = d;
+      }
+    return vec3(d1, d2, id);
+  }
+
+  /** 1: birch — pale, dark lenticel dashes, rough blotches, peeling curls. */
+  vec3 patBarkPapery(vec2 uv, vec3 base, vec3 tint) {
+    vec3 bark = max(base, vec3(0.55, 0.52, 0.46));
+    vec3 col = bark * (0.94 + 0.08 * vxNoise(uv * vec2(3.0, 1.2)));
+    float row = floor(uv.y * 5.0);
+    float dash = (1.0 - smoothstep(0.0, 0.09, abs(fract(uv.y * 5.0) - 0.5) - 0.38))
+               * step(0.45, vxNoise(vec2(uv.x * 3.0 + row * 7.1, row)));
+    col = mix(col, tint * 0.6, dash * 0.8);
+    float blot = smoothstep(0.62, 0.78, vxNoise(uv * vec2(2.2, 0.9) + 5.0));
+    col = mix(col, tint * 0.55, blot * 0.7);
+    float peel = smoothstep(0.82, 0.9, vxNoise(uv * vec2(6.0, 2.0) + 11.0));
+    return mix(col, vec3(0.86, 0.8, 0.72), peel * 0.5);
+  }
+
+  /** 2: conifer — irregular domed scales between dark crevices, warm flush. */
+  vec3 patBarkScaly(vec2 uv, vec3 base, vec3 tint) {
+    vec3 bark = max(base * 3.4, vec3(0.2, 0.11, 0.07));
+    vec2 p = uv * vec2(3.4, 2.0) + vec2(vxNoise(uv * 1.7), vxNoise(uv * 1.7 + 9.0)) * 0.6;
+    vec3 c = _cells(p);
+    float crevice = 1.0 - smoothstep(0.02, 0.16, c.y - c.x);
+    vec3 col = bark * (0.84 + 0.3 * c.z) * (0.92 + 0.12 * vxNoise(uv * 9.0));
+    col *= 0.86 + 0.24 * (1.0 - smoothstep(0.0, 0.7, c.x));     // each scale domes
+    col = mix(col, bark * 0.28, crevice * 0.85);
+    return mix(col, col * vec3(1.18, 0.95, 0.82), 0.3);
+  }
+
+  /** 3: palm — horizontal leaf-scar rings, fibrous between, each band bulging. */
+  vec3 patBarkRinged(vec2 uv, vec3 base, vec3 tint) {
+    vec3 bark = max(base * 1.4, vec3(0.32, 0.26, 0.18));
+    float y = uv.y * 3.0 + vxNoise(vec2(uv.x * 2.0, uv.y)) * 0.25;
+    float f = fract(y);
+    float ring = 1.0 - smoothstep(0.0, 0.14, min(f, 1.0 - f));
+    vec3 col = bark * (0.9 + 0.16 * vxNoise(vec2(uv.x * 26.0, uv.y * 3.0)));
+    col *= 0.92 + 0.12 * sin(f * 3.14159);
+    return mix(col, tint * 0.5, ring * 0.75);
+  }
+
+  /** 4: smooth grey-green — faint streaks, mottling, pale lichen. */
+  vec3 patBarkSmooth(vec2 uv, vec3 base, vec3 tint) {
+    vec3 bark = max(base * 2.4, vec3(0.2, 0.19, 0.15));
+    float streak = vxNoise(vec2(uv.x * 7.0, uv.y * 0.5));
+    float mott = vxNoise(uv * 1.8) * 0.6 + vxNoise(uv * 4.4 + 3.0) * 0.4;
+    vec3 col = bark * (0.88 + 0.14 * streak) * (0.93 + 0.12 * mott);
+    float lichen = smoothstep(0.7, 0.82, vxNoise(uv * vec2(3.5, 2.5) + 17.0));
+    return mix(col, vec3(0.62, 0.66, 0.52), lichen * 0.45);
+  }
+
+  /** Side bark by style (0 / unset = voxel-world's furrowed plates). */
+  vec3 patBarkStyled(vec2 uv, vec3 base, vec3 tint, float style) {
+    return style > 3.5 ? patBarkSmooth(uv, base, tint)
+         : style > 2.5 ? patBarkRinged(uv, base, tint)
+         : style > 1.5 ? patBarkScaly(uv, base, tint)
+         : style > 0.5 ? patBarkPapery(uv, base, tint)
+         : patBarkSide(uv, base, tint);
+  }
+
+  vec3 patBark(vec2 uv, vec3 base, vec3 tint, bool endGrain, vec3 pos, float style) {
+    return endGrain ? patBarkEnd(base, tint, pos) : patBarkStyled(uv, base, tint, style);
+  }
+
+  /** Cactus: vertical ribs with pale spine dots on the sides; a radiating crown on top. */
+  vec3 patCactusTop(vec2 uv, vec3 base) {
+    vec2 c = fract(uv) - 0.5;
+    float rib = 0.5 + 0.5 * cos(atan(c.y, c.x) * 8.0);
+    return mix(base * 0.9, base * 1.12, rib) * (0.92 + 0.16 * (1.0 - length(c) * 2.0));
+  }
+  vec3 patCactusSide(vec2 uv, vec3 base, vec3 tint) {
+    float x = uv.x * 5.0;
+    float rib = 0.5 + 0.5 * cos(fract(x) * 6.28318);
+    vec3 col = mix(tint * 0.78, base * 1.1, rib);
+    float spineY = fract(uv.y * 6.0 + floor(x) * 0.5);
+    float spine = (1.0 - smoothstep(0.0, 0.12, abs(fract(x) - 0.5) * 2.0))
+                * (1.0 - smoothstep(0.0, 0.1, abs(spineY - 0.5)));
+    return mix(col, vec3(0.92, 0.9, 0.78), spine * 0.7);
+  }
+  vec3 patCactus(vec2 uv, vec3 base, vec3 tint, bool side) {
+    return side ? patCactusSide(uv, base, tint) : patCactusTop(uv, base);
   }
 
   /**
@@ -2069,52 +2171,56 @@ const FRAG_DECL = /* glsl */ `
   }
 
   /**
-   * One leaf in a cell: a pointed ellipse (lens) at a random angle, with a
-   * midrib. Returns (coverage, shade, rib) — coverage 0..1, shade is a per-leaf
-   * brightness, rib marks the vein.
+   * Foliage mass (ported from voxel-planet's patFoliage). A canopy is read as
+   * lit clumps and shaded pockets, not as individually drawn leaves: a
+   * domain-warped clump field (lumpy, not round), a fine angled speckle for
+   * leaf texture, a hue drift between clumps, and sun-catching highlights on
+   * the brightest clumps of lit faces. Continuous across blocks, so a whole
+   * crown shades as one mass.
    */
-  vec3 leafCell(vec2 p, vec2 cell) {
-    float h = vxHash(cell + 1.7);
-    float ang = h * 6.2832;
-    vec2 c = vec2(vxHash(cell + 4.3), vxHash(cell + 8.9)) * 0.5 + 0.25;   // centre, inset
-    vec2 d = p - (cell + c);
-    vec2 q = vec2(cos(ang) * d.x + sin(ang) * d.y, -sin(ang) * d.x + cos(ang) * d.y);
-    float len = 0.42 + vxHash(cell + 2.2) * 0.22, wid = len * 0.42;
-    // Lens: width tapers to a point at both ends.
-    float taper = max(1.0 - (q.x * q.x) / (len * len), 0.0);
-    float edge = abs(q.y) / max(wid * taper, 1e-3);
-    float cover = (1.0 - smoothstep(0.80, 1.0, edge)) * step(abs(q.x), len);
-    float rib = (1.0 - smoothstep(0.0, 0.06, abs(q.y))) * cover * step(-len * 0.8, q.x);
-    return vec3(cover, vxHash(cell + 6.1), rib);
+  vec3 patFoliage(vec2 uv, vec3 base, vec3 tint, float faceLight) {
+    vec2 w = uv + vec2(vxNoise(uv * 0.9 + 3.1), vxNoise(uv * 0.9 - 7.4)) * 0.55;
+    float clump = vxNoise(w * 1.3) * 0.62 + vxNoise(w * 2.9 + 11.0) * 0.38;
+    vec2 lp = mat2(0.86, -0.5, 0.5, 0.86) * uv * vec2(10.0, 6.0);
+    float leaves = vxNoise(lp) * 0.6 + vxNoise(lp * 2.1 + 4.0) * 0.4;
+    float lit = smoothstep(0.30, 0.78, clump);
+    vec3 col = mix(base * 0.62, base * 1.06, lit);
+    col = mix(col, tint * mix(0.7, 1.05, lit), vxNoise(w * 0.7 + 19.0) * 0.45);
+    col *= 0.9 + 0.2 * leaves * (0.4 + 0.6 * lit);
+    col += base * 0.18 * smoothstep(0.72, 0.92, clump) * smoothstep(0.55, 0.9, leaves) * faceLight;
+    return col;
   }
 
   /**
-   * Leaf mass: overlapping pointed leaves at random angles, each with its own
-   * shade and a faint midrib, layered two deep, with dark gaps showing into the
-   * crown between them and broad clumping on top.
+   * Per-tree variety (voxel-planet's canopyVariety): a ~6-block world field
+   * shifts brightness ±14%, warm/cool hue and saturation, so neighbouring
+   * crowns of one species differ; darker and cooler low down, warmer up high;
+   * pale young-leaf flecks on top faces.
    */
-  vec3 patLeaf(vec2 uv, vec3 base, vec3 tint) {
-    vec3 col = base * 0.66;                            // the shadowed interior of the crown
-    // Two staggered layers: the second is offset and smaller so leaves overlap.
-    for (int layer = 0; layer < 2; layer++) {
-      float s = layer == 0 ? 3.2 : 4.6;
-      vec2 p = uv * s + (layer == 0 ? vec2(0.0) : vec2(0.37, 0.61));
-      vec2 cell = floor(p);
-      // Check this cell and its neighbours so leaves can cross cell borders.
-      for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
-        vec2 cc = cell + vec2(float(i), float(j));
-        vec3 lf = leafCell(p, cc);
-        if (lf.x <= 0.001) continue;
-        vec3 leafCol = mix(base, tint * 1.08, lf.y * 0.75) * (0.86 + lf.y * 0.24);
-        leafCol *= 1.0 - lf.z * 0.16;                 // midrib
-        // Front layer sits slightly brighter (more light reaches it).
-        leafCol *= layer == 1 ? 1.06 : 0.97;
-        col = mix(col, leafCol, lf.x);
-      }
-    }
-    // Broad clumping so a crown has sunlit and shaded masses, not uniform noise.
-    col *= 0.90 + vxNoise(uv * 0.8) * 0.20;
-    return col;
+  vec3 canopyVariety(vec3 col, vec3 tint, bool top, vec2 uv) {
+    vec3 wp = vPosW * 0.16;
+    float tree = vxNoise(wp.xz + wp.y * 0.3) * 0.5 + vxNoise(wp.xy * 1.3 + 7.0) * 0.5;
+    col *= 0.86 + 0.28 * tree;
+    col *= mix(vec3(0.94, 0.98, 1.06), vec3(1.07, 1.02, 0.9), vxNoise(wp.yz * 0.9 - 3.0));
+    float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
+    col = mix(vec3(lum), col, 0.82 + 0.3 * tree);
+    // Flat grid: height above sea, not distance from the planet centre.
+    float hh = smoothstep(2.0, 22.0, vPosW.y - uWaterLevel);
+    col *= mix(vec3(0.92, 0.94, 0.98), vec3(1.04, 1.03, 0.98), hh);
+    float tip = top ? smoothstep(0.78, 0.9, vxNoise(uv * 3.3 + wp.xz * 2.0)) : 0.0;
+    return mix(col, tint * 1.25 + vec3(0.04, 0.05, 0.0), tip * 0.35);
+  }
+
+  /**
+   * Leaf blocks (PATTERN.LEAF): foliage mass + per-tree variety + the
+   * per-face lift voxel-planet uses in place of real translucency — sides and
+   * undersides glow a little, as light through a crown does.
+   */
+  vec3 patLeaf(vec2 uv, vec3 base, vec3 tint, bool top, bool side) {
+    float faceLight = top ? 1.0 : side ? 0.6 : 0.0;
+    vec3 col = patFoliage(top || side ? uv : uv * 1.8, base, tint, faceLight);   // finer underside
+    col = canopyVariety(col, tint, top, uv);
+    return col * (top ? 1.05 : side ? 1.28 : 1.15);
   }
 
   /** Cobbled path: irregular rounded stones in a darker bed. */
@@ -2208,16 +2314,17 @@ const FRAG_BODY = /* glsl */ `
       if      (pat == 1.0)  t = patBrick(vUvW, col, vTintV);
       else if (pat == 2.0)  t = patStone(vUvW, col, vTintV);
       else if (pat == 3.0)  t = patPlank(vUvW, col, vTintV);
-      else if (pat == 4.0)  t = patBark(vUvW, col, vTintV, abs(vNrmW.y) > 0.5, vPosW);
+      else if (pat == 4.0)  t = patBark(vUvW, col, vTintV, abs(vNrmW.y) > 0.5, vPosW, fringe < -1.5 ? -fringe - 2.0 : 0.0);
       else if (pat == 5.0)  t = patGrassTop(vUvW, col, vTintV);
       else if (pat == 6.0)  t = patTile(vUvW, col, vTintV);
       else if (pat == 7.0)  t = patSoil(vUvW, col, vTintV);
       else if (pat == 8.0)  t = patSand(vUvW, col, vTintV, top);
-      else if (pat == 9.0)  t = patLeaf(vUvW, col, vTintV);
+      else if (pat == 9.0)  t = patLeaf(vUvW, col, vTintV, top, isSide);
       else if (pat == 10.0) t = patCobble(vUvW, col, vTintV);
       else if (pat == 11.0) t = patCloth(vUvW, col, vTintV);
       else if (pat == 12.0) t = patCrystal(vUvW, col, vTintV);
       else if (pat == 13.0) t = patWater(vUvW, col, vTintV, top, uCausticTime);
+      else if (pat == 14.0) t = patCactus(vUvW, col, vTintV, isSide);
       else                  t = patSurface(vUvW, col, vTintV);
       col = mix(col, t, detail);
     }
@@ -2432,15 +2539,19 @@ export function makeVoxelMaterial() {
             directionalShadowMap[0], petalShadow.shadowMapSize,
             petalShadow.shadowIntensity, petalShadow.shadowBias,
             petalShadow.shadowRadius, vDirectionalShadowCoord[0]);
+          // Shadows keep the surface's own hue (partly), lean cool, and deepen
+          // a touch — voxel-planet's tint. A fully desaturated cool shadow read
+          // as grey paint over every shaded slope.
           float petalShade = (1.0 - petalVisibility) * uShadowTintStrength;
           float petalLum = dot(outgoingLight, vec3(0.2126, 0.7152, 0.0722));
-          vec3 petalCool = vec3(petalLum) * uShadowHue;
-          outgoingLight = mix(outgoingLight, petalCool, petalShade);
+          vec3 petalCool = mix(vec3(petalLum), outgoingLight, 0.55) * uShadowHue;
+          outgoingLight = mix(outgoingLight, petalCool, petalShade * 0.75);
+          outgoingLight *= 1.0 - 0.12 * (1.0 - petalVisibility);
         #endif`,
             );
         mat.userData.shader = shader;
     };
-    mat.customProgramCacheKey = () => 'VoxelWorld-voxel-v17';
+    mat.customProgramCacheKey = () => 'VoxelWorld-voxel-v18';
     return mat;
 }
 

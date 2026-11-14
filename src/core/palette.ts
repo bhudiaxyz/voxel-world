@@ -73,7 +73,9 @@ export const PATTERN = {
     CLOTH: 11,
     CRYSTAL: 12,
     WATER: 13,
-    // 14–15 free. The mesher packs the id into 4 bits (bit 4 is the sway flag).
+    CACTUS: 14,
+    // 15 free. The mesher packs the id into 4 bits (bit 4 is the sway flag).
+    // Bark has five styles under one id — see barkStyle / patBark.
 };
 
 /* ------------------------------------------------------------------ *
@@ -446,7 +448,7 @@ export interface VoxelPalette {
 }
 
 /** The active palette name — read by map.ts and any future palette-aware systems. */
-export let activePaletteName = 'Autumn';
+export let activePaletteName = 'Spring';
 
 export const VOXEL_PALETTES: Record<string, VoxelPalette> = {
     Autumn: {
@@ -710,4 +712,4 @@ export function setVoxelPalette(name: string): void {
 }
 
 // Initialise all palette-driven exports with the default palette.
-setVoxelPalette('Autumn');
+setVoxelPalette('Spring');
