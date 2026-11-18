@@ -59,14 +59,14 @@ const RANGES = {
 const CSS = `
 #settings {
   position:fixed; inset:0; z-index:46; display:none; pointer-events:none;
-  font-family:Inter, ui-sans-serif, system-ui, sans-serif; color:var(--ink);
+  font-family:var(--font-body); color:var(--ink);
 }
 #settings.open { display:block; }
 #settings .panel {
   position:absolute; top:16px; right:16px; pointer-events:auto;
   width:min(330px, calc(100vw - 32px)); padding:18px;
   max-height:calc(100vh - 32px); overflow:auto;
-  border-radius:12px; background:rgba(20,19,24,.92);
+  border-radius:14px; background:rgba(20,19,24,.92);
   backdrop-filter:blur(18px) saturate(1.12);
   border:1px solid var(--line);
   box-shadow:0 24px 64px rgba(0,0,0,.55);
@@ -83,7 +83,7 @@ const CSS = `
                       color:var(--ink-faint); text-align:right; }
 #settings .row input[type=range] {
   grid-column:1 / -1; width:100%; height:2px; appearance:none; outline:none;
-  border-radius:99px; background:rgba(201,173,115,.18); cursor:pointer;
+  border-radius:99px; background:rgba(192,88,40,.18); cursor:pointer;
 }
 #settings .row input[type=range]::-webkit-slider-thumb {
   appearance:none; width:14px; height:14px; border-radius:50%;
@@ -98,15 +98,15 @@ const CSS = `
 #settings .row input[type=range]:disabled { opacity:.28; cursor:not-allowed; }
 #settings .toggle {
   appearance:none; width:34px; height:19px; margin:0; cursor:pointer;
-  border-radius:99px; position:relative; background:rgba(201,173,115,.12);
-  border:1px solid rgba(201,173,115,.2); transition:background .16s ease;
+  border-radius:99px; position:relative; background:rgba(192,88,40,.12);
+  border:1px solid rgba(192,88,40,.2); transition:background .16s ease;
 }
 #settings .toggle::after {
   content:""; position:absolute; width:13px; height:13px; left:2px; top:2px;
   border-radius:50%; background:var(--ink-faint);
   transition:transform .16s ease;
 }
-#settings .toggle:checked { background:rgba(201,173,115,.32); }
+#settings .toggle:checked { background:rgba(192,88,40,.32); }
 #settings .toggle:checked::after { transform:translateX(15px); background:var(--gold); }
 #settings .divider { height:1px; margin:2px 0 16px; background:var(--line); }
 #settings .palette-row {
@@ -118,25 +118,25 @@ const CSS = `
 }
 #settings .palette-row select {
   flex:1; height:34px; padding:0 10px;
-  border:1px solid rgba(201,173,115,.18); border-radius:8px;
+  border:1px solid rgba(192,88,40,.18); border-radius:8px;
   background:rgba(30,28,35,.72); color:var(--ink-soft);
-  font:600 11px/1 Inter, ui-sans-serif, system-ui, sans-serif;
+  font:600 11px/1 var(--font-body);
   letter-spacing:.06em; cursor:pointer; appearance:none;
 }
 #settings .palette-row select:focus { outline:none; border-color:var(--gold); }
 #settings .foot { display:flex; justify-content:flex-start; align-items:center;
                   margin-top:2px; padding-top:16px; border-top:1px solid var(--line); }
 #settings button {
-  height:34px; padding:0 14px; border:1px solid rgba(201,173,115,.25);
+  height:34px; padding:0 14px; border:1px solid rgba(192,88,40,.25);
   border-radius:8px; background:rgba(30,28,35,.72); color:var(--ink-soft);
-  font:600 11px/1 Inter, ui-sans-serif, system-ui, sans-serif;
+  font:600 11px/1 var(--font-body);
   letter-spacing:.08em; text-transform:uppercase; cursor:pointer;
   transition:background .14s ease, border-color .14s ease;
 }
 #settings button:hover { background:rgba(42,39,48,.88); border-color:var(--gold); }
 #settings .icon { width:30px; height:30px; padding:0; border:0; background:transparent;
                   color:var(--ink-faint); font-size:19px; text-transform:none; }
-#settings .icon:hover { background:rgba(201,173,115,.1); color:var(--gold); }
+#settings .icon:hover { background:rgba(192,88,40,.1); color:var(--gold); }
 #settings #set-reset { width:34px; padding:0; font-size:16px; text-transform:none; }
 `;
 
@@ -281,7 +281,7 @@ export function createSettings({ rig, atmo, input, world, dayNight, seed }: Sett
       </header>
       <div class="row">
         <label for="set-seed">World seed</label>
-        <input id="set-seed" type="text" style="grid-column:1/-1;width:100%;box-sizing:border-box;padding:5px 8px;background:rgba(201,173,115,.08);border:1px solid rgba(201,173,115,.2);border-radius:6px;color:var(--ink);font-size:12px;" />
+        <input id="set-seed" type="text" style="grid-column:1/-1;width:100%;box-sizing:border-box;padding:5px 8px;background:rgba(192,88,40,.08);border:1px solid rgba(192,88,40,.2);border-radius:6px;color:var(--ink);font-size:12px;" />
       </div>
       <div class="divider"></div>
       <div class="row">

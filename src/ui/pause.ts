@@ -7,7 +7,7 @@ const CSS = `
   position:fixed; inset:0; z-index:45; display:none;
   align-items:center; justify-content:center;
   background:rgba(7,7,10,.55); backdrop-filter:blur(10px) saturate(1.04);
-  font-family:var(--font-body,Inter,ui-sans-serif,system-ui,sans-serif); color:var(--ink);
+  font-family:var(--font-body); color:var(--ink);
 }
 #pause.open { display:flex; }
 #pause .panel {
@@ -21,28 +21,28 @@ const CSS = `
 #pause nav { display:grid; gap:8px; }
 #pause button {
   width:100%; height:42px; padding:0 14px; display:flex; align-items:center;
-  justify-content:space-between; border:1px solid rgba(201,173,115,.18);
+  justify-content:space-between; border:1px solid rgba(192,88,40,.18);
   border-radius:8px; background:rgba(30,28,35,.72); color:var(--ink-soft);
-  font:600 12px/1 var(--font-body,Inter,ui-sans-serif,system-ui,sans-serif);
+  font:600 12px/1 var(--font-body);
   letter-spacing:.08em; text-transform:uppercase; cursor:pointer;
   transition:background .14s ease, border-color .14s ease;
 }
 #pause button:hover, #pause button:focus-visible {
   outline:none; background:rgba(42,39,48,.88); border-color:var(--gold);
 }
-#pause #pause-resume { background:rgba(201,173,115,.12); border-color:var(--line); color:var(--gold); }
+#pause #pause-resume { background:rgba(192,88,40,.12); border-color:var(--line); color:var(--gold); }
 #pause #pause-resume:hover, #pause #pause-resume:focus-visible {
-  background:rgba(201,173,115,.22); border-color:var(--gold);
+  background:rgba(192,88,40,.22); border-color:var(--gold);
 }
 #pause kbd {
   min-width:22px; height:20px; padding:0 5px; display:inline-grid; place-items:center;
-  border-radius:5px; background:rgba(201,173,115,.12); color:var(--gold);
-  font:700 9px/1 var(--font-body,Inter,ui-sans-serif,system-ui,sans-serif);
+  border-radius:5px; background:rgba(192,88,40,.12); color:var(--gold);
+  font:700 9px/1 var(--font-body);
   text-transform:uppercase; white-space:nowrap;
 }
 #pause .controls {
   margin-top:18px; padding-top:16px;
-  border-top:1px solid rgba(201,173,115,.12);
+  border-top:1px solid rgba(192,88,40,.12);
 }
 #pause .controls h3 {
   margin:0 0 10px; font-size:10px; font-weight:700;

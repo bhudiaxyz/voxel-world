@@ -45,7 +45,7 @@ const CSS = `
 #bubbles .bubble {
   position:absolute; left:0; top:0; will-change:transform, opacity;
   transform-origin:50% 100%;
-  font-family:Inter, ui-rounded, system-ui, sans-serif;
+  font-family:var(--font-body);
   font-weight:650; font-size:15px; letter-spacing:.015em;
   white-space:nowrap; color:var(--ink);
   text-shadow:

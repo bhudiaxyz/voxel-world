@@ -25,7 +25,6 @@ ref_images/
 *.bmp
 *.tif
 *.tiff
-*.svg
 *.ico
 *.mp4
 *.webm

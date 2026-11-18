@@ -12,7 +12,7 @@ import type { DroneMode } from '../player/drone';
 const CSS = `
 #hud {
   position:fixed; inset:0; z-index:20; pointer-events:none;
-  font-family:Inter, ui-sans-serif, system-ui, sans-serif;
+  font-family:var(--font-body);
   color:var(--ink);
   --hud-shadow:0 8px 24px rgba(0,0,0,.42);
 }
@@ -21,7 +21,7 @@ const CSS = `
   transform:translate(-50%, -6px); opacity:0;
   font-size:12px; font-weight:700; letter-spacing:.22em;
   text-transform:uppercase; color:var(--gold);
-  text-shadow:0 0 14px rgba(201,173,115,.4);
+  text-shadow:0 0 14px rgba(192,88,40,.4);
   transition:opacity .55s ease, transform .55s ease;
 }
 #hud .place.show { opacity:.9; transform:translate(-50%, 0); }
@@ -41,8 +41,8 @@ const CSS = `
 }
 #hud kbd {
   min-width:18px; height:18px; padding:0 4px; display:grid; place-items:center;
-  border-radius:4px; background:rgba(201,173,115,.18); color:var(--gold);
-  font:700 10px/1 Inter, ui-sans-serif, system-ui, sans-serif;
+  border-radius:4px; background:rgba(192,88,40,.18); color:var(--gold);
+  font:700 10px/1 var(--font-body);
   box-shadow:0 1px 0 rgba(0,0,0,.3);
 }
 #hud .status-bar {

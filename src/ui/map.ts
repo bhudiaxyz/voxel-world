@@ -95,11 +95,11 @@ const CSS = `
   backdrop-filter:blur(18px) saturate(1.12);
   box-shadow:0 24px 72px rgba(0,0,0,.55); }
 #map canvas { display:block; border-radius:9px; background:#0d0c0f;
-  box-shadow:inset 0 0 0 1px rgba(201,173,115,.12); }
+  box-shadow:inset 0 0 0 1px rgba(192,88,40,.12); }
 #map .busy { position:absolute; inset:0; display:flex; align-items:center;
   justify-content:center; }
 #map .busy::after { content:""; width:22px; height:22px; border-radius:50%;
-  border:2px solid rgba(201,173,115,.18); border-top-color:var(--gold);
+  border:2px solid rgba(192,88,40,.18); border-top-color:var(--gold);
   animation:map-spin .75s linear infinite; }
 @keyframes map-spin { to { transform:rotate(360deg); } }
 `;
