@@ -128,7 +128,17 @@ function toolkit(world: any) {
      * hunt within 30 blocks of a centre. Rejecting a feature, rather than a
      * site, is what actually keeps compositions off one another. */
     const claims: any[] = [];
-    const claimed = (x: any, z: any) => claims.some((c) => Math.hypot(c[0] - x, c[1] - z) < MIN_SEPARATION);
+    // Hot: called inside every finder's search loop against 100+ claims.
+    // Squared compare = same answer as hypot() < MIN_SEPARATION, without the sqrt.
+    const SEP_SQ = MIN_SEPARATION * MIN_SEPARATION;
+    const claimed = (x: any, z: any) => {
+        for (let k = 0; k < claims.length; k++) {
+            const dx = claims[k][0] - x,
+                dz = claims[k][1] - z;
+            if (dx * dx + dz * dz < SEP_SQ) return true;
+        }
+        return false;
+    };
 
     /** True if a patch is flat, dry and unclaimed — a place to build. */
     const flat = (cx: any, cz: any, r: any, tol = 0) => {

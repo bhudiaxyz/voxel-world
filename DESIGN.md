@@ -110,21 +110,22 @@ src/
 
 | Thread      | Work                                                                                                |
 | ----------- | --------------------------------------------------------------------------------------------------- |
-| Main        | World generation (once, at startup), physics, AI, rendering — and chunk meshing if the worker fails |
-| Mesh worker | Chunk meshing during play; one worker, one chunk in flight                                          |
+| Main         | World generation (once, at startup), physics, AI, rendering — and chunk meshing if every worker fails |
+| Mesh workers | Chunk meshing during play; `min(4, max(1, cores − 2))` workers, one chunk in flight each              |
 
-World generation is **synchronous on the main thread**. `buildWorld()` awaits `setTimeout(0)` between stages so the loading bar repaints, but each stage blocks. For a 768² world it takes a few seconds on desktop and is the main startup cost. Moving it into a worker would mean transferring the grid and plan back; that hasn't been needed so far.
+World generation is **synchronous on the main thread**. `buildWorld()` awaits `setTimeout(0)` between stages, and `generateTerrain()` yields at each of its own progress marks, so the loading bar repaints, but each stage between yields blocks. For a 768² world it takes about 2–3 s on a recent laptop and is the main startup cost. Moving it into a worker would mean transferring the grid and plan back; that hasn't been needed so far.
 
 ### Startup sequence (`start()` in `main.ts`)
 
 1. `hasWebGL2()` — if false, throw a readable error, which the boot screen displays.
 2. `detectGpuTier()` → `tier`; `ts = TIER_SETTINGS[tier]`.
 3. `createRenderer(container, tier)`. `setTierDefaults()` seeds the settings panel defaults from the tier. A `webglcontextlost` listener reloads the page — same seed, same world.
-4. `buildWorld(SEED, setProgress, ts.streamRadius, { density, distance })` — the generation pipeline plus the spawn-chunk preload.
+4. `buildWorld(SEED, onProgress, ts.streamRadius, { density, distance }, ts.chunkUploadsPerFrame)` — the generation pipeline plus the spawn-chunk preload. It fills the loading bar to 92%.
 5. Construct, in order: `FPCamera`, `Atmosphere`, `DayNight`, water, particles, character, `Controller`, drone/fly modes, `Input`, navigator, map, bubbles, dog, touch controls, post-FX, settings, HUD, pause.
 6. Wire the shared actions (`cycleMode`, `land`, `toggleEdges`, `stepTime`) to keyboard and touch.
 7. Call `scene.updateMatrixWorld(true)` once, then set `scene.matrixWorldAutoUpdate = false` (see [Conventions](#conventions--gotchas)).
-8. Start `frame()`. The first frame marks the boot screen `.ready`; a click or tap dismisses it and, on desktop, requests pointer lock.
+8. `await post.precompile()` ("warming up shaders", 94% → 100%). See [Shader precompile](#shader-precompile).
+9. Start `frame()`. The first frame marks the boot screen `.ready`; a click or tap dismisses it and, on desktop, requests pointer lock.
 
 ### Frame loop (`frame()` in `main.ts`)
 
@@ -297,7 +298,10 @@ All absolute lengths are authored in blocks × `K`, and feature counts scale wit
 | 0.40        | growing the forests          | `scatterVegetation` (trees, bushes, ground detail) |
 | 0.50        | finding the path             | `findSpawn`                                        |
 | 0.54 → 0.96 | meshing the world            | spawn-chunk preload (per-chunk sub-progress)       |
+| 0.94        | warming up shaders           | `post.precompile()` in `main.ts`                   |
 | 1.0         | ready                        | boot screen becomes dismissable                    |
+
+`main.ts` scales every `buildWorld` fraction by 0.92, so world building ends at 92% and shader warm-up owns the last stretch.
 
 ---
 
@@ -325,12 +329,16 @@ Emissive blocks go into a separate `glow` buffer, drawn with an unlit `MeshBasic
 - **Desired set:**
     - Recomputed only when the player's or the camera's _chunk_ changes (`viewKey`).
     - Distance is measured to the player→camera _segment_, so a drone looking far ahead also loads along its line of view. When wrapping is on, it's measured from five positions: the player plus the four ±size ghosts.
-    - Chunks load within `loadRadius × 16` and unload beyond `(loadRadius + 1) × 16`. The load queue is sorted nearest first.
+    - Chunks load within `loadRadius × 16` and unload beyond `(loadRadius + 1) × 16`.
+    - The load queue is sorted by distance to a **look-ahead point**: where the player will be in 1.5 s at their smoothed velocity. Standing still, that's plain nearest-first; sprinting, the terrain ahead arrives before the ring behind. Only the order changes, not the loaded set.
+- **Anchor:** walking, the anchor is `controller.pos`. In drone or fly mode `main.ts` passes the camera position instead, because the walk controller stays parked at the take-off point. Anchoring to it used to keep a corridor of chunks back to take-off loaded, and pinned the shadow frustum there.
 - **Worker path:**
     - `makeChunkWindow()` copies the chunk plus a 2-block margin out of the grid into a transferable `Uint8Array` and posts it.
     - The worker meshes it (`buildChunkTransferPayload`) and posts the typed arrays back as transferables, so neither direction copies.
-    - One chunk is in flight at a time.
-    - The block registry is sent to the worker at start and again on `invalidateAll()` (palette change).
+    - A pool of `min(4, max(1, hardwareConcurrency − 2))` workers, each with one chunk in flight.
+    - Finished payloads are **not** turned into meshes in `onmessage`. They queue in `ready`, and `update()` restores at most `uploadsPerFrame` per frame (tier `chunkUploadsPerFrame`: 3 high, 2 mobile-high/mid, 1 low/very-low), nearest to the look-ahead point first. Each restore plus its first-draw GPU upload costs a few ms, so this caps the per-frame spike however many workers finish at once.
+    - The block registry is sent to every worker at start and again on `invalidateAll()` (palette change). `invalidateAll()` posts the registry _before_ re-queuing, and discards ready and in-flight results, so no chunk is meshed with the old palette.
+    - A worker that errors is retired and its chunk re-queued; when none are left, the fallback path takes over.
 - **Fallback path:**
     - If `Worker` is unavailable or errors, meshing runs on the main thread in `requestIdleCallback` (or `setTimeout`) slices of 6 Y-layers.
     - Each idle callback runs up to 4 slices, and a timed-out callback still runs at least one, so a busy GPU can't starve streaming.
@@ -680,7 +688,7 @@ void applyPlanetBend(inout vec3 worldPos, inout vec3 worldNormal) {
 | WebGL2 context                            | Required by the renderer. If it's missing, `main.ts` stops with a message before detection runs                                                                      |
 | `WEBGL_debug_renderer_info` renderer name | The only reliable way to tell integrated from discrete GPUs, and to spot software renderers. On Windows, ANGLE reports `MAX_TEXTURE_SIZE = 16384` even for Intel UHD |
 | iPadOS detection                          | iPadOS reports a desktop Mac user-agent, so it's detected as `Macintosh` UA + `maxTouchPoints > 1`                                                                   |
-| `MAX_TEXTURE_SIZE`                        | On Apple devices, 16384 means an A12 (2018) or newer chip                                                                                                            |
+| `MAX_TEXTURE_SIZE`                        | On Apple devices, below 16384 means an old chip. Recent iOS reports 16384 on older chips too, so a low `hardwareConcurrency` also keeps an Apple device on `mid`      |
 | `hardwareConcurrency`, `deviceMemory`     | `deviceMemory` exists only in Chromium and is capped at 8; when missing it counts as "enough"                                                                        |
 
 The probe context is released with `WEBGL_lose_context`, because mobile Safari caps how many live contexts a page can hold.
@@ -690,14 +698,16 @@ Rules, first match wins:
 ```text
 software renderer (SwiftShader / llvmpipe / Basic Render)           → very-low
 mobile:
-  Apple GPU / iPad / iPhone   → maxTex ≥ 16384 ? mobile-high : mid
+  Apple GPU / iPad / iPhone   → maxTex < 16384 or cores ≤ 4 ? mid : mobile-high
   cores ≤ 4 or mem ≤ 2        → very-low
   Mali-T / Adreno 3xx–5xx / PowerVR                                 → low
   cores ≥ 8 and mem ≥ 6       → mobile-high        (e.g. Galaxy S22 Ultra)
   cores ≥ 6 and mem ≥ 3       → mid, else low
 desktop:
-  cores ≤ 4 or mem ≤ 2        → low
-  not integrated, cores ≥ 8, mem ≥ 6, maxTex ≥ 16384                → high
+  mem ≤ 2                     → low
+  (not integrated or Apple M-series), cores ≥ 8, mem ≥ 6, maxTex ≥ 16384 → high
+  not integrated, maxTex ≥ 16384                                    → mid   (e.g. 4-core i5 + GTX 1060)
+  cores ≤ 4                   → low
   cores ≥ 6 ? mid : low
 ```
 
@@ -705,13 +715,15 @@ Getting the tier slightly wrong is cheap, because the [adaptive-resolution gover
 
 ### Settings table (`TIER_SETTINGS`)
 
-| Tier        | DPR cap | Shadow px | Blur | Shadow every | Extent | Far  | Bloom | AO  | DoF | Rays | Ink | Cloud | AA   | Stream | Water sub | Particles | Detail ×, dist |
-| ----------- | ------- | --------- | ---- | ------------ | ------ | ---- | ----- | --- | --- | ---- | --- | ----- | ---- | ------ | --------- | --------- | -------------- |
-| high        | 2       | 4096      | 12   | 1 frame      | 120    | 6000 | ✓     | 8   | ✓   | 8    | ✓   | ✓     | SMAA | 12     | 64        | 1200      | 1.0, 140       |
-| mobile-high | 1.5     | 2048      | 8    | 2            | 110    | 3000 | ✓     | 4   | ✓   | 4    | —   | ✓     | SMAA | 11     | 32        | 700       | 0.55, 90       |
-| mid         | 1.25    | 2048      | 8    | 2            | 120    | 3000 | ✓     | 4   | ✓   | 4    | —   | ✓     | SMAA | 11     | 32        | 600       | 0.6, 100       |
-| low         | 1       | 1024      | 4    | 3            | 100    | 1500 | —     | 0   | —   | 0    | —   | —     | FXAA | 8      | 16        | 200       | 0.25, 70       |
-| very-low    | 1       | 512       | 4    | 6            | 80     | 1200 | —     | 0   | —   | 0    | —   | —     | none | 6      | 4         | 0         | 0, 50          |
+| Tier        | DPR cap | Shadow px | Blur | Shadow every | Extent | Far  | Bloom | AO  | DoF | Rays | Ink | Cloud | AA   | Stream | Uploads/frame | Water sub | Particles | Detail ×, dist |
+| ----------- | ------- | --------- | ---- | ------------ | ------ | ---- | ----- | --- | --- | ---- | --- | ----- | ---- | ------ | ------------- | --------- | --------- | -------------- |
+| high        | 2       | 4096      | 12   | 1 frame      | 120    | 6000 | ✓     | 8   | ✓   | 8    | ✓   | ✓     | SMAA | 12     | 3             | 64        | 1200      | 1.0, 140       |
+| mobile-high | 1.5     | 2048      | 8    | 2            | 110    | 3000 | ✓     | 4   | ✓   | 4    | —   | ✓     | SMAA | 11     | 2             | 32        | 700       | 0.55, 90       |
+| mid         | 1.25    | 2048      | 8    | 2            | 120    | 3000 | ✓     | 4   | ✓   | 4    | —   | ✓     | SMAA | 11     | 2             | 32        | 600       | 0.6, 100       |
+| low         | 1       | 1024      | 4    | 3            | 100    | 1500 | —     | 0   | —   | 0    | —   | —     | FXAA | 8      | 1             | 16        | 200       | 0.25, 70       |
+| very-low    | 1       | 512       | 4    | 6            | 80     | 1200 | —     | 0   | —   | 0    | —   | —     | none | 6      | 1             | 4         | 0         | 0, 50          |
+
+The high-tier stream radius stays at 12. Radius 14 measured about 11% more draw calls and 8% more triangles; in one sprinting-drone run the stream fell 157 chunks behind and the governor dropped render scale, for only a small gain (the edge of loaded terrain moves from about 80% to about 90% fog). Users can still raise it in the settings panel.
 
 Each tier value is used in one place:
 
@@ -720,6 +732,15 @@ Each tier value is used in one place:
 - **Detail density:** scales the meadow-sprite layer at generation time. `0` keeps only the authored sparse tufts.
 - **Detail distance:** a per-batch distance cull applied every frame (`DetailField` `update()`).
 - **Shadow cadence:** when `shadowInterval > 1`, `renderer.shadowMap.autoUpdate` is false. `main.ts` then sets `needsUpdate` every N frames, and `DayNight` also sets it whenever the sun moves noticeably (more than 0.009 in Y).
+
+### Shader precompile
+
+`post.precompile()` (in `postfx.ts`) compiles every shader program before the first frame. Without it, the first render linked every program synchronously: 3.6 s of frozen main thread on an Intel Arc laptop, and longer on mobile. Materials that first appear mid-game (ground detail coming into range, crepuscular rays, bloom) also caused a one-off hitch.
+
+- **Scene:** `renderer.compileAsync(scene, camera, scene)` with every camera layer enabled and the scene FBO bound, so the programs get the real lights, shadows, fog and render-target keys.
+- **Post passes:** materials are harvested from each pass's own fields (one level deep), and each is compiled as a **lone mesh** with an orthographic camera, bound to the HDR target (or to the screen for the pass that renders to screen). That is exactly how `FullScreenQuad.render()` draws, `renderer.render(mesh, camera)`, so the program key matches. Parenting the quads under a `Scene` gives different light and fog state and silently builds a second, unused set of programs.
+- With `KHR_parallel_shader_compile` (Chrome/Edge, Safari 17+) the driver links in the background and the promise resolves without a long task. Without it, three polls instead, which is no worse than before.
+- **Check:** `__game.renderer.info.programs.length` should not grow during play.
 
 ### Adaptive resolution
 

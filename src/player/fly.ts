@@ -1,3 +1,29 @@
+/**
+ * Fly mode — free noclip-style flight with a terrain floor.
+ *
+ * Purpose:
+ *   Direct WASD flight at any altitude: the player controls both direction
+ *   and height (unlike the drone, nothing moves unless input is held).
+ *
+ * Operations:
+ *   - enter():  lifts the camera clear of anything directly overhead.
+ *   - update(): WASD/joystick move in the yaw plane, altDelta moves
+ *               vertically, a smoothed terrain floor keeps eye height above
+ *               ground/sea, and a look-ahead probe auto-climbs over obstacles.
+ *
+ * Usage:
+ *   const fly = createFlyMode(world.grid);
+ *   fly.enter(camera);
+ *   fly.update(dt, camera, keys, fpCam.yaw, fpCam.pitch, altDelta, joyX, joyY);
+ *   Landing is driven by main.ts (eases down, then switches to walk).
+ *
+ * Important:
+ *   - Caller owns yaw/pitch (FPCamera); this module only writes the camera
+ *     rotation and position. Roll is applied by main.ts after update().
+ *   - Floor rises instantly but falls at most floorDescentRate, so flying off
+ *     a cliff doesn't yank the floor out from under the camera.
+ *   - Position is wrapped with wrapAxis (toroidal world).
+ */
 import * as THREE from 'three';
 import type { VoxelGrid } from '../core/voxel';
 import { WORLD, wrapAxis } from '../world/terrain';

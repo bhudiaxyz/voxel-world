@@ -20,6 +20,18 @@ import { PLANET_UNIFORMS_GLSL, PLANET_BEND_GLSL, planetUniformValues } from '../
 
 export const CHUNK = 16;
 export const DEFAULT_STREAM_RADIUS = 12;
+/** Seconds of travel the chunk load order looks ahead. */
+const LOOKAHEAD_S = 1.5;
+
+/**
+ * Mesher workers: leave a core for the main thread and one for the browser
+ * (compositor/GPU process), cap at 4 — beyond that upload, not meshing, is
+ * the bottleneck. A 7-year-old 4-core phone gets 2; a desktop gets 4.
+ */
+function defaultWorkerCount() {
+    const cores = (typeof navigator !== 'undefined' && navigator.hardwareConcurrency) || 4;
+    return Math.max(1, Math.min(4, cores - 2));
+}
 
 /**
  * Objects on this layer are drawn only by the edge-mask pass, never by the
@@ -693,7 +705,16 @@ export function buildWorldMeshes(grid: any, { onProgress }: { onProgress?: (p: n
  */
 export function createWorldChunkStreamer(
     grid: any,
-    { loadRadius = DEFAULT_STREAM_RADIUS, unloadPadding = 1, wrapBuffer = 0, toroidalWrap = false } = {},
+    {
+        loadRadius = DEFAULT_STREAM_RADIUS,
+        unloadPadding = 1,
+        wrapBuffer = 0,
+        toroidalWrap = false,
+        /** Mesher workers. Each keeps one chunk in flight. */
+        workers = defaultWorkerCount(),
+        /** Finished chunks turned into scene meshes per frame (first draw uploads them). */
+        uploadsPerFrame = 2,
+    } = {},
 ) {
     const meshes = createMeshRoots();
     const chunksX = Math.ceil(grid.sx / CHUNK);
@@ -703,8 +724,12 @@ export function createWorldChunkStreamer(
     let unloadQueue: string[] = [];
     let desiredLoadKeys = new Set<string>();
     let activeLoad: any = null;
-    let meshWorker: Worker | null = null;
-    let workerBusy: any = null;
+    /** Idle mesher workers, and what each busy one is meshing. */
+    let pool: Worker[] = [];
+    const idle: Worker[] = [];
+    const inFlight = new Map<Worker, { key: string; ci: number; ck: number }>();
+    /** Meshed payloads waiting for a frame's upload budget. */
+    const ready: { key: string; ci: number; ck: number; payload: any }[] = [];
     let viewKey = '';
     let idleHandle: any = null;
     let disposed = false;
@@ -712,23 +737,27 @@ export function createWorldChunkStreamer(
     const currentUnloadPadding = Math.max(1, unloadPadding);
     let lastPlayer: any = null;
     let lastCamera: any = null;
+    /** Smoothed travel velocity (blocks/s) — the load queue favours chunks ahead. */
+    const vel = { x: 0, z: 0 };
 
     if (typeof globalThis.Worker === 'function') {
-        try {
-            meshWorker = new Worker(new URL('./voxel-worker.ts', import.meta.url), {
-                type: 'module',
-                name: 'VoxelWorld-chunk-mesher',
-            });
-            // Worker messages are processed in order, so every subsequent chunk
-            // sees the same runtime-registered materials as the main-thread preload.
-            meshWorker.postMessage({
-                type: 'block-registry',
-                definitions: serializeBlockRegistry(),
-            });
-        } catch {
-            meshWorker = null;
+        for (let n = 0; n < workers; n++) {
+            try {
+                const w = new Worker(new URL('./voxel-worker.ts', import.meta.url), {
+                    type: 'module',
+                    name: `VoxelWorld-chunk-mesher-${n}`,
+                });
+                // Worker messages are processed in order, so every subsequent chunk
+                // sees the same runtime-registered materials as the main-thread preload.
+                w.postMessage({ type: 'block-registry', definitions: serializeBlockRegistry() });
+                pool.push(w);
+                idle.push(w);
+            } catch {
+                break;
+            }
         }
     }
+    const useWorkers = () => pool.length > 0;
 
     const keyOf = (ci: any, ck: any) => `${ci},${ck}`;
     const frameYield = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -769,7 +798,7 @@ export function createWorldChunkStreamer(
     };
 
     const schedule = () => {
-        const canLoad = meshWorker ? !workerBusy && loadQueue.length > 0 : Boolean(activeLoad || loadQueue.length);
+        const canLoad = useWorkers() ? idle.length > 0 && loadQueue.length > 0 : Boolean(activeLoad || loadQueue.length);
         if (idleHandle !== null || disposed || (!canLoad && !unloadQueue.length)) return;
         if (typeof globalThis.requestIdleCallback === 'function') {
             idleHandle = globalThis.requestIdleCallback(pump, { timeout: 120 });
@@ -786,14 +815,18 @@ export function createWorldChunkStreamer(
         // cannot turn one idle callback into a long garbage-collection spike.
         drainUnloads(3);
 
-        if (meshWorker) {
-            while (!workerBusy && loadQueue.length) {
+        if (useWorkers()) {
+            // makeChunkWindow copies ~100 KB per chunk; keep dispatching inside the
+            // idle slice instead of filling every worker in one go.
+            while (idle.length && loadQueue.length) {
+                if (!deadline.didTimeout && deadline.timeRemaining() <= 1) break;
                 const next = loadQueue.shift();
                 const key = keyOf(next.ci, next.ck);
-                if (loaded.has(key) || !desiredLoadKeys.has(key)) continue;
+                if (loaded.has(key) || !desiredLoadKeys.has(key) || isPending(key)) continue;
+                const w = idle.pop()!;
                 const window = makeChunkWindow(grid, next.ci, next.ck);
-                workerBusy = { key, ci: next.ci, ck: next.ck };
-                meshWorker.postMessage({ key, window }, [window.data.buffer]);
+                inFlight.set(w, { key, ci: next.ci, ck: next.ck });
+                w.postMessage({ key, window }, [window.data.buffer]);
             }
             schedule();
             return;
@@ -821,39 +854,57 @@ export function createWorldChunkStreamer(
         schedule();
     };
 
-    const disableWorker = () => {
-        const interrupted = workerBusy;
-        meshWorker?.terminate();
-        meshWorker = null;
-        workerBusy = null;
-        if (interrupted && desiredLoadKeys.has(interrupted.key)) {
-            loadQueue.unshift({ ci: interrupted.ci, ck: interrupted.ck, distanceSq: 0 });
-        }
+    const isPending = (key: string) => {
+        for (const job of inFlight.values()) if (job.key === key) return true;
+        return ready.some((r) => r.key === key);
+    };
+
+    /** Drop a failed worker; its chunk goes back to the front of the queue. */
+    const retire = (w: Worker) => {
+        const job = inFlight.get(w);
+        inFlight.delete(w);
+        w.terminate();
+        pool = pool.filter((p) => p !== w);
+        const i = idle.indexOf(w);
+        if (i >= 0) idle.splice(i, 1);
+        if (job && desiredLoadKeys.has(job.key)) loadQueue.unshift({ ci: job.ci, ck: job.ck, distanceSq: 0 });
+        // Last worker gone: the main-thread sliced mesher takes over.
         schedule();
     };
 
-    if (meshWorker) {
-        meshWorker.onmessage = ({ data }) => {
-            const completed = workerBusy;
-            workerBusy = null;
-            if (data.error) {
-                if (completed && desiredLoadKeys.has(completed.key)) {
-                    loadQueue.unshift({
-                        ci: completed.ci,
-                        ck: completed.ck,
-                        distanceSq: 0,
-                    });
-                }
-                meshWorker!.terminate();
-                meshWorker = null;
-            } else if (completed?.key === data.key && desiredLoadKeys.has(data.key) && !loaded.has(data.key)) {
-                const record = restoreMeshChunk(data.payload, data.ci, data.ck, meshes);
-                loaded.set(data.key, record);
+    for (const w of pool) {
+        w.onmessage = ({ data }: MessageEvent) => {
+            const job = inFlight.get(w);
+            inFlight.delete(w);
+            if (data.error) return retire(w);
+            idle.push(w);
+            // Don't build meshes here: several workers can finish in one frame,
+            // and each restore + first-draw upload is a few ms. update() drains
+            // `ready` at a fixed per-frame budget instead.
+            if (job?.key === data.key && desiredLoadKeys.has(data.key) && !loaded.has(data.key)) {
+                ready.push({ key: data.key, ci: data.ci, ck: data.ck, payload: data.payload });
             }
             schedule();
         };
-        meshWorker.onerror = disableWorker;
+        w.onerror = () => retire(w);
     }
+
+    /** Turn up to `limit` meshed payloads into scene meshes, nearest first. */
+    const drainReady = (limit: number) => {
+        if (!ready.length) return;
+        if (ready.length > 1 && lastPlayer) {
+            const px = lastPlayer.x + vel.x * LOOKAHEAD_S,
+                pz = lastPlayer.z + vel.z * LOOKAHEAD_S;
+            const d = (r: any) => ((r.ci + 0.5) * CHUNK - px) ** 2 + ((r.ck + 0.5) * CHUNK - pz) ** 2;
+            ready.sort((a, b) => d(a) - d(b));
+        }
+        for (let n = 0; n < limit && ready.length; ) {
+            const r = ready.shift()!;
+            if (!desiredLoadKeys.has(r.key) || loaded.has(r.key)) continue;
+            loaded.set(r.key, restoreMeshChunk(r.payload, r.ci, r.ck, meshes));
+            n++;
+        }
+    };
 
     const update = (player: any, camera = player, trimToRadius = false, dt = 0) => {
         if (disposed || !player) return;
@@ -861,10 +912,21 @@ export function createWorldChunkStreamer(
         // GPU can starve requestIdleCallback, but stale GPU buffers must still be
         // released promptly as the player crosses the world.
         drainUnloads(4);
+        drainReady(uploadsPerFrame);
         const ax = player.x,
             az = player.z;
         const bx = camera?.x ?? ax,
             bz = camera?.z ?? az;
+        if (lastPlayer && dt > 0) {
+            // Ignore teleports (world wrap, mode switch) — they aren't travel.
+            const mx = ax - lastPlayer.x,
+                mz = az - lastPlayer.z;
+            if (mx * mx + mz * mz < 64) {
+                const k = Math.min(1, dt * 3);
+                vel.x += (mx / dt - vel.x) * k;
+                vel.z += (mz / dt - vel.z) * k;
+            }
+        }
         lastPlayer = { x: ax, z: az };
         lastCamera = { x: bx, z: bz };
         const nextViewKey = [
@@ -876,7 +938,7 @@ export function createWorldChunkStreamer(
         if (nextViewKey === viewKey) return;
         viewKey = nextViewKey;
 
-        const desired = [];
+        const desired: { ci: number; ck: number; distanceSq: number; order?: number }[] = [];
         const keep = new Set();
         const loadMargin = currentLoadRadius * CHUNK;
         const unloadMargin = (currentLoadRadius + currentUnloadPadding) * CHUNK;
@@ -912,7 +974,23 @@ export function createWorldChunkStreamer(
             }
         }
 
-        desired.sort((a, b) => a.distanceSq - b.distanceSq);
+        // Order by distance to where the player will be in LOOKAHEAD_S, not where
+        // they are: at drone sprint (45 b/s) the ring behind you is wasted work
+        // while the terrain ahead pops in. Standing still this is plain distance.
+        // (The radius test above still uses the true position, so the loaded set
+        // is unchanged — only the order it arrives in.)
+        const fx = ax + vel.x * LOOKAHEAD_S,
+            fz = az + vel.z * LOOKAHEAD_S;
+        for (const d of desired) {
+            let best = Infinity;
+            for (const [ox, oz] of mirrorOffsets) {
+                const dx = Math.min((d.ci + 0.5) * CHUNK, grid.sx) - (fx + ox),
+                    dz = Math.min((d.ck + 0.5) * CHUNK, grid.sz) - (fz + oz);
+                best = Math.min(best, dx * dx + dz * dz);
+            }
+            d.order = best;
+        }
+        desired.sort((a, b) => a.order! - b.order!);
         loadQueue = desired;
         desiredLoadKeys = new Set(desired.map(({ ci, ck }) => keyOf(ci, ck)));
         if (activeLoad && !desiredLoadKeys.has(activeLoad.key)) activeLoad = null;
@@ -957,9 +1035,11 @@ export function createWorldChunkStreamer(
     const dispose = () => {
         disposed = true;
         activeLoad = null;
-        workerBusy = null;
-        meshWorker?.terminate();
-        meshWorker = null;
+        for (const w of pool) w.terminate();
+        pool = [];
+        idle.length = 0;
+        inFlight.clear();
+        ready.length = 0;
         if (idleHandle !== null) {
             if (typeof globalThis.cancelIdleCallback === 'function') {
                 globalThis.cancelIdleCallback(idleHandle);
@@ -975,14 +1055,19 @@ export function createWorldChunkStreamer(
     };
 
     const invalidateAll = () => {
+        // Registry first: worker messages are ordered, so every chunk dispatched
+        // after this meshes with the new colours.
+        const definitions = serializeBlockRegistry();
+        for (const w of pool) w.postMessage({ type: 'block-registry', definitions });
+        // Results already meshed (or in flight) carry the old palette — discard.
+        // In-flight jobs are forgotten; their workers still come back idle.
+        ready.length = 0;
+        for (const job of inFlight.values()) job.key = '';
+        activeLoad = null;
         // Unload every loaded chunk so they get re-meshed with the current block registry.
         for (const key of [...loaded.keys()]) unloadChunk(key);
         viewKey = ''; // force update() to re-queue everything
         if (lastPlayer) update(lastPlayer, lastCamera);
-        // Push the updated block registry to the worker if one is running.
-        if (meshWorker) {
-            meshWorker.postMessage({ type: 'block-registry', definitions: serializeBlockRegistry() });
-        }
     };
 
     return {
@@ -1003,7 +1088,7 @@ export function createWorldChunkStreamer(
             return loaded.size;
         },
         get pendingCount() {
-            return loadQueue.length + unloadQueue.length + (activeLoad ? 1 : 0) + (workerBusy ? 1 : 0);
+            return loadQueue.length + unloadQueue.length + (activeLoad ? 1 : 0) + inFlight.size + ready.length;
         },
     };
 }

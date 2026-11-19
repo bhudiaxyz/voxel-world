@@ -111,15 +111,23 @@ export function labelWalk(lev: any, S: any, land: any, maxStep = 1) {
 export function despeckle(lev: any, S: any, land: any, minArea = 14) {
     const out = Int16Array.from(lev);
     const { label, sizes } = labelWalk(lev, S, land, 0);
+    // Bucket small-region cells in ONE scan (ascending index, so each region's
+    // member order matches the old per-region full-map scan exactly). The old
+    // loop rescanned all S² cells per small region: ~1 s on a 768² world.
+    const small = new Map<number, number[]>();
+    for (let i = 0; i < S * S; i++) {
+        const id = label[i];
+        if (id < 0 || sizes[id] >= minArea) continue;
+        let list = small.get(id);
+        if (!list) small.set(id, (list = []));
+        list.push(i);
+    }
     const border = new Map();
-    const members = [];
     for (let id = 0; id < sizes.length; id++) {
-        if (sizes[id] >= minArea) continue;
+        const members = small.get(id);
+        if (!members) continue;
         border.clear();
-        members.length = 0;
-        for (let i = 0; i < S * S; i++) {
-            if (label[i] !== id) continue;
-            members.push(i);
+        for (const i of members) {
             const x = i % S,
                 z = (i / S) | 0;
             for (let d = 0; d < 4; d++) {

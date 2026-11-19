@@ -1,3 +1,28 @@
+/**
+ * Touch controls — on-screen joystick, swipe-look and action buttons.
+ *
+ * Purpose:
+ *   Gives phones/tablets the same controls as keyboard + mouse (full mapping
+ *   in the createTouchControls doc comment below).
+ *
+ * Operations:
+ *   - Left half: nipplejs dynamic joystick → fpCam.setTouchMove.
+ *   - Right half: swipe → fpCam.applyTouchLook.
+ *   - Held buttons (ascend/descend/sprint/roll) write fpCam touch fields;
+ *     tap buttons call handlers registered via the on*() setters.
+ *   - update(): shows roll + land buttons only while airborne and relabels
+ *     ✈ with the next mode.
+ *
+ * Usage:
+ *   const touch = createTouchControls(fpCam, renderer.domElement);
+ *   touch.onCycle(cycleMode); ...; touch.update(drone.active, landing, fly.active) per frame.
+ *
+ * Important:
+ *   - On non-touch devices this returns a no-op stub, so callers never branch.
+ *   - isTouchDevice requires `(pointer: coarse)`: touch-capable laptops with
+ *     a mouse are treated as desktop.
+ *   - Button handlers stopPropagation so taps don't also start swipe-look.
+ */
 import nipplejs from 'nipplejs';
 import type { FPCamera } from '../render/fp-camera';
 

@@ -61,6 +61,8 @@ export interface TierSettings {
     detailDistance: number;
     /** Re-render the shadow map every N frames (1 = every frame). */
     shadowInterval: number;
+    /** Streamed chunks turned into GPU meshes per frame. Caps upload spikes. */
+    chunkUploadsPerFrame: number;
 }
 
 //                         dprCap  shadowRes  blurSamples  shadowExtent  cameraFar  bloom   aoTaps  dof    crep  edge   cloud  nightFull  aa       stream  waterSub  particles
@@ -85,6 +87,7 @@ export const TIER_SETTINGS: Record<GpuTier, TierSettings> = {
         detailDensity: 1.0,
         detailDistance: 140,
         shadowInterval: 1,
+        chunkUploadsPerFrame: 3,
     },
     'mobile-high': {
         dprCap: 1.5,
@@ -106,6 +109,7 @@ export const TIER_SETTINGS: Record<GpuTier, TierSettings> = {
         detailDensity: 0.55,
         detailDistance: 90,
         shadowInterval: 2,
+        chunkUploadsPerFrame: 2,
     },
     mid: {
         dprCap: 1.25,
@@ -127,6 +131,7 @@ export const TIER_SETTINGS: Record<GpuTier, TierSettings> = {
         detailDensity: 0.6,
         detailDistance: 100,
         shadowInterval: 2,
+        chunkUploadsPerFrame: 2,
     },
     low: {
         dprCap: 1,
@@ -148,6 +153,7 @@ export const TIER_SETTINGS: Record<GpuTier, TierSettings> = {
         detailDensity: 0.25,
         detailDistance: 70,
         shadowInterval: 3,
+        chunkUploadsPerFrame: 1,
     },
     'very-low': {
         dprCap: 1,
@@ -169,6 +175,7 @@ export const TIER_SETTINGS: Record<GpuTier, TierSettings> = {
         detailDensity: 0,
         detailDistance: 50,
         shadowInterval: 6,
+        chunkUploadsPerFrame: 1,
     },
 };
 
@@ -220,10 +227,14 @@ export function detectGpuTier(): GpuTier {
     if (/swiftshader|llvmpipe|software|basic render/.test(gpu)) return 'very-low';
 
     if (mobile) {
-        // iOS/iPadOS: no deviceMemory and coarse core counts. A12+ (2018) report
-        // 16384 textures and comfortably run the mid/mobile-high feature set.
+        // iOS/iPadOS: no deviceMemory, GPU masked as "Apple GPU". Recent iOS
+        // reports 16384 textures on older chips too (e.g. the 2017 A10 iPad), so
+        // texture size alone over-promotes. A low hardwareConcurrency is the
+        // remaining hint of an older/budget chip; keep those on 'mid', where
+        // the resolution governor still has headroom to recover frame rate.
         if (/apple/.test(gpu) || iPadOS || /iPad|iPhone/.test(navigator.userAgent)) {
-            return maxTex >= 16384 ? 'mobile-high' : 'mid';
+            if (maxTex < 16384 || cores <= 4) return 'mid';
+            return 'mobile-high';
         }
         if (cores <= 4 || mem <= 2) return 'very-low';
         // Old Mali-T / Adreno 3xx-5xx (pre-2019 mid-range) stay off the heavy path.
@@ -232,11 +243,17 @@ export function detectGpuTier(): GpuTier {
         return cores >= 6 && mem >= 3 ? 'mid' : 'low';
     }
 
-    if (cores <= 4 || mem <= 2) return 'low';
+    if (mem <= 2) return 'low';
     // ANGLE/D3D11 reports MAX_TEXTURE_SIZE 16384 even on Intel UHD, so it cannot
     // separate integrated from discrete. The renderer string can.
     const integrated =
         /intel|iris|uhd|(radeon\(tm\)|radeon) (vega )?graphics|mali|adreno/.test(gpu) && !/arc/.test(gpu);
-    if (!integrated && cores >= 8 && mem >= 6 && maxTex >= 16384) return 'high';
+    // Apple Silicon Macs report "Apple M1/M2…" — integrated but desktop-class.
+    const appleSilicon = /apple m\d/.test(gpu);
+    if ((!integrated || appleSilicon) && cores >= 8 && mem >= 6 && maxTex >= 16384) return 'high';
+    // A 4-core desktop with a discrete card (i5 + GTX 1060, 2016) is GPU-strong:
+    // the GPU carries the frame, and the worker pool shrinks with the cores.
+    if (!integrated && maxTex >= 16384) return 'mid';
+    if (cores <= 4) return 'low';
     return cores >= 6 ? 'mid' : 'low';
 }

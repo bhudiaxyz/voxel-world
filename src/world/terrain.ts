@@ -95,11 +95,17 @@ export const RIVER_WATER = registerBlock('RIVER_WATER', {
     isWater: true,
 });
 
-export function generateTerrain(
+export async function generateTerrain(
     seed = 20260820,
     plan: any = null,
     onProgress: (p: number, s: string) => void = () => {},
 ) {
+    // Yield after each progress mark so the label paints and input/timers run;
+    // the stages between are still synchronous (and deterministic).
+    const step = async (p: number, s: string) => {
+        onProgress(p, s);
+        await new Promise((r) => setTimeout(r, 0));
+    };
     const S = WORLD.size;
     const L = WORLD.step;
     const SEA = WORLD.seaLevel;
@@ -567,6 +573,11 @@ export function generateTerrain(
         }
     }
 
+    // Per-column island distance and rim radius, reused by the beach pass below.
+    // Both are pure functions of (x, z); nearDist loops every island, so
+    // evaluating them twice per column was ~1.7 s of boot on a 768² world.
+    const rimDist = new Float64Array(S * S);
+    const rimRad = new Float64Array(S * S);
     for (let z = 0; z < S; z++) {
         for (let x = 0; x < S; x++) {
             const i = z * S + x;
@@ -574,8 +585,8 @@ export function generateTerrain(
 
             // Keep the outer band of each island low so the plinth is a readable
             // 9–12 block wall and no massif ever runs off the island edge.
-            const r = nearDist(x, z);
-            const R = rimR(x, z);
+            const r = (rimDist[i] = nearDist(x, z));
+            const R = (rimRad[i] = rimR(x, z));
             if (r > R - 20 * K) h = Math.min(h, BASE + L);
             if (r > R - 9 * K) h = Math.min(h, BASE);
 
@@ -612,7 +623,7 @@ export function generateTerrain(
     }
     H = despeckle(ledged, S, land, 12);
 
-    onProgress(0.45, 'carving the rivers');
+    await step(0.45, 'carving the rivers');
     /* ================================================================
      * 3. River, banks and beaches — carved after terracing
      * ================================================================ */
@@ -803,9 +814,7 @@ export function generateTerrain(
         for (let x = 0; x < S; x++) {
             const i = z * S + x;
             if (!land[i]) continue;
-            const r = nearDist(x, z);
-            const R = rimR(x, z);
-            const gap = R - r;
+            const gap = rimRad[i] - rimDist[i];
             if (gap > 14) continue;
             const coastal = fbm2(nEdge, x * 0.014 + 200, z * 0.014, 2);
             if (coastal < 0.14) continue; // most of the rim stays a plinth
@@ -884,7 +893,7 @@ export function generateTerrain(
         }
     }
 
-    onProgress(0.7, 'shaping the banks');
+    await step(0.7, 'shaping the banks');
     /* ================================================================
      * 4. Walkability
      * ================================================================ */
@@ -993,7 +1002,7 @@ export function generateTerrain(
         }
     }
 
-    onProgress(0.85, 'filling the voxels');
+    await step(0.85, 'filling the voxels');
     /* ================================================================
      * 6. Voxel fill
      * ================================================================ */

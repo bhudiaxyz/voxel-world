@@ -48,6 +48,7 @@ export async function buildWorld(
     onProgress: (p: number, s?: string) => void = () => {},
     streamRadius = 8,
     detail: { density: number; distance: number } = { density: 1, distance: 140 },
+    uploadsPerFrame = 2,
 ): Promise<World> {
     const yieldFrame = () => new Promise((r) => setTimeout(r, 0));
 
@@ -62,7 +63,7 @@ export async function buildWorld(
 
     await yieldFrame(); // let the browser paint 'drawing the map' before terrain blocks
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const world: any = generateTerrain(seed, plan, (p, s) => onProgress(0.06 + p * 0.18, s));
+    const world: any = await generateTerrain(seed, plan, (p, s) => onProgress(0.06 + p * 0.18, s));
     world.plan = plan;
     world.detail = detail;
     world.rng = makeRng(seed ^ 0x5f3a);
@@ -105,7 +106,11 @@ export async function buildWorld(
     // the spawn is ready before the loading veil lifts; the rest streams during
     // idle time as the camera moves.
     onProgress(0.54, 'meshing the world');
-    const streaming = createWorldChunkStreamer(world.grid, { loadRadius: streamRadius, toroidalWrap: true });
+    const streaming = createWorldChunkStreamer(world.grid, {
+        loadRadius: streamRadius,
+        toroidalWrap: true,
+        uploadsPerFrame,
+    });
     await streaming.preload(world.spawn, {
         radius: 3,
         onProgress: (p: number) => onProgress(0.54 + p * 0.42, 'meshing the world'),

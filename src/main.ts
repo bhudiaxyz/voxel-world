@@ -1,3 +1,39 @@
+/**
+ * Entry point — boots VoxelWorld and runs the frame loop.
+ *
+ * Purpose:
+ *   Wires every subsystem together (renderer, world, camera, atmosphere,
+ *   water, particles, player modes, dog, UI, post-FX) and drives them from a
+ *   single requestAnimationFrame loop.
+ *
+ * Operations:
+ *   1. Resolve the seed word from `?seed=` (or the default) and write it back
+ *      to the URL so every reload regenerates the identical world.
+ *   2. Detect the GPU tier and apply its settings (stream radius, shadows, …).
+ *   3. Build the world, then create camera, lighting, water, particles,
+ *      character, controller, drone/fly modes, navigator, dog and UI.
+ *   4. Each frame: fixed-step (1/60 s) controller physics, mode-specific
+ *      camera update, chunk streaming, day/night, weather + wind uniforms,
+ *      crepuscular sun projection, planet-bend uniforms, wrap-flash, shadow
+ *      cadence, post-FX render, and an adaptive-resolution governor.
+ *
+ * Usage:
+ *   Loaded by index.html as the module script; expects `#app` (canvas host)
+ *   and `#boot` (loading overlay) elements. Exports `currentSeedWord` and
+ *   `pushSeedUrl` for the settings panel.
+ *
+ * Important:
+ *   - Mode cycle is walk → drone → fly → walk (F / ✈); keyboard and touch
+ *     call the same `cycleMode` / `land` / `toggleEdges` / `stepTime` actions.
+ *   - `scene.matrixWorldAutoUpdate` is off — moving objects must call
+ *     `updateMatrixWorld()` themselves.
+ *   - A lost WebGL context triggers a reload (same seeded world) rather than
+ *     an in-place GPU resource rebuild.
+ *   - Palette changes must push into every uniform that was cloned at
+ *     creation (water, sky, day/night keyframes, grade, bloom) — see
+ *     `settings.onPaletteChange`.
+ *   - `window.__game` and `window.__fps` are debug/test hooks.
+ */
 import * as THREE from 'three';
 import { createRenderer } from './render/renderer';
 import { setVoxelPalette, WATER, SKY, LIGHT, GRADE, VOXEL_PALETTES } from './core/palette';
@@ -74,10 +110,14 @@ async function start(): Promise<void> {
         e.preventDefault();
         setTimeout(() => location.reload(), 300);
     });
-    const world = await buildWorld(SEED, setProgress, ts.streamRadius, {
-        density: ts.detailDensity,
-        distance: ts.detailDistance,
-    });
+    // World generation fills the bar to 92%; shader warm-up (below) the rest.
+    const world = await buildWorld(
+        SEED,
+        (p, s) => setProgress(p * 0.92, s),
+        ts.streamRadius,
+        { density: ts.detailDensity, distance: ts.detailDistance },
+        ts.chunkUploadsPerFrame,
+    );
     scene.add(world.group);
 
     const fpCam = new FPCamera(container.clientWidth / container.clientHeight, renderer.domElement, ts.cameraFar);
@@ -318,6 +358,12 @@ async function start(): Promise<void> {
     scene.updateMatrixWorld(true);
     scene.matrixWorldAutoUpdate = false;
 
+    // Link every shader off the critical path before the first frame; otherwise
+    // the first render freezes the tab for seconds while programs link.
+    setProgress(0.94, 'warming up shaders');
+    await post.precompile();
+    setProgress(1);
+
     const resize = () => {
         const w = container.clientWidth,
             h = container.clientHeight;
@@ -444,10 +490,16 @@ async function start(): Promise<void> {
         } else {
             fpCam.update(dt, controller.pos, controller.speed01, controller.grounded);
         }
-        world.streaming.update(controller.pos, fpCam.camera.position, false, dt);
+        // Airborne, the walk controller is parked where you took off: anchoring
+        // streaming to it kept a corridor of chunks back to the take-off point
+        // loaded (662 vs ~450) and pinned the shadow frustum there, so terrain
+        // under the drone lost its shadows. Follow the camera instead.
+        const airborne = fly.active || drone.active;
+        const anchor = airborne ? fpCam.camera.position : controller.pos;
+        world.streaming.update(anchor, fpCam.camera.position, false, dt);
         // Only update fog origin when the player is actually moving — saves a
         // uniform write + fog-origin recalculation on every idle frame.
-        if (manualMovement || fly.active || drone.active) atmo.followTarget(controller.pos.x, controller.pos.z);
+        if (manualMovement || airborne) atmo.followTarget(anchor.x, anchor.z);
         dayNight.update(dt);
 
         weather.update(dt);

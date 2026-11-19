@@ -1,3 +1,29 @@
+/**
+ * Chunk-meshing Web Worker.
+ *
+ * Purpose:
+ *   Moves chunk meshing (face culling, baked AO, edge lines) off the main
+ *   thread so world streaming doesn't hitch the frame loop.
+ *
+ * Operations / message protocol:
+ *   in  { type: 'block-registry', definitions } — install block definitions;
+ *       must arrive before any chunk request (voxel.ts sends it on creation
+ *       and again whenever the registry changes).
+ *   in  { key, window }  — mesh one chunk window via buildChunkTransferPayload.
+ *   out { key, ci, ck, payload } on success, { key, ci, ck, error } on failure.
+ *
+ * Usage:
+ *   Spawned by voxel.ts with
+ *   `new Worker(new URL('./voxel-worker.ts', import.meta.url), { type: 'module' })`.
+ *   Not imported directly.
+ *
+ * Important:
+ *   - Geometry buffers are posted as transferables (zero-copy); after posting,
+ *     the worker's copies are detached. collectTransfers de-duplicates
+ *     buffers because transferring the same ArrayBuffer twice throws.
+ *   - Any new buffer added to the payload must also be added to
+ *     collectTransfers, or it will be structured-cloned (slow) instead.
+ */
 import { buildChunkTransferPayload, installBlockRegistry } from './voxel';
 
 function collectTransfers(payload: any) {

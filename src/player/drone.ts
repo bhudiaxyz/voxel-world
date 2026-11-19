@@ -1,3 +1,32 @@
+/**
+ * Drone mode — terrain-following auto-cruise flight.
+ *
+ * Purpose:
+ *   A sightseeing mode: the camera always flies forward along its heading at
+ *   a hover altitude above the terrain, so the player only steers.
+ *
+ * Operations:
+ *   State machine idle → rising → cruising (→ idle on landing).
+ *   - enter():  scans upward for overhead obstructions (trees, bridges) and
+ *               picks a hover altitude that clears them, then rises.
+ *   - update(): A/D / joystick X turn the shared yaw; Space/C/scroll change
+ *               altitude; joystick back brakes. Probes the ground ahead and to
+ *               both sides so cliffs are climbed before they are reached.
+ *   - beginLanding(): fast descent; update() returns true once landed.
+ *
+ * Usage:
+ *   const drone = createDroneMode(world.grid);
+ *   drone.enter(camera);
+ *   if (drone.update(dt, camera, keys, fpCam, altDelta, joyX, joyY)) { ...back to walk }
+ *
+ * Important:
+ *   - Look state (yaw/pitch/roll) is owned by FPCamera and shared across
+ *     walk/drone/fly; pitch tilts the view only and never changes altitude.
+ *   - Ascent snaps instantly, descent is rate-capped — never smooth away
+ *     rising terrain. A hard floor keeps the camera 2 blocks above
+ *     terrain/sea.
+ *   - Position is wrapped with wrapAxis (toroidal world).
+ */
 import * as THREE from 'three';
 import type { VoxelGrid } from '../core/voxel';
 import { WORLD, wrapAxis } from '../world/terrain';

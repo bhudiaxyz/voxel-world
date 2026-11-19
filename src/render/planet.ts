@@ -1,3 +1,28 @@
+/**
+ * Planet curvature — a vertex-shader bend that makes the flat world read as
+ * a small planet.
+ *
+ * Purpose:
+ *   Drops geometry by r²/(2R) with distance from the player, so the horizon
+ *   curves away and distant terrain sinks below it.
+ *
+ * Operations:
+ *   - PLANET_UNIFORMS_GLSL / PLANET_BEND_GLSL: GLSL snippets to inject into a
+ *     vertex shader; call applyPlanetBend(worldPos, worldNormal) after the
+ *     model transform, before the view matrix.
+ *   - planetUniformValues(): creates the uniform objects for a material.
+ *   - updatePlanetUniforms(): moves the bend origin to the player.
+ *
+ * Usage:
+ *   Every material that should curve registers its uniforms in
+ *   world.allPlanetUnis; main.ts updates them all when the player/camera
+ *   moves more than 0.1 units.
+ *
+ * Important:
+ *   - Every visible surface (voxels, water, particles, decorations) must use
+ *     the bend, or it will visibly detach from the curved terrain.
+ *   - Small-angle approximation; fine while view distance << radius.
+ */
 import * as THREE from 'three';
 
 export const PLANET_RADIUS_DEFAULT = 350.0;

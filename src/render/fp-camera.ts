@@ -1,3 +1,34 @@
+/**
+ * First-person camera and raw input state.
+ *
+ * Purpose:
+ *   Owns the PerspectiveCamera plus the look state (yaw, pitch, roll) and
+ *   keyboard/mouse/touch input shared by walk, drone and fly modes.
+ *
+ * Operations:
+ *   - Mouse: click requests pointer lock; mousemove updates yaw/pitch.
+ *   - Keys: tracked in `_keys` (KeyboardEvent.code); Space press is latched
+ *     as a one-shot jump edge. Window blur clears all held keys.
+ *   - getWish(): world-space horizontal move direction for the walk
+ *     controller (zero in drone/fly).
+ *   - update(): walk mode — places camera at eye height with head-bob.
+ *   - updateRoll(): Q/E (or touch) banking in the air, level on foot.
+ *   - drainDroneAltDelta(): Space/C/touch/scroll → altitude rate (m/s).
+ *
+ * Usage:
+ *   const fpCam = new FPCamera(aspect, renderer.domElement, far);
+ *   each frame: fpCam.getWish(), fpCam.getJumpEdge(), then fpCam.update(...)
+ *   (walk) or hand fpCam to drone/fly. Touch controls call setTouchMove,
+ *   applyTouchLook, triggerTouchJump and the touch* fields.
+ *
+ * Important:
+ *   - Keyboard movement requires pointer lock; touch bypasses it via
+ *     `touchActive`.
+ *   - In drone/fly mode (`droneActive` / `flyActive`) update() is a no-op —
+ *     those modes write the camera transform themselves.
+ *   - `_keys`, `_joyX`, `_joyY` are read directly by drone/fly; treat them as
+ *     package-internal.
+ */
 import * as THREE from 'three';
 
 const EYE_HEIGHT = 1.75;

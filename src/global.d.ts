@@ -1,3 +1,8 @@
-// Ambient declarations for plain-JS modules. TypeScript treats all imports
-// from these as `any`, which is intentional while the JS files are untyped.
+/**
+ * Ambient module declarations.
+ *
+ * Purpose: lets TypeScript import plain-JS modules without type errors.
+ * Important: every `*.js` import is typed as `any` — intentional while the
+ * JS files are untyped; remove this once they are converted or typed.
+ */
 declare module '*.js';

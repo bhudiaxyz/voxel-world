@@ -239,12 +239,25 @@ export function planWorld(seed: any, size: any) {
 
     /** Distance from (x,z) to the nearest island (main or stone), normalised to
      *  continentRadius so terrain's single threshold still works.  */
+    // Flat copies: nearIsland runs once per terrain column (~590k calls), and
+    // destructuring + Math.hypot dominated boot. sqrt(dx²+dz²) is exact for
+    // these magnitudes (no over/underflow risk, which is all hypot guards).
+    const contXZ = Float64Array.from(continentCenters.flat());
+    const stoneXZR = Float64Array.from(stoneIslands.flat());
     const nearIsland = (x: number, z: number) => {
         // Main continents: raw distance
-        let best = continentCenters.reduce((mn, [ix, iz]) => Math.min(mn, Math.hypot(x - ix, z - iz)), Infinity);
+        let best = Infinity;
+        for (let k = 0; k < contXZ.length; k += 2) {
+            const dx = x - contXZ[k],
+                dz = z - contXZ[k + 1];
+            const d = Math.sqrt(dx * dx + dz * dz);
+            if (d < best) best = d;
+        }
         // Stepping/scatter islands: shift so that each stone's own radius maps to continentRadius
-        for (const [sx, sz, sr] of stoneIslands) {
-            const d = Math.hypot(x - sx, z - sz) - sr + continentRadius;
+        for (let k = 0; k < stoneXZR.length; k += 3) {
+            const dx = x - stoneXZR[k],
+                dz = z - stoneXZR[k + 1];
+            const d = Math.sqrt(dx * dx + dz * dz) - stoneXZR[k + 2] + continentRadius;
             if (d < best) best = d;
         }
         return best;

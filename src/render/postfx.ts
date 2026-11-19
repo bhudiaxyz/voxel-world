@@ -710,6 +710,58 @@ export function createPostFX(
     };
     setRes(size.x, size.y);
 
+    /**
+     * Compile every shader program the first real frame would otherwise link
+     * synchronously — 3.6 s of frozen main thread on an Intel Arc laptop, worse
+     * on mobile. With KHR_parallel_shader_compile (Chrome/Edge/Safari 17+) the
+     * driver links in the background and this promise resolves without one
+     * long task; without it three falls back to polling, no worse than before.
+     *
+     * Program keys depend on the render target being drawn into (tone mapping,
+     * output colour space), so post materials compile with an HDR target bound,
+     * and the pass that finishes on screen with no target — exactly as the
+     * composer will draw them.
+     */
+    const precompile = async (): Promise<void> => {
+        // Scene materials (beauty pass + edge layer), with the real lights/shadows.
+        const prevMask = camera.layers.mask;
+        camera.layers.enableAll();
+        renderer.setRenderTarget(sceneFBO);
+        const sceneReady = renderer.compileAsync(scene, camera, scene);
+        renderer.setRenderTarget(null);
+        camera.layers.mask = prevMask;
+
+        // Pass materials. FullScreenQuad draws `renderer.render(mesh, orthoCam)`
+        // — the mesh IS the scene (no lights, no fog), with three's shared quad
+        // geometry. Compiling a lone mesh the same way gives the same program
+        // key; parenting it under a Scene does not (different light/fog state),
+        // which silently built a second, unused set of programs.
+        // Materials are harvested from each pass's own fields (one level deep)
+        // so private names in three's examples don't need to be known here.
+        const ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+        const quadGeo = new THREE.BufferGeometry();
+        quadGeo.setAttribute('position', new THREE.Float32BufferAttribute([-1, 3, 0, -1, -1, 0, 3, -1, 0], 3));
+        quadGeo.setAttribute('uv', new THREE.Float32BufferAttribute([0, 2, 0, 0, 2, 0], 2));
+        const pending: Promise<unknown>[] = [sceneReady];
+        for (const pass of composer.passes) {
+            if (!pass.enabled && pass !== crepPass) continue;
+            const mats = new Set<THREE.Material>();
+            for (const v of Object.values(pass)) {
+                for (const m of Array.isArray(v) ? v : [v]) {
+                    if ((m as THREE.Material)?.isMaterial) mats.add(m as THREE.Material);
+                }
+            }
+            for (const m of mats) {
+                const q = new THREE.Mesh(quadGeo, m);
+                renderer.setRenderTarget(pass.renderToScreen ? null : target);
+                pending.push(renderer.compileAsync(q, ortho));
+            }
+        }
+        renderer.setRenderTarget(null);
+        await Promise.all(pending);
+        quadGeo.dispose();
+    };
+
     return {
         composer,
         bloom,
@@ -718,6 +770,7 @@ export function createPostFX(
         target,
         edgeMask,
         edgePass,
+        precompile,
         /**
          * Make the haze pass read the sky dome's uniform OBJECTS, so DayNight's
          * per-frame updates reach both. Before this, the aerial perspective

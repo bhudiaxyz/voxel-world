@@ -1,3 +1,28 @@
+/**
+ * WebGL renderer setup.
+ *
+ * Purpose:
+ *   Creates and configures the THREE.WebGLRenderer for the detected GPU tier
+ *   and attaches its canvas to the container.
+ *
+ * Operations:
+ *   - Pixel ratio = min(devicePixelRatio, tier dprCap) × dprScale.
+ *   - sRGB output, ACES tone mapping, exposure from the palette GRADE.
+ *   - VSM shadows (PCF fallback without float render-target support);
+ *     shadow auto-update only on tiers with shadowInterval ≤ 1.
+ *   - Adds helpers on the instance: setDprScale(s), resizeTo(w, h),
+ *     floatRT (bool), renderProfile (tier).
+ *
+ * Usage:
+ *   const renderer = createRenderer(container, tier);
+ *   main.ts's adaptive-resolution governor calls setDprScale + resizeTo.
+ *
+ * Important:
+ *   - antialias is off on purpose — AA is the last post-FX pass.
+ *   - preserveDrawingBuffer only with `?capture=1` (screenshot tooling).
+ *   - Palette colours are linear; pass hex (sRGB) to setClearColor, don't
+ *     convert twice.
+ */
 import * as THREE from 'three';
 import { GRADE } from '../core/palette';
 import type { GpuTier } from './gpu-tier';
